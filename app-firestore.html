@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --green: #16a34a;
+      --orange: #ea580c;
+      --bg: #f3f4f6;
+      --card: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    button { outline: none; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding-bottom: 30px;
+    }
+    header {
+      background: var(--primary);
+      color: white;
+      padding: 16px 20px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+    header p { margin: 2px 0 0; font-size: 12px; opacity: 0.85; }
+
+    .container { padding: 16px; }
+    .card {
+      background: var(--card);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    #reader { width: 100%; border-radius: 12px; overflow: hidden; }
+
+    .btn {
+      display: block; width: 100%; padding: 14px; border: none; border-radius: 12px;
+      font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 10px;
+    }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-secondary { background: #e5e7eb; color: var(--text); }
+    .btn-success { background: var(--green); color: white; }
+    .btn:disabled { opacity: 0.5; }
+
+    .sugerencia-item {
+      padding: 10px 12px; cursor: pointer; border-bottom: 1px solid var(--border); font-size: 14px;
+    }
+    .sugerencia-item:last-child { border-bottom: none; }
+    .sugerencia-item:active { background: #f3f4f6; }
+    .sugerencia-item .sug-nombre { font-weight: 600; }
+    .sugerencia-item .sug-codigo { color: var(--muted); font-size: 12px; font-family: monospace; }
+
+    .producto-box { display: none; }
+    .producto-box.show { display: block; }
+    .producto-posicion {
+      display: inline-block; background: #eff6ff; color: var(--primary-dark);
+      border: 1px solid #bfdbfe; border-radius: 8px; padding: 4px 10px; font-size: 13px; font-weight: 700; margin-bottom: 6px;
+    }
+    .producto-nombre { font-size: 18px; font-weight: 700; margin-bottom: 2px; }
+    .producto-codigo { font-size: 13px; color: var(--muted); font-family: monospace; margin-bottom: 10px; }
+    .no-encontrado { color: var(--orange); font-weight: 600; }
+
+    .stock-badge {
+      display: inline-block; background: #eff6ff; color: var(--primary-dark); border: 1px solid #bfdbfe;
+      border-radius: 8px; padding: 6px 10px; font-size: 13px; font-weight: 600;
+    }
+    .stock-badge.sin-stock { background: #f3f4f6; color: var(--muted); border-color: var(--border); }
+    .stock-detalle { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    .field { margin-bottom: 12px; }
+    .field label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+    .field input { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 16px; }
+    .qty-row { display: flex; align-items: center; gap: 8px; }
+    .qty-row input { text-align: center; font-size: 20px; font-weight: 700; }
+    .qty-btn {
+      width: 46px; height: 46px; border-radius: 10px; border: none;
+      background: var(--primary); color: white; font-size: 22px; font-weight: 700; cursor: pointer;
+    }
+
+    .session-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px;
+    }
+    .session-item:last-child { border-bottom: none; }
+    .session-item .nombre { font-weight: 600; }
+    .session-item .detalle { color: var(--muted); font-size: 12px; }
+    .session-item .cant { font-weight: 700; color: var(--primary); }
+
+    .empty-state { color: var(--muted); font-size: 14px; text-align: center; padding: 20px 0; }
+
+    .toast {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: var(--green); color: white; padding: 12px 20px; border-radius: 10px;
+      font-size: 14px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 100;
+    }
+    .toast.show { opacity: 1; }
+    .toast.error { background: #dc2626; }
+
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 50; align-items: flex-end;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal { background: white; width: 100%; max-height: 80vh; overflow-y: auto; border-radius: 18px 18px 0 0; padding: 20px; }
+    .modal h2 { margin-top: 0; font-size: 17px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 8px 4px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; }
+
+    .spinner {
+      border: 3px solid var(--border); border-top: 3px solid var(--primary); border-radius: 50%;
+      width: 20px; height: 20px; animation: spin 0.8s linear infinite; display: inline-block; vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .bottom-bar {
+      position: fixed; bottom: 0; left: 0; right: 0; display: flex; gap: 10px;
+      padding: 12px 16px; background: white; border-top: 1px solid var(--border);
+    }
+    .bottom-bar button { flex: 1; margin-top: 0; padding: 12px; font-size: 14px; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>📦 Conteo de Stock</h1>
+    <p id="subtitulo">Depósito — registro provisorio (Firestore)</p>
+  </header>
+
+  <div class="container">
+
+    <div class="card">
+      <button class="btn btn-primary" id="btnEscanear">📷 Escanear código de barras</button>
+      <div id="reader" style="display:none; margin-top: 12px;"></div>
+      <button class="btn btn-secondary" id="btnCancelarScan" style="display:none;">Cancelar escaneo</button>
+
+      <div style="display:flex; align-items:center; gap:8px; margin: 14px 0 6px;">
+        <div style="flex:1; height:1px; background:var(--border);"></div>
+        <span style="font-size:12px; color:var(--muted);">o escribí código / nombre</span>
+        <div style="flex:1; height:1px; background:var(--border);"></div>
+      </div>
+      <div style="display:flex; gap:8px; position:relative;">
+        <input type="text" id="inputCodigoManual" placeholder="Código EAN o nombre del producto" autocomplete="off"
+          style="flex:1; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:16px;">
+        <button class="btn btn-secondary" id="btnBuscarManual" style="width:auto; margin-top:0; padding:12px 18px;">Buscar</button>
+        <div id="sugerenciasManual" style="display:none; position:absolute; top:100%; left:0; right:60px; margin-top:4px; background:white; border:1px solid var(--border); border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.12); max-height:260px; overflow-y:auto; z-index:20;"></div>
+      </div>
+      <div style="font-size:11px; color:var(--muted); margin-top:6px;">La búsqueda por nombre encuentra lo que <strong>empieza con</strong> lo que escribís, no lo que lo contiene en el medio.</div>
+    </div>
+
+    <!-- PRODUCTO ENCONTRADO -->
+    <div class="card producto-box" id="productoBox">
+      <div class="producto-codigo" id="pCodigo"></div>
+      <div class="producto-nombre" id="pNombre"></div>
+      <div id="pBultoBadge" style="display:none; margin-bottom:10px;">
+        <span style="background:#fef3c7; color:#92400e; border:1px solid #fde68a; border-radius:8px; padding:5px 10px; font-size:12px; font-weight:700;">
+          📦 Esto es un BULTO — <span id="pUnidadesPorBulto"></span> unidades c/u
+        </span>
+      </div>
+      <div id="pStockActual" style="margin-bottom: 14px;"></div>
+
+      <div class="field" id="nombreManualField" style="display:none;">
+        <label>Nombre del producto (no está en el catálogo)</label>
+        <input type="text" id="inputNombreManual" placeholder="Escribí el nombre">
+      </div>
+
+      <div class="field">
+        <label>Posición (estantería / pasillo / etc.)</label>
+        <input type="text" id="inputPosicion" placeholder="Ej: A-03">
+      </div>
+
+      <div class="field">
+        <label id="labelCantidad">Cantidad</label>
+        <div class="qty-row">
+          <button class="qty-btn" id="btnMenos">−</button>
+          <input type="number" id="inputCantidad" value="1" min="1">
+          <button class="qty-btn" id="btnMas">+</button>
+        </div>
+        <div id="equivalenciaBulto" style="display:none; font-size:12px; color:var(--muted); margin-top:4px;"></div>
+      </div>
+
+      <button class="btn btn-success" id="btnConfirmar">✔ Confirmar y guardar</button>
+      <button class="btn btn-secondary" id="btnModoMover" style="display:none;">📍 Modificar posición existente (sin sumar)</button>
+      <button class="btn btn-secondary" id="btnAsociarBulto">📦 Asociar código de bulto a este producto</button>
+      <button class="btn btn-secondary" id="btnDescartar">Descartar</button>
+
+      <div id="moverPosicionBox" style="display:none; margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
+        <div class="field" id="selectorPosicionField" style="display:none;">
+          <label>¿Cuál posición vas a corregir/mover?</label>
+          <select id="selectPosicionAMover" style="width:100%; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:15px;"></select>
+        </div>
+        <div class="field">
+          <label>Nueva posición</label>
+          <input type="text" id="inputNuevaPosicion" placeholder="Ej: A-03">
+        </div>
+        <div class="field">
+          <label>Cantidad en esa posición</label>
+          <input type="number" id="inputCantidadPosicion" min="0">
+          <div style="font-size:11px; color:var(--muted); margin-top:4px;">0 elimina esa posición. Si movés a una posición que ya tenía stock de este código, se suma ahí.</div>
+        </div>
+        <button class="btn btn-success" id="btnGuardarMovimiento">✔ Guardar movimiento</button>
+        <button class="btn btn-secondary" id="btnCancelarMover">Cancelar</button>
+      </div>
+    </div>
+
+    <!-- ASOCIAR BULTO -->
+    <div class="card" id="asociarBultoBox" style="display:none;">
+      <p style="margin-top:0; font-size:14px;">Asociando bulto a: <strong id="abProducto"></strong></p>
+      <div id="abPaso1">
+        <button class="btn btn-primary" id="btnEscanearBulto">📷 Escanear código de la caja/bulto</button>
+        <div id="readerBulto" style="display:none; margin-top:12px;"></div>
+        <button class="btn btn-secondary" id="btnCancelarScanBulto" style="display:none;">Cancelar escaneo</button>
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <input type="text" id="inputCodigoBultoManual" placeholder="O ingresá el código a mano" inputmode="numeric"
+            style="flex:1; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:16px;">
+          <button class="btn btn-secondary" id="btnUsarCodigoBultoManual" style="width:auto; margin-top:0; padding:12px 18px;">Usar</button>
+        </div>
+      </div>
+      <div id="abPaso2" style="display:none;">
+        <div class="field">
+          <label>Código de la caja escaneado</label>
+          <input type="text" id="abCodigoBulto" disabled style="background:#f3f4f6;">
+        </div>
+        <div class="field">
+          <label>Unidades por bulto (ej: 10)</label>
+          <input type="number" id="abUnidadesPorBulto" min="1" placeholder="10">
+        </div>
+        <button class="btn btn-success" id="btnGuardarBulto">✔ Guardar asociación</button>
+      </div>
+      <button class="btn btn-secondary" id="btnCancelarAsociarBulto">Cancelar</button>
+    </div>
+
+    <!-- LISTA DE LA SESIÓN -->
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <strong>Contado en esta sesión</strong>
+        <span id="totalSesion" style="color:var(--muted); font-size:13px;">0 productos</span>
+      </div>
+      <div id="listaSesion"><div class="empty-state">Todavía no escaneaste nada</div></div>
+    </div>
+
+  </div>
+
+  <div class="bottom-bar">
+    <button class="btn btn-secondary" id="btnVerStock">📊 Ver stock</button>
+  </div>
+
+  <div class="modal-overlay" id="modalStock">
+    <div class="modal">
+      <h2>Stock actual</h2>
+      <div id="stockContenido"><div class="spinner"></div> Cargando...</div>
+      <button class="btn btn-secondary" onclick="cerrarModal('modalStock')">Cerrar</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+    import {
+      getFirestore, doc, getDoc, setDoc, deleteDoc, runTransaction,
+      collection, collectionGroup, query, where, orderBy, limit, getDocs,
+      serverTimestamp, increment
+    } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+    // ⚠️ CONFIGURACIÓN: pegá acá tu config real de Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyBjsx_gcl2X1yr8SPoi_tF3qGcrFRLK3bQ",
+      authDomain: "armador-de-pedidos-secos-119b3.firebaseapp.com",
+      projectId: "armador-de-pedidos-secos-119b3",
+      storageBucket: "armador-de-pedidos-secos-119b3.firebasestorage.app",
+      messagingSenderId: "713677759926",
+      appId: "1:713677759926:web:e0a8f512d79f75f2a5cd17"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    let html5QrCode = null;
+    let html5QrCodeBulto = null;
+    let productoActual = null;
+    let sesion = [];
+    let ultimaPosicion = "";
+    let esBultoActual = false;
+    let unidadesPorBultoActual = 1;
+    let posicionesDisponibles = [];
+
+    const productoBox = document.getElementById('productoBox');
+
+    // ---------------- ESCANEO ----------------
+    document.getElementById('btnEscanear').addEventListener('click', iniciarEscaneo);
+    document.getElementById('btnCancelarScan').addEventListener('click', detenerEscaneo);
+
+    function iniciarEscaneo() {
+      document.getElementById('reader').style.display = 'block';
+      document.getElementById('btnCancelarScan').style.display = 'block';
+      document.getElementById('btnEscanear').style.display = 'none';
+      productoBox.classList.remove('show');
+
+      html5QrCode = new Html5Qrcode("reader");
+      const config = {
+        fps: 10,
+        qrbox: { width: 260, height: 140 },
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.QR_CODE
+        ]
+      };
+      html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess)
+        .catch(() => { mostrarToast("No se pudo abrir la cámara", true); detenerEscaneo(); });
+    }
+
+    function detenerEscaneo() {
+      if (document.activeElement) document.activeElement.blur();
+      if (html5QrCode) {
+        html5QrCode.stop().then(() => { html5QrCode.clear(); html5QrCode = null; }).catch(() => {});
+      }
+      document.getElementById('reader').style.display = 'none';
+      document.getElementById('btnCancelarScan').style.display = 'none';
+      document.getElementById('btnEscanear').style.display = 'block';
+    }
+
+    function onScanSuccess(codigo) {
+      detenerEscaneo();
+      if (navigator.vibrate) navigator.vibrate(80);
+      buscarProducto(codigo);
+    }
+
+    document.getElementById('btnBuscarManual').addEventListener('click', () => {
+      const codigo = document.getElementById('inputCodigoManual').value.trim();
+      if (!codigo) { mostrarToast("Ingresá un código", true); return; }
+      ocultarSugerencias();
+      buscarProducto(codigo);
+      document.getElementById('inputCodigoManual').value = '';
+    });
+    document.getElementById('inputCodigoManual').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('btnBuscarManual').click();
+    });
+
+    // ---------------- BÚSQUEDA POR NOMBRE (prefijo, Firestore) ----------------
+    let timeoutBusqueda = null;
+    document.getElementById('inputCodigoManual').addEventListener('input', () => {
+      const texto = document.getElementById('inputCodigoManual').value.trim();
+      clearTimeout(timeoutBusqueda);
+      if (texto.length < 2) { ocultarSugerencias(); return; }
+      timeoutBusqueda = setTimeout(() => buscarSugerencias(texto), 250);
+    });
+
+    async function buscarSugerencias(texto) {
+      const textoLower = texto.toLowerCase();
+      try {
+        const q = query(
+          collection(db, 'productos'),
+          orderBy('productoLower'),
+          where('productoLower', '>=', textoLower),
+          where('productoLower', '<=', textoLower + '\uf8ff'),
+          limit(10)
+        );
+        const snap = await getDocs(q);
+        const resultados = [];
+        snap.forEach(d => resultados.push({ codigo: d.id, producto: d.data().producto }));
+        renderizarSugerencias(resultados);
+      } catch (err) {
+        console.error('Error buscando sugerencias', err);
+      }
+    }
+
+    function renderizarSugerencias(resultados) {
+      const cont = document.getElementById('sugerenciasManual');
+      if (!resultados.length) { ocultarSugerencias(); return; }
+      cont.innerHTML = resultados.map(p => `
+        <div class="sugerencia-item" onmousedown="window.__seleccionarSugerencia('${p.codigo.replace(/'/g, "\\'")}')">
+          <div class="sug-nombre">${escapeHtml(p.producto)}</div>
+          <div class="sug-codigo">${escapeHtml(p.codigo)}</div>
+        </div>
+      `).join('');
+      cont.style.display = 'block';
+    }
+
+    function ocultarSugerencias() {
+      document.getElementById('sugerenciasManual').style.display = 'none';
+    }
+
+    window.__seleccionarSugerencia = function(codigo) {
+      ocultarSugerencias();
+      document.getElementById('inputCodigoManual').value = '';
+      buscarProducto(codigo);
+    };
+
+    document.addEventListener('click', e => {
+      if (!e.target.closest('#inputCodigoManual') && !e.target.closest('#sugerenciasManual')) ocultarSugerencias();
+    });
+
+    // ---------------- BUSCAR PRODUCTO (unidad o bulto) ----------------
+    async function buscarProducto(codigoInput) {
+      const codigo = String(codigoInput).trim();
+      try {
+        const ref = doc(db, 'productos', codigo);
+        const snap = await getDoc(ref);
+
+        if (snap.exists()) {
+          const data = snap.data();
+          const stock = await obtenerStockDeProducto(codigo);
+          mostrarProducto({
+            encontrado: true, esBulto: false, codigo: codigo,
+            producto: data.producto, stock: stock
+          });
+          return;
+        }
+
+        // No es un código de unidad conocido: ¿es un bulto?
+        const bultoRef = doc(db, 'bultos', codigo);
+        const bultoSnap = await getDoc(bultoRef);
+        if (bultoSnap.exists()) {
+          const b = bultoSnap.data();
+          const baseSnap = await getDoc(doc(db, 'productos', b.codigoBase));
+          const productoNombre = baseSnap.exists() ? baseSnap.data().producto : b.producto;
+          const stock = await obtenerStockDeProducto(b.codigoBase);
+          mostrarProducto({
+            encontrado: true, esBulto: true, codigo: b.codigoBase,
+            codigoBultoEscaneado: codigo, producto: productoNombre,
+            unidadesPorBulto: b.unidadesPorBulto, stock: stock
+          });
+          return;
+        }
+
+        // No es ni unidad ni bulto: producto no encontrado
+        mostrarProducto({ encontrado: false, esBulto: false, codigo: codigo, producto: null, stock: { total: 0, posiciones: [] } });
+      } catch (err) {
+        mostrarToast("Error buscando producto: " + err.message, true);
+      }
+    }
+
+    async function obtenerStockDeProducto(codigo) {
+      const posSnap = await getDocs(collection(db, 'productos', codigo, 'posiciones'));
+      const posiciones = [];
+      let total = 0;
+      posSnap.forEach(d => {
+        const cantidad = d.data().cantidad || 0;
+        posiciones.push({ posicion: d.id, cantidad });
+        total += cantidad;
+      });
+      return { total, posiciones };
+    }
+
+    // ---------------- MOSTRAR PRODUCTO ----------------
+    function mostrarProducto(resultado) {
+      productoActual = resultado;
+      esBultoActual = !!resultado.esBulto;
+      unidadesPorBultoActual = resultado.unidadesPorBulto || 1;
+
+      document.getElementById('pCodigo').textContent = resultado.codigo;
+
+      if (resultado.encontrado) {
+        document.getElementById('pNombre').textContent = resultado.producto;
+        document.getElementById('pNombre').classList.remove('no-encontrado');
+        document.getElementById('nombreManualField').style.display = 'none';
+      } else {
+        document.getElementById('pNombre').textContent = '⚠ No encontrado en el catálogo';
+        document.getElementById('pNombre').classList.add('no-encontrado');
+        document.getElementById('nombreManualField').style.display = 'block';
+        document.getElementById('inputNombreManual').value = '';
+      }
+
+      if (esBultoActual) {
+        document.getElementById('pBultoBadge').style.display = 'block';
+        document.getElementById('pUnidadesPorBulto').textContent = unidadesPorBultoActual;
+        document.getElementById('labelCantidad').textContent = 'Cantidad de bultos/cajas';
+        document.getElementById('btnAsociarBulto').style.display = 'none';
+      } else {
+        document.getElementById('pBultoBadge').style.display = 'none';
+        document.getElementById('labelCantidad').textContent = 'Cantidad';
+        document.getElementById('btnAsociarBulto').style.display = resultado.encontrado ? 'block' : 'none';
+      }
+
+      document.getElementById('inputPosicion').value = ultimaPosicion;
+      document.getElementById('inputCantidad').value = 1;
+      actualizarEquivalenciaBulto();
+      renderStockActual(resultado.stock);
+
+      posicionesDisponibles = (resultado.stock && resultado.stock.posiciones) || [];
+      document.getElementById('btnModoMover').style.display = posicionesDisponibles.length > 0 ? 'block' : 'none';
+      document.getElementById('moverPosicionBox').style.display = 'none';
+
+      productoBox.classList.add('show');
+    }
+
+    function actualizarEquivalenciaBulto() {
+      const div = document.getElementById('equivalenciaBulto');
+      if (!esBultoActual) { div.style.display = 'none'; return; }
+      const cantidad = parseInt(document.getElementById('inputCantidad').value, 10) || 0;
+      div.style.display = 'block';
+      div.textContent = `= ${cantidad * unidadesPorBultoActual} unidades en total`;
+    }
+
+    function renderStockActual(stock) {
+      const cont = document.getElementById('pStockActual');
+      if (!stock || !stock.total) {
+        cont.innerHTML = '<span class="stock-badge sin-stock">Sin conteo previo</span>';
+        return;
+      }
+      let html = `<span class="stock-badge">Ya contado: ${stock.total}</span>`;
+      if (stock.posiciones.length > 1) {
+        const detalle = stock.posiciones.map(p => `${escapeHtml(p.posicion)}: ${p.cantidad}`).join(' · ');
+        html += `<div class="stock-detalle">${detalle}</div>`;
+      } else if (stock.posiciones.length === 1) {
+        html += `<div class="stock-detalle">en ${escapeHtml(stock.posiciones[0].posicion)}</div>`;
+      }
+      cont.innerHTML = html;
+    }
+
+    // ---------------- CANTIDAD ----------------
+    document.getElementById('btnMas').addEventListener('click', () => cambiarCantidad(1));
+    document.getElementById('btnMenos').addEventListener('click', () => cambiarCantidad(-1));
+    document.getElementById('inputCantidad').addEventListener('input', actualizarEquivalenciaBulto);
+
+    function cambiarCantidad(delta) {
+      const input = document.getElementById('inputCantidad');
+      let val = parseInt(input.value || "1", 10) + delta;
+      if (val < 1) val = 1;
+      input.value = val;
+      actualizarEquivalenciaBulto();
+    }
+
+    // ---------------- CONFIRMAR CONTEO (transacción atómica) ----------------
+    document.getElementById('btnConfirmar').addEventListener('click', confirmarConteo);
+    document.getElementById('btnDescartar').addEventListener('click', descartarProducto);
+
+    async function confirmarConteo() {
+      const posicion = document.getElementById('inputPosicion').value.trim();
+      const cantidadIngresada = parseInt(document.getElementById('inputCantidad').value, 10);
+
+      if (!posicion) { mostrarToast("Ingresá una posición", true); return; }
+      if (!cantidadIngresada || cantidadIngresada <= 0) {
+        mostrarToast(esBultoActual ? "Cantidad de bultos inválida" : "Cantidad inválida", true);
+        return;
+      }
+
+      const cantidadEnUnidades = esBultoActual ? cantidadIngresada * unidadesPorBultoActual : cantidadIngresada;
+
+      let nombreProducto = productoActual.producto;
+      if (!productoActual.encontrado) {
+        nombreProducto = document.getElementById('inputNombreManual').value.trim();
+        if (!nombreProducto) { mostrarToast("Ingresá el nombre del producto", true); return; }
+      }
+
+      const btn = document.getElementById('btnConfirmar');
+      btn.disabled = true;
+      btn.textContent = 'Guardando...';
+      ultimaPosicion = posicion;
+
+      const codigo = productoActual.codigo;
+
+      try {
+        const cantidadTotal = await runTransaction(db, async (tx) => {
+          const productoRef = doc(db, 'productos', codigo);
+          const posRef = doc(db, 'productos', codigo, 'posiciones', posicion);
+
+          const productoSnap = await tx.get(productoRef);
+          const posSnap = await tx.get(posRef);
+
+          const cantidadAnterior = posSnap.exists() ? (posSnap.data().cantidad || 0) : 0;
+          const nuevaCantidadPosicion = cantidadAnterior + cantidadEnUnidades;
+
+          tx.set(posRef, {
+            codigo: codigo,
+            producto: nombreProducto,
+            cantidad: nuevaCantidadPosicion,
+            ultimaActualizacion: serverTimestamp()
+          }, { merge: true });
+
+          if (productoSnap.exists()) {
+            tx.update(productoRef, {
+              producto: nombreProducto,
+              productoLower: nombreProducto.toLowerCase(),
+              stockTotal: increment(cantidadEnUnidades),
+              ultimaActualizacion: serverTimestamp()
+            });
+          } else {
+            tx.set(productoRef, {
+              producto: nombreProducto,
+              productoLower: nombreProducto.toLowerCase(),
+              stockMinimo: null,
+              codigoInterno: null,
+              stockTotal: cantidadEnUnidades,
+              posicionPrincipal: posicion,
+              ultimaActualizacion: serverTimestamp()
+            });
+          }
+
+          return nuevaCantidadPosicion;
+        });
+
+        const detalleSesion = esBultoActual ? `${cantidadIngresada} bulto(s) x${unidadesPorBultoActual}` : null;
+        agregarASesion(codigo, nombreProducto, posicion, cantidadEnUnidades, cantidadTotal, detalleSesion);
+        mostrarToast("Guardado ✓");
+        productoBox.classList.remove('show');
+      } catch (err) {
+        mostrarToast("Error guardando: " + err.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '✔ Confirmar y guardar';
+      }
+    }
+
+    function descartarProducto() {
+      productoBox.classList.remove('show');
+      productoActual = null;
+    }
+
+    function agregarASesion(codigo, nombre, posicion, cantidad, totalAcumulado, detalleBulto) {
+      sesion.unshift({ codigo, nombre, posicion, cantidad, totalAcumulado, detalleBulto });
+      renderSesion();
+    }
+
+    function renderSesion() {
+      const cont = document.getElementById('listaSesion');
+      document.getElementById('totalSesion').textContent = sesion.length + " producto" + (sesion.length === 1 ? "" : "s");
+      if (sesion.length === 0) {
+        cont.innerHTML = '<div class="empty-state">Todavía no escaneaste nada</div>';
+        return;
+      }
+      cont.innerHTML = sesion.map(item => `
+        <div class="session-item">
+          <div>
+            <div class="nombre">${escapeHtml(item.nombre)}</div>
+            <div class="detalle">${escapeHtml(item.codigo)} · Pos. ${escapeHtml(item.posicion)}${item.detalleBulto ? ' · 📦 ' + escapeHtml(item.detalleBulto) : ''}</div>
+          </div>
+          <div class="cant">+${item.cantidad} <span style="color:var(--muted); font-weight:400;">(total: ${item.totalAcumulado})</span></div>
+        </div>
+      `).join('');
+    }
+
+    // ---------------- MOVER/CORREGIR POSICIÓN EXISTENTE ----------------
+    document.getElementById('btnModoMover').addEventListener('click', abrirModoMover);
+    document.getElementById('btnCancelarMover').addEventListener('click', () => {
+      document.getElementById('moverPosicionBox').style.display = 'none';
+    });
+    document.getElementById('selectPosicionAMover').addEventListener('change', cargarDatosPosicionSeleccionada);
+    document.getElementById('btnGuardarMovimiento').addEventListener('click', guardarMovimientoPosicion);
+
+    function abrirModoMover() {
+      const select = document.getElementById('selectPosicionAMover');
+      const selectorField = document.getElementById('selectorPosicionField');
+      if (posicionesDisponibles.length > 1) {
+        selectorField.style.display = 'block';
+        select.innerHTML = posicionesDisponibles.map(p =>
+          `<option value="${escapeAttrJs(p.posicion)}">${escapeHtml(p.posicion)} (${p.cantidad} u.)</option>`
+        ).join('');
+      } else {
+        selectorField.style.display = 'none';
+      }
+      document.getElementById('moverPosicionBox').style.display = 'block';
+      cargarDatosPosicionSeleccionada();
+      document.getElementById('moverPosicionBox').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function cargarDatosPosicionSeleccionada() {
+      let posicionElegida = posicionesDisponibles.length > 1
+        ? document.getElementById('selectPosicionAMover').value
+        : posicionesDisponibles[0].posicion;
+      const datos = posicionesDisponibles.find(p => p.posicion === posicionElegida) || posicionesDisponibles[0];
+      document.getElementById('inputNuevaPosicion').value = datos.posicion;
+      document.getElementById('inputCantidadPosicion').value = datos.cantidad;
+    }
+
+    async function guardarMovimientoPosicion() {
+      const posicionOriginal = posicionesDisponibles.length > 1
+        ? document.getElementById('selectPosicionAMover').value
+        : posicionesDisponibles[0].posicion;
+      const nuevaPosicion = document.getElementById('inputNuevaPosicion').value.trim();
+      const nuevaCantidad = parseInt(document.getElementById('inputCantidadPosicion').value, 10);
+
+      if (!nuevaPosicion) { mostrarToast("La posición no puede estar vacía", true); return; }
+      if (isNaN(nuevaCantidad) || nuevaCantidad < 0) { mostrarToast("Cantidad inválida", true); return; }
+
+      const btn = document.getElementById('btnGuardarMovimiento');
+      btn.disabled = true;
+      btn.textContent = 'Guardando...';
+      const codigo = productoActual.codigo;
+
+      try {
+        await runTransaction(db, async (tx) => {
+          const productoRef = doc(db, 'productos', codigo);
+          const origenRef = doc(db, 'productos', codigo, 'posiciones', posicionOriginal);
+          const origenSnap = await tx.get(origenRef);
+          const cantidadOrigenAnterior = origenSnap.exists() ? (origenSnap.data().cantidad || 0) : 0;
+
+          if (posicionOriginal === nuevaPosicion) {
+            const delta = nuevaCantidad - cantidadOrigenAnterior;
+            if (nuevaCantidad === 0) {
+              tx.delete(origenRef);
+            } else {
+              tx.set(origenRef, { cantidad: nuevaCantidad, ultimaActualizacion: serverTimestamp() }, { merge: true });
+            }
+            tx.update(productoRef, { stockTotal: increment(delta), ultimaActualizacion: serverTimestamp() });
+            return;
+          }
+
+          const destinoRef = doc(db, 'productos', codigo, 'posiciones', nuevaPosicion);
+          const destinoSnap = await tx.get(destinoRef);
+          const cantidadDestinoAnterior = destinoSnap.exists() ? (destinoSnap.data().cantidad || 0) : 0;
+
+          tx.delete(origenRef);
+          if (nuevaCantidad > 0) {
+            tx.set(destinoRef, {
+              codigo: codigo, producto: productoActual.producto,
+              cantidad: cantidadDestinoAnterior + nuevaCantidad,
+              ultimaActualizacion: serverTimestamp()
+            }, { merge: true });
+          }
+
+          const deltaTotal = nuevaCantidad - cantidadOrigenAnterior;
+          tx.update(productoRef, { stockTotal: increment(deltaTotal), ultimaActualizacion: serverTimestamp() });
+        });
+
+        mostrarToast("Posición actualizada ✓");
+        document.getElementById('moverPosicionBox').style.display = 'none';
+        productoBox.classList.remove('show');
+      } catch (err) {
+        mostrarToast("Error: " + err.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '✔ Guardar movimiento';
+      }
+    }
+
+    // ---------------- ASOCIAR BULTO ----------------
+    document.getElementById('btnAsociarBulto').addEventListener('click', abrirAsociarBulto);
+    document.getElementById('btnCancelarAsociarBulto').addEventListener('click', cerrarAsociarBulto);
+    document.getElementById('btnEscanearBulto').addEventListener('click', iniciarEscaneoBulto);
+    document.getElementById('btnCancelarScanBulto').addEventListener('click', detenerEscaneoBulto);
+    document.getElementById('btnUsarCodigoBultoManual').addEventListener('click', () => {
+      const codigo = document.getElementById('inputCodigoBultoManual').value.trim();
+      if (!codigo) { mostrarToast("Ingresá un código", true); return; }
+      mostrarPaso2Bulto(codigo);
+    });
+    document.getElementById('btnGuardarBulto').addEventListener('click', guardarBulto);
+
+    function abrirAsociarBulto() {
+      productoBox.classList.remove('show');
+      document.getElementById('abProducto').textContent = productoActual.producto;
+      document.getElementById('abPaso1').style.display = 'block';
+      document.getElementById('abPaso2').style.display = 'none';
+      document.getElementById('inputCodigoBultoManual').value = '';
+      document.getElementById('abUnidadesPorBulto').value = '';
+      document.getElementById('asociarBultoBox').style.display = 'block';
+    }
+
+    function cerrarAsociarBulto() {
+      detenerEscaneoBulto();
+      document.getElementById('asociarBultoBox').style.display = 'none';
+    }
+
+    function iniciarEscaneoBulto() {
+      document.getElementById('readerBulto').style.display = 'block';
+      document.getElementById('btnCancelarScanBulto').style.display = 'block';
+      document.getElementById('btnEscanearBulto').style.display = 'none';
+
+      html5QrCodeBulto = new Html5Qrcode("readerBulto");
+      const config = {
+        fps: 10, qrbox: { width: 260, height: 140 },
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.QR_CODE
+        ]
+      };
+      html5QrCodeBulto.start({ facingMode: "environment" }, config, codigo => {
+        detenerEscaneoBulto();
+        if (navigator.vibrate) navigator.vibrate(80);
+        mostrarPaso2Bulto(codigo);
+      }).catch(() => { mostrarToast("No se pudo abrir la cámara", true); detenerEscaneoBulto(); });
+    }
+
+    function detenerEscaneoBulto() {
+      if (document.activeElement) document.activeElement.blur();
+      if (html5QrCodeBulto) {
+        html5QrCodeBulto.stop().then(() => { html5QrCodeBulto.clear(); html5QrCodeBulto = null; }).catch(() => {});
+      }
+      document.getElementById('readerBulto').style.display = 'none';
+      document.getElementById('btnCancelarScanBulto').style.display = 'none';
+      document.getElementById('btnEscanearBulto').style.display = 'block';
+    }
+
+    function mostrarPaso2Bulto(codigoBulto) {
+      document.getElementById('abCodigoBulto').value = codigoBulto;
+      document.getElementById('abPaso1').style.display = 'none';
+      document.getElementById('abPaso2').style.display = 'block';
+    }
+
+    async function guardarBulto() {
+      const codigoBulto = document.getElementById('abCodigoBulto').value.trim();
+      const unidadesPorBulto = parseInt(document.getElementById('abUnidadesPorBulto').value, 10);
+      if (!unidadesPorBulto || unidadesPorBulto <= 0) { mostrarToast("Ingresá cuántas unidades trae el bulto", true); return; }
+      if (codigoBulto === productoActual.codigo) { mostrarToast("El código de la caja no puede ser igual al de la unidad", true); return; }
+
+      const btn = document.getElementById('btnGuardarBulto');
+      btn.disabled = true;
+      btn.textContent = 'Guardando...';
+
+      try {
+        await setDoc(doc(db, 'bultos', codigoBulto), {
+          codigoBase: productoActual.codigo,
+          producto: productoActual.producto,
+          unidadesPorBulto: unidadesPorBulto,
+          fechaActualizacion: serverTimestamp()
+        }, { merge: true });
+        mostrarToast("Bulto asociado ✓ (" + unidadesPorBulto + " unidades)");
+        document.getElementById('asociarBultoBox').style.display = 'none';
+      } catch (err) {
+        mostrarToast("Error: " + err.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '✔ Guardar asociación';
+      }
+    }
+
+    // ---------------- VER STOCK ----------------
+    document.getElementById('btnVerStock').addEventListener('click', abrirStock);
+    let stockFilasActuales = [];
+
+    async function abrirStock() {
+      document.getElementById('modalStock').classList.add('show');
+      document.getElementById('stockContenido').innerHTML = '<div class="spinner"></div> Cargando...';
+      try {
+        const q = query(collectionGroup(db, 'posiciones'), orderBy('codigo'));
+        const snap = await getDocs(q);
+        const filas = [];
+        snap.forEach(d => {
+          const data = d.data();
+          filas.push({ codigo: data.codigo, producto: data.producto, posicion: d.id, cantidad: data.cantidad || 0 });
+        });
+        renderStock(filas);
+      } catch (err) {
+        document.getElementById('stockContenido').textContent = 'Error: ' + err.message;
+      }
+    }
+
+    function renderStock(filas) {
+      stockFilasActuales = filas;
+      if (!filas.length) {
+        document.getElementById('stockContenido').innerHTML = '<div class="empty-state">Sin stock cargado todavía</div>';
+        return;
+      }
+      let html = '<table><tr><th>Código</th><th>Producto</th><th>Pos.</th><th>Cant.</th><th></th></tr>';
+      filas.forEach((f, idx) => {
+        html += `<tr id="fila-stock-${idx}">
+          <td>${escapeHtml(f.codigo)}</td>
+          <td>${escapeHtml(f.producto)}</td>
+          <td>${escapeHtml(f.posicion)}</td>
+          <td><strong>${f.cantidad}</strong></td>
+          <td><button onclick="window.__editarFilaStock(${idx})" style="background:none;border:none;font-size:16px;cursor:pointer;">✏️</button></td>
+        </tr>`;
+      });
+      html += '</table>';
+      document.getElementById('stockContenido').innerHTML = html;
+    }
+
+    window.__editarFilaStock = function(idx) {
+      const f = stockFilasActuales[idx];
+      const fila = document.getElementById('fila-stock-' + idx);
+      fila.innerHTML = `
+        <td colspan="5">
+          <div style="padding:8px 0;">
+            <div style="font-weight:600; margin-bottom:6px;">${escapeHtml(f.producto)}
+              <span style="color:var(--muted); font-weight:400;">(${escapeHtml(f.codigo)})</span>
+            </div>
+            <div style="display:flex; gap:8px; margin-bottom:8px;">
+              <input type="text" id="editPos-${idx}" value="${escapeHtml(f.posicion)}" placeholder="Posición"
+                style="flex:1; padding:8px; border:1px solid var(--border); border-radius:8px; font-size:14px;">
+              <input type="number" id="editCant-${idx}" value="${f.cantidad}" min="0"
+                style="width:80px; padding:8px; border:1px solid var(--border); border-radius:8px; font-size:14px;">
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button onclick="window.__guardarEdicionStock(${idx})"
+                style="flex:1; padding:8px; border:none; border-radius:8px; background:var(--green); color:white; font-weight:600;">Guardar</button>
+              <button onclick="window.__abrirStockDesdeCero()"
+                style="flex:1; padding:8px; border:none; border-radius:8px; background:#e5e7eb;">Cancelar</button>
+            </div>
+            <div style="font-size:11px; color:var(--muted); margin-top:6px;">Cantidad en 0 elimina esa posición.</div>
+          </div>
+        </td>
+      `;
+    };
+
+    window.__abrirStockDesdeCero = function() { abrirStock(); };
+
+    window.__guardarEdicionStock = async function(idx) {
+      const f = stockFilasActuales[idx];
+      const nuevaPosicion = document.getElementById('editPos-' + idx).value.trim();
+      const nuevaCantidad = parseInt(document.getElementById('editCant-' + idx).value, 10);
+      if (!nuevaPosicion) { mostrarToast("La posición no puede estar vacía", true); return; }
+      if (isNaN(nuevaCantidad) || nuevaCantidad < 0) { mostrarToast("Cantidad inválida", true); return; }
+
+      try {
+        await runTransaction(db, async (tx) => {
+          const productoRef = doc(db, 'productos', f.codigo);
+          const origenRef = doc(db, 'productos', f.codigo, 'posiciones', f.posicion);
+          const origenSnap = await tx.get(origenRef);
+          const cantidadAnterior = origenSnap.exists() ? (origenSnap.data().cantidad || 0) : 0;
+
+          if (f.posicion === nuevaPosicion) {
+            const delta = nuevaCantidad - cantidadAnterior;
+            if (nuevaCantidad === 0) tx.delete(origenRef);
+            else tx.set(origenRef, { cantidad: nuevaCantidad, ultimaActualizacion: serverTimestamp() }, { merge: true });
+            tx.update(productoRef, { stockTotal: increment(delta), ultimaActualizacion: serverTimestamp() });
+            return;
+          }
+
+          const destinoRef = doc(db, 'productos', f.codigo, 'posiciones', nuevaPosicion);
+          const destinoSnap = await tx.get(destinoRef);
+          const cantidadDestinoAnterior = destinoSnap.exists() ? (destinoSnap.data().cantidad || 0) : 0;
+
+          tx.delete(origenRef);
+          if (nuevaCantidad > 0) {
+            tx.set(destinoRef, {
+              codigo: f.codigo, producto: f.producto,
+              cantidad: cantidadDestinoAnterior + nuevaCantidad,
+              ultimaActualizacion: serverTimestamp()
+            }, { merge: true });
+          }
+          tx.update(productoRef, { stockTotal: increment(nuevaCantidad - cantidadAnterior), ultimaActualizacion: serverTimestamp() });
+        });
+        mostrarToast("Actualizado ✓");
+        abrirStock();
+      } catch (err) {
+        mostrarToast("Error: " + err.message, true);
+      }
+    };
+
+    window.cerrarModal = function(id) { document.getElementById(id).classList.remove('show'); };
+
+    // ---------------- HELPERS ----------------
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+    }
+    function escapeAttrJs(str) { return String(str).replace(/'/g, "\\'"); }
+
+    function mostrarToast(msg, esError) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.toggle('error', !!esError);
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), esError ? 3500 : 2200);
+    }
+  </script>
+</body>
+</html>
