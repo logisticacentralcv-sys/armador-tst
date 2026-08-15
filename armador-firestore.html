@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    :root {
+      --primary: #2563eb; --primary-dark: #1d4ed8; --green: #16a34a; --orange: #ea580c;
+      --bg: #f3f4f6; --card: #ffffff; --text: #111827; --muted: #6b7280; --border: #e5e7eb;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    button { outline: none; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); padding-bottom: 30px; }
+    header { background: var(--primary); color: white; padding: 16px 20px; position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+    header p { margin: 2px 0 0; font-size: 12px; opacity: 0.85; }
+    .container { padding: 16px; }
+    .card { background: var(--card); border-radius: 14px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .btn { display: block; width: 100%; padding: 14px; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 10px; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-secondary { background: #e5e7eb; color: var(--text); }
+    .btn-success { background: var(--green); color: white; }
+    .btn:disabled { opacity: 0.5; }
+    .sucursal-btn { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 14px 16px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 12px; background: white; font-size: 15px; font-weight: 600; cursor: pointer; }
+    .sucursal-btn .badge { background: var(--primary); color: white; border-radius: 20px; padding: 3px 10px; font-size: 12px; font-weight: 700; }
+    .barra-sucursal { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .barra-sucursal .nombre { font-size: 16px; font-weight: 700; }
+    .barra-sucursal button { background: none; border: none; color: var(--primary); font-size: 13px; font-weight: 600; cursor: pointer; }
+    #reader { width: 100%; border-radius: 12px; overflow: hidden; }
+    .producto-box { display: none; }
+    .producto-box.show { display: block; }
+    .producto-posicion { display: inline-block; background: #eff6ff; color: var(--primary-dark); border: 1px solid #bfdbfe; border-radius: 8px; padding: 4px 10px; font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+    .producto-nombre { font-size: 18px; font-weight: 700; margin-bottom: 2px; }
+    .producto-codigo { font-size: 13px; color: var(--muted); font-family: monospace; margin-bottom: 10px; }
+    .producto-pedido { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+    .field { margin-bottom: 12px; }
+    .field label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+    .field input { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 16px; }
+    .qty-row { display: flex; align-items: center; gap: 8px; }
+    .qty-row input { text-align: center; font-size: 20px; font-weight: 700; }
+    .qty-btn { width: 46px; height: 46px; border-radius: 10px; border: none; background: var(--primary); color: white; font-size: 22px; font-weight: 700; cursor: pointer; }
+    .item-pendiente { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+    .item-pendiente:last-child { border-bottom: none; }
+    .item-pendiente .posicion-tag { background: #f3f4f6; color: var(--text); border-radius: 8px; padding: 4px 8px; font-size: 12px; font-weight: 700; font-family: monospace; white-space: nowrap; }
+    .item-pendiente .info { flex: 1; min-width: 0; }
+    .item-pendiente .info .nombre { font-size: 14px; font-weight: 600; }
+    .item-pendiente .info .detalle { font-size: 12px; color: var(--muted); }
+    .item-pendiente .cant { font-weight: 700; color: var(--primary); font-size: 14px; white-space: nowrap; }
+    .empty-state { color: var(--muted); font-size: 14px; text-align: center; padding: 20px 0; }
+    .cargando { color: var(--muted); font-size: 13px; text-align: center; padding: 16px 0; }
+    .contador { font-size: 13px; color: var(--muted); font-weight: 400; }
+    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--green); color: white; padding: 12px 20px; border-radius: 10px; font-size: 14px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.2); opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 100; }
+    .toast.show { opacity: 1; }
+    .toast.error { background: #dc2626; }
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 50; align-items: flex-end; }
+    .modal-overlay.show { display: flex; }
+    .modal { background: white; width: 100%; max-height: 80vh; overflow-y: auto; border-radius: 18px 18px 0 0; padding: 20px; }
+    .modal h2 { margin-top: 0; font-size: 17px; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>📋 Armador de Pedidos</h1>
+    <p id="subtitulo">Elegí la sucursal para armar</p>
+  </header>
+
+  <div class="container">
+
+    <div class="card" id="pasoSucursal">
+      <div id="listaSucursales"><div class="cargando">Cargando sucursales con pedidos pendientes...</div></div>
+      <button class="btn btn-secondary" id="btnRefrescarSucursales">🔄 Refrescar</button>
+    </div>
+
+    <div id="pasoArmar" style="display:none;">
+      <div class="card">
+        <div class="barra-sucursal">
+          <span class="nombre" id="nombreSucursalActiva"></span>
+          <button id="btnCambiarSucursal">Cambiar sucursal</button>
+        </div>
+        <button class="btn btn-secondary" id="btnVerArmadoArriba" style="margin-top:2px;">✅ Ver lo que ya armé</button>
+
+        <button class="btn btn-primary" id="btnEscanear" style="margin-top:14px;">📷 Escanear código de barras</button>
+        <div id="reader" style="display:none; margin-top: 12px;"></div>
+        <button class="btn btn-secondary" id="btnCancelarScan" style="display:none;">Cancelar escaneo</button>
+
+        <div style="display:flex; align-items:center; gap:8px; margin: 14px 0 6px;">
+          <div style="flex:1; height:1px; background:var(--border);"></div>
+          <span style="font-size:12px; color:var(--muted);">o ingresalo a mano</span>
+          <div style="flex:1; height:1px; background:var(--border);"></div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="inputCodigoManual" placeholder="Código EAN" inputmode="numeric"
+            style="flex:1; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:16px;">
+          <button class="btn btn-secondary" id="btnBuscarManual" style="width:auto; margin-top:0; padding:12px 18px;">Buscar</button>
+        </div>
+      </div>
+
+      <div class="card producto-box" id="productoBox">
+        <div class="producto-posicion" id="pPosicion"></div>
+        <div class="producto-nombre" id="pNombre"></div>
+        <div class="producto-codigo" id="pCodigo"></div>
+        <div class="producto-pedido" id="pPedido"></div>
+        <div class="producto-pedido" id="pStockVirtual" style="margin-top:-8px;"></div>
+        <div id="pBultoAviso" style="display:none; background:#fef3c7; color:#92400e; border:1px solid #fde68a; border-radius:8px; padding:8px 10px; font-size:13px; margin-bottom:10px;"></div>
+
+        <div class="field">
+          <label id="labelCantidadArmador">Cantidad armada</label>
+          <div class="qty-row">
+            <button class="qty-btn" id="btnMenos">−</button>
+            <input type="number" id="inputCantidad" value="1" min="0">
+            <button class="qty-btn" id="btnMas">+</button>
+          </div>
+          <div id="equivalenciaBultoArmador" style="display:none; font-size:12px; color:var(--muted); margin-top:4px;"></div>
+        </div>
+
+        <div class="field" id="motivoField" style="display:none;">
+          <label>La cantidad no coincide con lo pedido — ¿por qué?</label>
+          <select id="selectMotivo" style="width:100%; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:15px;">
+            <option value="">Elegí un motivo...</option>
+            <option value="Redondeo de bulto/caja">Redondeo de bulto/caja</option>
+            <option value="Falta de stock">Falta de stock</option>
+            <option value="otro">Otro (escribir)</option>
+          </select>
+          <input type="text" id="inputMotivoOtro" placeholder="Detalle..." style="display:none; margin-top:8px; width:100%; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:15px;">
+        </div>
+
+        <button class="btn btn-success" id="btnArmar">✔ Armar</button>
+        <button class="btn" id="btnSinStock" style="background:#fee2e2; color:#dc2626;">✕ Sin stock</button>
+        <button class="btn btn-secondary" id="btnDescartar">Cancelar</button>
+      </div>
+
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <strong>Pendientes de armar</strong>
+          <span class="contador" id="contadorPendientes"></span>
+        </div>
+        <div id="listaPendientes"><div class="cargando">Cargando...</div></div>
+      </div>
+
+      <button class="btn btn-secondary" id="btnVerArmado">✅ Ver lo que ya armé</button>
+    </div>
+
+  </div>
+
+  <div class="modal-overlay" id="modalArmado">
+    <div class="modal">
+      <h2>Ya armado</h2>
+      <input type="text" id="buscarEnArmado" placeholder="Buscar por código o nombre..."
+        style="width:100%; padding:10px; border:1px solid var(--border); border-radius:10px; font-size:14px; margin-bottom:10px;">
+      <div id="armadoContenido"><div class="cargando">Cargando...</div></div>
+      <button class="btn btn-secondary" onclick="cerrarModal('modalArmado')">Cerrar</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+    import {
+      getFirestore, doc, getDoc, collection, query, where, orderBy, limit,
+      getDocs, runTransaction, writeBatch, serverTimestamp, increment
+    } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+    // ⚠️ CONFIGURACIÓN: mismo proyecto de Firebase que app-firestore.html
+    const firebaseConfig = {
+      apiKey: "AIzaSyBjsx_gcl2X1yr8SPoi_tF3qGcrFRLK3bQ",
+      authDomain: "armador-de-pedidos-secos-119b3.firebaseapp.com",
+      projectId: "armador-de-pedidos-secos-119b3",
+      storageBucket: "armador-de-pedidos-secos-119b3.firebasestorage.app",
+      messagingSenderId: "713677759926",
+      appId: "1:713677759926:web:e0a8f512d79f75f2a5cd17"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const pedidosCol = collection(db, 'pedidos');
+
+    let html5QrCode = null;
+    let sucursalActiva = null;
+    let pendientes = [];
+    let itemSeleccionado = null;
+    let stockVirtual = {};
+    let bultosMap = {};
+    let bultoActual = null;
+
+    cargarBultos();
+    cargarSucursales();
+
+    // ---------------- BULTOS (una sola carga, se comparte con app de conteo) ----------------
+    async function cargarBultos() {
+      try {
+        const snap = await getDocs(collection(db, 'bultos'));
+        bultosMap = {};
+        snap.forEach(d => { bultosMap[d.id] = { codigoBulto: d.id, ...d.data() }; });
+      } catch (err) {
+        console.error('Error cargando bultos', err);
+      }
+    }
+
+    // ---------------- PASO 1: SUCURSALES ----------------
+    document.getElementById('btnRefrescarSucursales').addEventListener('click', cargarSucursales);
+    document.getElementById('btnCambiarSucursal').addEventListener('click', volverAElegirSucursal);
+
+    async function cargarSucursales() {
+      document.getElementById('listaSucursales').innerHTML = '<div class="cargando">Cargando...</div>';
+      try {
+        // Pendiente = todavía no procesado Y sin nada en armado ni diferencia
+        const q = query(pedidosCol, where('procesado', '==', false), where('armado', '==', null));
+        const snap = await getDocs(q);
+        const conteo = {};
+        snap.forEach(d => {
+          const data = d.data();
+          if (data.diferencia) return; // ya resuelto por diferencia, no cuenta como pendiente
+          const sucursal = data.sucursal || '(sin sucursal)';
+          conteo[sucursal] = (conteo[sucursal] || 0) + 1;
+        });
+        renderizarSucursales(Object.keys(conteo).map(s => ({ sucursal: s, pendientes: conteo[s] })));
+      } catch (err) {
+        document.getElementById('listaSucursales').innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
+      }
+    }
+
+    function renderizarSucursales(datos) {
+      const cont = document.getElementById('listaSucursales');
+      if (!datos.length) { cont.innerHTML = '<div class="empty-state">No hay pedidos pendientes de armar</div>'; return; }
+      cont.innerHTML = datos.map(d => `
+        <button class="sucursal-btn" onclick="window.__elegirSucursal('${d.sucursal.replace(/'/g, "\\'")}')">
+          ${escapeHtml(d.sucursal)}
+          <span class="badge">${d.pendientes}</span>
+        </button>
+      `).join('');
+    }
+
+    window.__elegirSucursal = function(sucursal) {
+      sucursalActiva = sucursal;
+      document.getElementById('nombreSucursalActiva').textContent = sucursal;
+      document.getElementById('subtitulo').textContent = 'Armando para: ' + sucursal;
+      document.getElementById('pasoSucursal').style.display = 'none';
+      document.getElementById('pasoArmar').style.display = 'block';
+      cargarPendientes();
+    };
+
+    function volverAElegirSucursal() {
+      sucursalActiva = null;
+      pendientes = [];
+      document.getElementById('subtitulo').textContent = 'Elegí la sucursal para armar';
+      document.getElementById('pasoArmar').style.display = 'none';
+      document.getElementById('pasoSucursal').style.display = 'block';
+      cargarSucursales();
+    }
+
+    // ---------------- PASO 2: LISTA DE PENDIENTES ----------------
+    async function cargarPendientes() {
+      document.getElementById('listaPendientes').innerHTML = '<div class="cargando">Cargando...</div>';
+      try {
+        const q = query(pedidosCol,
+          where('sucursal', '==', sucursalActiva),
+          where('procesado', '==', false),
+          where('armado', '==', null)
+        );
+        const snap = await getDocs(q);
+        const filas = [];
+        for (const d of snap.docs) {
+          const data = d.data();
+          if (data.diferencia) continue; // ya resuelto
+          filas.push({ id: d.id, ...data });
+        }
+
+        // Backfill de posición desde productos.posicionPrincipal si falta
+        for (const f of filas) {
+          if (!f.posicion && f.codigo) {
+            const pSnap = await getDoc(doc(db, 'productos', f.codigo));
+            if (pSnap.exists() && pSnap.data().posicionPrincipal) {
+              f.posicion = pSnap.data().posicionPrincipal;
+              // se persiste en Firestore, no solo en pantalla
+              updateDocSinEsperar(doc(db, 'pedidos', f.id), { posicion: f.posicion });
+            }
+          }
+          if (f.codigo && !(f.codigo in stockVirtual)) {
+            const pSnap = await getDoc(doc(db, 'productos', f.codigo));
+            stockVirtual[f.codigo] = pSnap.exists() ? (pSnap.data().stockTotal ?? null) : null;
+          }
+        }
+
+        pendientes = filas.sort((a, b) => compararPosicionNatural(a.posicion, b.posicion));
+        renderizarPendientes();
+      } catch (err) {
+        document.getElementById('listaPendientes').innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
+      }
+    }
+
+    function updateDocSinEsperar(ref, datos) {
+      import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js").then(({ updateDoc }) => {
+        updateDoc(ref, datos).catch(() => {});
+      });
+    }
+
+    function renderizarPendientes() {
+      const cont = document.getElementById('listaPendientes');
+      document.getElementById('contadorPendientes').textContent = pendientes.length ? `(${pendientes.length})` : '';
+      if (!pendientes.length) { cont.innerHTML = '<div class="empty-state">🎉 No queda nada pendiente para esta sucursal</div>'; return; }
+      cont.innerHTML = pendientes.map((p, idx) => `
+        <div class="item-pendiente" onclick="window.__seleccionarItem(${idx}, true)">
+          <div class="posicion-tag">${escapeHtml(p.posicion || '—')}</div>
+          <div class="info">
+            <div class="nombre">${escapeHtml(p.producto)}</div>
+            <div class="detalle">${escapeHtml(p.codigo || '')} ${renderStockPill(stockVirtual[p.codigo])}</div>
+          </div>
+          <div class="cant">x${p.cantidadPedida}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderStockPill(stock) {
+      if (stock === null || stock === undefined) return '<span style="color:var(--muted);">· sin contar</span>';
+      if (stock <= 0) return '<span style="color:#dc2626; font-weight:700;">· sin stock</span>';
+      return `<span style="color:var(--green); font-weight:700;">· stock: ${stock}</span>`;
+    }
+
+    function compararPosicionNatural(a, b) {
+      const partesA = String(a || '').match(/\d+|\D+/g) || [];
+      const partesB = String(b || '').match(/\d+|\D+/g) || [];
+      const len = Math.max(partesA.length, partesB.length);
+      for (let i = 0; i < len; i++) {
+        const pa = partesA[i] || '', pb = partesB[i] || '';
+        const numA = parseInt(pa, 10), numB = parseInt(pb, 10);
+        if (!isNaN(numA) && !isNaN(numB) && numA !== numB) return numA - numB;
+        if (pa !== pb) return pa < pb ? -1 : 1;
+      }
+      return 0;
+    }
+
+    // ---------------- ESCANEO ----------------
+    document.getElementById('btnEscanear').addEventListener('click', iniciarEscaneo);
+    document.getElementById('btnCancelarScan').addEventListener('click', detenerEscaneo);
+    document.getElementById('btnBuscarManual').addEventListener('click', buscarManual);
+    document.getElementById('inputCodigoManual').addEventListener('keydown', e => { if (e.key === 'Enter') buscarManual(); });
+
+    function iniciarEscaneo() {
+      document.getElementById('reader').style.display = 'block';
+      document.getElementById('btnCancelarScan').style.display = 'block';
+      document.getElementById('btnEscanear').style.display = 'none';
+      document.getElementById('productoBox').classList.remove('show');
+
+      html5QrCode = new Html5Qrcode("reader");
+      const config = {
+        fps: 10, qrbox: { width: 260, height: 140 },
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.QR_CODE
+        ]
+      };
+      html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess)
+        .catch(() => { mostrarToast("No se pudo abrir la cámara", true); detenerEscaneo(); });
+    }
+
+    function detenerEscaneo() {
+      if (document.activeElement) document.activeElement.blur();
+      if (html5QrCode) { html5QrCode.stop().then(() => { html5QrCode.clear(); html5QrCode = null; }).catch(() => {}); }
+      document.getElementById('reader').style.display = 'none';
+      document.getElementById('btnCancelarScan').style.display = 'none';
+      document.getElementById('btnEscanear').style.display = 'block';
+    }
+
+    function onScanSuccess(codigo) {
+      detenerEscaneo();
+      if (navigator.vibrate) navigator.vibrate(80);
+      buscarEnPendientes(codigo);
+    }
+
+    function buscarManual() {
+      const input = document.getElementById('inputCodigoManual');
+      const codigo = input.value.trim();
+      if (!codigo) { mostrarToast("Ingresá un código", true); return; }
+      buscarEnPendientes(codigo);
+      input.value = '';
+    }
+
+    function buscarEnPendientes(codigo) {
+      codigo = codigo.trim();
+      let idx = pendientes.findIndex(p => p.codigo === codigo);
+      if (idx !== -1) { bultoActual = null; seleccionarItem(idx); return; }
+
+      const bulto = bultosMap[codigo];
+      if (bulto) {
+        idx = pendientes.findIndex(p => p.codigo === bulto.codigoBase);
+        if (idx !== -1) { bultoActual = bulto; seleccionarItem(idx); return; }
+      }
+      mostrarToast("Ese código no está pendiente para " + sucursalActiva, true);
+    }
+
+    window.__seleccionarItem = function(idx, esClickDirecto) {
+      if (esClickDirecto) bultoActual = null;
+      seleccionarItem(idx);
+    };
+
+    function seleccionarItem(idx) {
+      itemSeleccionado = pendientes[idx];
+      document.getElementById('pPosicion').textContent = itemSeleccionado.posicion || 'Sin posición';
+      document.getElementById('pNombre').textContent = itemSeleccionado.producto;
+      document.getElementById('pCodigo').textContent = itemSeleccionado.codigo || '';
+      document.getElementById('pPedido').textContent = `Pedido: ${itemSeleccionado.cantidadPedida} unidad(es)`;
+      document.getElementById('pStockVirtual').innerHTML = 'Stock disponible: ' + renderStockPill(stockVirtual[itemSeleccionado.codigo]);
+
+      if (bultoActual) {
+        document.getElementById('pBultoAviso').style.display = 'block';
+        document.getElementById('pBultoAviso').innerHTML = `📦 Escaneaste una CAJA — contiene <strong>${bultoActual.unidadesPorBulto}</strong> unidades c/u`;
+        document.getElementById('labelCantidadArmador').textContent = 'Cantidad de cajas armadas';
+        document.getElementById('inputCantidad').value = 1;
+      } else {
+        document.getElementById('pBultoAviso').style.display = 'none';
+        document.getElementById('labelCantidadArmador').textContent = 'Cantidad armada';
+        document.getElementById('inputCantidad').value = itemSeleccionado.cantidadPedida;
+      }
+
+      document.getElementById('selectMotivo').value = '';
+      document.getElementById('inputMotivoOtro').value = '';
+      document.getElementById('inputMotivoOtro').style.display = 'none';
+      actualizarVisibilidadMotivo();
+      actualizarEquivalenciaBultoArmador();
+      document.getElementById('productoBox').classList.add('show');
+      document.getElementById('productoBox').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    document.getElementById('inputCantidad').addEventListener('input', () => {
+      actualizarVisibilidadMotivo();
+      actualizarEquivalenciaBultoArmador();
+    });
+    document.getElementById('btnMas').addEventListener('click', () => cambiarCantidad(1));
+    document.getElementById('btnMenos').addEventListener('click', () => cambiarCantidad(-1));
+    document.getElementById('selectMotivo').addEventListener('change', () => {
+      document.getElementById('inputMotivoOtro').style.display = document.getElementById('selectMotivo').value === 'otro' ? 'block' : 'none';
+    });
+
+    function cambiarCantidad(delta) {
+      const input = document.getElementById('inputCantidad');
+      let val = parseInt(input.value || "0", 10) + delta;
+      if (val < 0) val = 0;
+      input.value = val;
+      actualizarVisibilidadMotivo();
+      actualizarEquivalenciaBultoArmador();
+    }
+
+    function actualizarEquivalenciaBultoArmador() {
+      const div = document.getElementById('equivalenciaBultoArmador');
+      if (!bultoActual) { div.style.display = 'none'; return; }
+      const cantidad = parseInt(document.getElementById('inputCantidad').value, 10) || 0;
+      div.style.display = 'block';
+      div.textContent = `= ${cantidad * bultoActual.unidadesPorBulto} unidades en total`;
+    }
+
+    function actualizarVisibilidadMotivo() {
+      if (!itemSeleccionado) return;
+      const cantidad = parseInt(document.getElementById('inputCantidad').value, 10);
+      const cantidadEnUnidades = bultoActual ? cantidad * bultoActual.unidadesPorBulto : cantidad;
+      const difiere = !isNaN(cantidadEnUnidades) && cantidadEnUnidades !== itemSeleccionado.cantidadPedida;
+      document.getElementById('motivoField').style.display = difiere ? 'block' : 'none';
+    }
+
+    // ---------------- ARMAR (transacción con query, sin LockService) ----------------
+    document.getElementById('btnArmar').addEventListener('click', confirmarArmado);
+    document.getElementById('btnSinStock').addEventListener('click', confirmarSinStock);
+    document.getElementById('btnDescartar').addEventListener('click', () => {
+      document.getElementById('productoBox').classList.remove('show');
+      itemSeleccionado = null;
+      bultoActual = null;
+    });
+
+    async function confirmarArmado() {
+      if (!itemSeleccionado) return;
+      const cantidadIngresada = parseInt(document.getElementById('inputCantidad').value, 10);
+      if (isNaN(cantidadIngresada) || cantidadIngresada < 0) { mostrarToast(bultoActual ? "Cantidad de cajas inválida" : "Cantidad inválida", true); return; }
+
+      const cantidadEnUnidades = bultoActual ? cantidadIngresada * bultoActual.unidadesPorBulto : cantidadIngresada;
+
+      let motivo = "";
+      const difiere = cantidadEnUnidades !== itemSeleccionado.cantidadPedida;
+      if (difiere) {
+        const seleccionMotivo = document.getElementById('selectMotivo').value;
+        if (!seleccionMotivo) { mostrarToast("Elegí el motivo de la diferencia", true); return; }
+        motivo = seleccionMotivo === 'otro' ? document.getElementById('inputMotivoOtro').value.trim() : seleccionMotivo;
+        if (!motivo) { mostrarToast("Escribí el motivo", true); return; }
+      }
+
+      const btn = document.getElementById('btnArmar');
+      btn.disabled = true;
+      btn.textContent = 'Guardando...';
+
+      try {
+        await guardarArmado(itemSeleccionado.id, cantidadEnUnidades, motivo);
+        if (itemSeleccionado.codigo in stockVirtual && stockVirtual[itemSeleccionado.codigo] !== null) {
+          stockVirtual[itemSeleccionado.codigo] -= cantidadEnUnidades;
+        }
+        pendientes = pendientes.filter(p => p.id !== itemSeleccionado.id);
+        renderizarPendientes();
+        document.getElementById('productoBox').classList.remove('show');
+        mostrarToast("Armado ✓" + (bultoActual ? ` (${cantidadIngresada} caja(s) = ${cantidadEnUnidades} u.)` : ""));
+        itemSeleccionado = null;
+        bultoActual = null;
+      } catch (err) {
+        mostrarToast("Error: " + err.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '✔ Armar';
+      }
+    }
+
+    // Escribe directo por ID de documento (ya lo tenemos, no hace falta query transaccional acá)
+    async function guardarArmado(pedidoId, cantidadArmada, diferencia) {
+      const { updateDoc } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js");
+      await updateDoc(doc(db, 'pedidos', pedidoId), {
+        armado: cantidadArmada,
+        diferencia: diferencia || null
+      });
+    }
+
+    function confirmarSinStock() {
+      if (!itemSeleccionado) return;
+      const item = itemSeleccionado;
+
+      pendientes = pendientes.filter(p => p.id !== item.id);
+      renderizarPendientes();
+      document.getElementById('productoBox').classList.remove('show');
+      itemSeleccionado = null;
+      bultoActual = null;
+      mostrarToast("Sin stock ✓ — avisando a otras sucursales...");
+
+      (async () => {
+        try {
+          await guardarArmado(item.id, 0, 'Falta de stock');
+          const filasActualizadas = await marcarSinStockGlobal(item.codigo, item.id);
+          if (filasActualizadas > 0) {
+            mostrarToast(`Sin stock marcado también en ${filasActualizadas} pedido(s) de otras sucursales`);
+            pendientes = pendientes.filter(p => p.codigo !== item.codigo);
+            renderizarPendientes();
+          }
+        } catch (err) {
+          mostrarToast("⚠ No se pudo guardar '" + item.producto + "': " + err.message, true);
+        }
+      })();
+    }
+
+    async function marcarSinStockGlobal(codigo, idExcluir) {
+      if (!codigo) return 0;
+      const q = query(pedidosCol, where('codigo', '==', codigo), where('procesado', '==', false), where('armado', '==', null));
+      const snap = await getDocs(q);
+      const candidatos = snap.docs.filter(d => d.id !== idExcluir && !d.data().diferencia);
+      if (!candidatos.length) return 0;
+
+      const { updateDoc } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js");
+      // writeBatch soporta hasta 500 operaciones; vamos de a 400 por margen
+      for (let i = 0; i < candidatos.length; i += 400) {
+        const batch = writeBatch(db);
+        candidatos.slice(i, i + 400).forEach(d => {
+          batch.update(d.ref, { armado: 0, diferencia: 'Falta de stock' });
+        });
+        await batch.commit();
+      }
+      return candidatos.length;
+    }
+
+    // ---------------- VER ARMADO ----------------
+    document.getElementById('btnVerArmado').addEventListener('click', abrirArmado);
+    document.getElementById('btnVerArmadoArriba').addEventListener('click', abrirArmado);
+
+    let armadosCargados = [];
+    document.getElementById('buscarEnArmado').addEventListener('input', () => {
+      const texto = document.getElementById('buscarEnArmado').value.trim().toLowerCase();
+      const filtrados = !texto ? armadosCargados : armadosCargados.filter(d =>
+        (d.codigo || '').toLowerCase().includes(texto) || (d.producto || '').toLowerCase().includes(texto)
+      );
+      renderizarArmado(filtrados);
+    });
+
+    async function abrirArmado() {
+      document.getElementById('modalArmado').classList.add('show');
+      document.getElementById('buscarEnArmado').value = '';
+      document.getElementById('armadoContenido').innerHTML = '<div class="cargando">Cargando...</div>';
+      try {
+        const q = query(pedidosCol, where('sucursal', '==', sucursalActiva), where('procesado', '==', false));
+        const snap = await getDocs(q);
+        const datos = [];
+        snap.forEach(d => {
+          const data = d.data();
+          if (data.armado !== null || data.diferencia) datos.push({ id: d.id, ...data });
+        });
+        armadosCargados = datos;
+        renderizarArmado(datos);
+      } catch (err) {
+        document.getElementById('armadoContenido').textContent = 'Error: ' + err.message;
+      }
+    }
+
+    function renderizarArmado(datos) {
+      const cont = document.getElementById('armadoContenido');
+      if (!datos.length) { cont.innerHTML = '<div class="empty-state">Nada para mostrar</div>'; return; }
+      let html = '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
+      html += '<tr><th style="text-align:left; padding:6px 4px; color:var(--muted);">Código</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Producto</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Pedido</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Armado</th><th></th></tr>';
+      datos.forEach(d => {
+        html += `<tr id="fila-armado-${d.id}">
+          <td style="padding:6px 4px; border-top:1px solid var(--border);">${escapeHtml(d.codigo || '')}</td>
+          <td style="padding:6px 4px; border-top:1px solid var(--border);">${escapeHtml(d.producto)}</td>
+          <td style="padding:6px 4px; border-top:1px solid var(--border);">${d.cantidadPedida}</td>
+          <td style="padding:6px 4px; border-top:1px solid var(--border); font-weight:700;">${d.armado ?? 0}${d.diferencia ? '<br><span style="font-weight:400; color:var(--muted); font-size:11px;">' + escapeHtml(d.diferencia) + '</span>' : ''}</td>
+          <td style="padding:6px 4px; border-top:1px solid var(--border);"><button onclick="window.__editarArmadoInline('${d.id}')" style="background:none; border:none; font-size:15px; cursor:pointer;">✏️</button></td>
+        </tr>`;
+      });
+      html += '</table>';
+      cont.innerHTML = html;
+    }
+
+    window.__editarArmadoInline = function(id) {
+      const d = armadosCargados.find(x => x.id === id);
+      if (!d) return;
+      const fila = document.getElementById('fila-armado-' + id);
+      fila.innerHTML = `
+        <td colspan="5" style="padding:8px 4px; border-top:1px solid var(--border);">
+          <div style="font-weight:600; margin-bottom:6px;">${escapeHtml(d.producto)} <span style="color:var(--muted); font-weight:400;">(${escapeHtml(d.codigo || '')})</span></div>
+          <div style="display:flex; gap:8px;">
+            <input type="number" id="editArmado-${id}" value="${d.armado ?? 0}" min="0"
+              style="flex:1; padding:8px; border:1px solid var(--border); border-radius:8px;">
+            <button onclick="window.__guardarEdicionArmado('${id}')"
+              style="padding:8px 14px; border:none; border-radius:8px; background:var(--green); color:white; font-weight:600;">Guardar</button>
+            <button onclick="renderizarArmado(armadosCargados)"
+              style="padding:8px 14px; border:none; border-radius:8px; background:#e5e7eb;">Cancelar</button>
+          </div>
+        </td>
+      `;
+    };
+
+    window.__guardarEdicionArmado = async function(id) {
+      const input = document.getElementById('editArmado-' + id);
+      const nuevaCantidad = parseInt(input.value, 10);
+      if (isNaN(nuevaCantidad) || nuevaCantidad < 0) { mostrarToast("Cantidad inválida", true); return; }
+      try {
+        const d = armadosCargados.find(x => x.id === id);
+        const { updateDoc } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js");
+        const datosUpdate = { armado: nuevaCantidad };
+        if (nuevaCantidad === d.cantidadPedida) datosUpdate.diferencia = null;
+        await updateDoc(doc(db, 'pedidos', id), datosUpdate);
+        mostrarToast("Actualizado ✓");
+        d.armado = nuevaCantidad;
+        if (nuevaCantidad === d.cantidadPedida) d.diferencia = null;
+        renderizarArmado(armadosCargados);
+      } catch (err) {
+        mostrarToast("Error: " + err.message, true);
+      }
+    };
+
+    window.cerrarModal = function(id) { document.getElementById(id).classList.remove('show'); };
+
+    function escapeHtml(str) { return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s])); }
+    function mostrarToast(msg, esError) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.toggle('error', !!esError);
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), esError ? 3500 : 2200);
+    }
+  </script>
+</body>
+</html>
