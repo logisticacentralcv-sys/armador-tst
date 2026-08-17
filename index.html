@@ -268,19 +268,28 @@
           filas.push({ id: d.id, ...data });
         }
 
-        // Backfill de posición desde productos.posicionPrincipal si falta
+        // Backfill de posición + stock virtual, UNA sola consulta por
+        // código único (no una por cada fila), y todas en paralelo
+        // (antes eran secuenciales y hasta duplicadas — de ahí la demora).
+        const codigosUnicos = [...new Set(filas.map(f => f.codigo).filter(Boolean))];
+        const docsProducto = await Promise.all(
+          codigosUnicos.map(codigo => getDoc(doc(db, 'productos', codigo)))
+        );
+        const infoPorCodigo = {};
+        codigosUnicos.forEach((codigo, idx) => {
+          const pSnap = docsProducto[idx];
+          infoPorCodigo[codigo] = pSnap.exists() ? pSnap.data() : null;
+        });
+
         for (const f of filas) {
-          if (!f.posicion && f.codigo) {
-            const pSnap = await getDoc(doc(db, 'productos', f.codigo));
-            if (pSnap.exists() && pSnap.data().posicionPrincipal) {
-              f.posicion = pSnap.data().posicionPrincipal;
-              // se persiste en Firestore, no solo en pantalla
-              updateDocSinEsperar(doc(db, 'pedidos', f.id), { posicion: f.posicion });
-            }
+          if (!f.codigo) continue;
+          const info = infoPorCodigo[f.codigo];
+          if (!f.posicion && info && info.posicionPrincipal) {
+            f.posicion = info.posicionPrincipal;
+            updateDocSinEsperar(doc(db, 'pedidos', f.id), { posicion: f.posicion });
           }
-          if (f.codigo && !(f.codigo in stockVirtual)) {
-            const pSnap = await getDoc(doc(db, 'productos', f.codigo));
-            stockVirtual[f.codigo] = pSnap.exists() ? (pSnap.data().stockTotal ?? null) : null;
+          if (!(f.codigo in stockVirtual)) {
+            stockVirtual[f.codigo] = info ? (info.stockTotal ?? null) : null;
           }
         }
 
