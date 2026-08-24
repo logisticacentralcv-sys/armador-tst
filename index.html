@@ -98,7 +98,17 @@
       </div>
 
       <div class="card producto-box" id="productoBox">
-        <div class="producto-posicion" id="pPosicion"></div>
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+          <div class="producto-posicion" id="pPosicion" style="margin-bottom:0;"></div>
+          <button id="btnEditarPosicion" style="background:none; border:none; font-size:15px; cursor:pointer; padding:2px 4px;">✏️</button>
+        </div>
+        <div id="editorPosicionBox" style="display:none; background:#f9fafb; border:1px solid var(--border); border-radius:10px; padding:10px; margin-bottom:10px;">
+          <div style="font-size:12px; color:var(--muted); margin-bottom:6px;">Corregir dónde está realmente este producto (mueve el stock, no suma ni resta cantidad):</div>
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="inputNuevaPosicionArmador" placeholder="Nueva posición" style="flex:1; padding:10px; border:1px solid var(--border); border-radius:8px; font-size:15px;">
+            <button id="btnGuardarPosicionArmador" style="padding:10px 14px; border:none; border-radius:8px; background:var(--green); color:white; font-weight:600;">Guardar</button>
+          </div>
+        </div>
         <div class="producto-nombre" id="pNombre"></div>
         <div class="producto-codigo" id="pCodigo"></div>
         <div class="producto-pedido" id="pPedido"></div>
@@ -409,6 +419,7 @@
 
     function seleccionarItem(idx) {
       itemSeleccionado = pendientes[idx];
+      document.getElementById('editorPosicionBox').style.display = 'none';
       document.getElementById('pPosicion').textContent = itemSeleccionado.posicion || 'Sin posición';
       document.getElementById('pNombre').textContent = itemSeleccionado.producto;
       document.getElementById('pCodigo').textContent = itemSeleccionado.codigo || '';
@@ -472,12 +483,93 @@
 
     // ---------------- ARMAR (transacción con query, sin LockService) ----------------
     document.getElementById('btnArmar').addEventListener('click', confirmarArmado);
+    document.getElementById('btnEditarPosicion').addEventListener('click', () => {
+      const box = document.getElementById('editorPosicionBox');
+      const abrir = box.style.display === 'none';
+      box.style.display = abrir ? 'block' : 'none';
+      if (abrir) document.getElementById('inputNuevaPosicionArmador').value = itemSeleccionado ? (itemSeleccionado.posicion || '') : '';
+    });
+    document.getElementById('btnGuardarPosicionArmador').addEventListener('click', guardarCorreccionPosicion);
     document.getElementById('btnSinStock').addEventListener('click', confirmarSinStock);
     document.getElementById('btnDescartar').addEventListener('click', () => {
       document.getElementById('productoBox').classList.remove('show');
       itemSeleccionado = null;
       bultoActual = null;
     });
+
+    // Corrige dónde está realmente un producto (mueve el stock entre
+    // posiciones sin cambiar la cantidad total) — no tiene nada que
+    // ver con "armar", es una corrección de datos que queda guardada
+    // para todos los pedidos futuros de ese producto.
+    async function guardarCorreccionPosicion() {
+      if (!itemSeleccionado || !itemSeleccionado.codigo) { mostrarToast("No hay producto seleccionado", true); return; }
+      const nuevaPosicion = document.getElementById('inputNuevaPosicionArmador').value.trim();
+      if (!nuevaPosicion) { mostrarToast("Ingresá una posición", true); return; }
+
+      const codigo = itemSeleccionado.codigo;
+      const posicionVieja = itemSeleccionado.posicion || '';
+
+      const btn = document.getElementById('btnGuardarPosicionArmador');
+      btn.disabled = true;
+      btn.textContent = 'Guardando...';
+
+      try {
+        await runTransaction(db, async (tx) => {
+          const productoRef = doc(db, 'productos', codigo);
+
+          if (posicionVieja && posicionVieja !== nuevaPosicion) {
+            // Había stock en otra posición: lo mudamos de verdad
+            const origenRef = doc(db, 'productos', codigo, 'posiciones', posicionVieja);
+            const destinoRef = doc(db, 'productos', codigo, 'posiciones', nuevaPosicion);
+            const origenSnap = await tx.get(origenRef);
+            const destinoSnap = await tx.get(destinoRef);
+            const cantidadOrigen = origenSnap.exists() ? (origenSnap.data().cantidad || 0) : 0;
+            const cantidadDestino = destinoSnap.exists() ? (destinoSnap.data().cantidad || 0) : 0;
+
+            tx.delete(origenRef);
+            tx.set(destinoRef, {
+              codigo: codigo, producto: itemSeleccionado.producto,
+              cantidad: cantidadDestino + cantidadOrigen,
+              ultimaActualizacion: serverTimestamp()
+            }, { merge: true });
+          } else if (!posicionVieja) {
+            // No había ninguna posición (sin stock todavía): igual creamos
+            // el registro de la posición, con cantidad 0. Así queda
+            // consistente en "Ver stock" y en cualquier otra consulta,
+            // no como un dato suelto en posicionPrincipal.
+            const destinoRef = doc(db, 'productos', codigo, 'posiciones', nuevaPosicion);
+            const destinoSnap = await tx.get(destinoRef);
+            if (!destinoSnap.exists()) {
+              tx.set(destinoRef, {
+                codigo: codigo, producto: itemSeleccionado.producto,
+                cantidad: 0,
+                ultimaActualizacion: serverTimestamp()
+              });
+            }
+          }
+
+          tx.update(productoRef, { posicionPrincipal: nuevaPosicion, ultimaActualizacion: serverTimestamp() });
+        });
+
+        // Actualizar en pantalla: este pedido y cualquier otro pendiente del mismo código
+        itemSeleccionado.posicion = nuevaPosicion;
+        document.getElementById('pPosicion').textContent = nuevaPosicion;
+        pendientes.forEach(p => { if (p.codigo === codigo) p.posicion = nuevaPosicion; });
+        renderizarPendientes();
+
+        // Persistir también en el pedido actual, para que quede prolijo
+        const { updateDoc } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js");
+        await updateDoc(doc(db, 'pedidos', itemSeleccionado.id), { posicion: nuevaPosicion });
+
+        document.getElementById('editorPosicionBox').style.display = 'none';
+        mostrarToast("Posición corregida ✓");
+      } catch (err) {
+        mostrarToast("Error: " + err.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Guardar';
+      }
+    }
 
     async function confirmarArmado() {
       if (!itemSeleccionado) return;
