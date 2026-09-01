@@ -48,6 +48,10 @@
     .item-pendiente .info .detalle { font-size: 12px; color: var(--muted); }
     .item-pendiente .cant { font-weight: 700; color: var(--primary); font-size: 14px; white-space: nowrap; }
     .empty-state { color: var(--muted); font-size: 14px; text-align: center; padding: 20px 0; }
+    .tabs-modo { display: flex; gap: 8px; margin-bottom: 12px; }
+    .tab-modo { flex: 1; padding: 12px; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; background: #e5e7eb; color: var(--text); }
+    .tab-modo.activo { background: var(--primary); color: white; }
+    .tab-modo.faltantes.activo { background: #dc2626; color: white; }
     .cargando { color: var(--muted); font-size: 13px; text-align: center; padding: 16px 0; }
     .contador { font-size: 13px; color: var(--muted); font-weight: 400; }
     .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--green); color: white; padding: 12px 20px; border-radius: 10px; font-size: 14px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.2); opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 100; }
@@ -69,6 +73,10 @@
   <div class="container">
 
     <div class="card" id="pasoSucursal">
+      <div class="tabs-modo">
+        <button class="tab-modo activo" id="tabModoPendientes">Pendientes</button>
+        <button class="tab-modo faltantes" id="tabModoFaltantes">🔴 Faltantes</button>
+      </div>
       <div id="listaSucursales"><div class="cargando">Cargando sucursales con pedidos pendientes...</div></div>
       <button class="btn btn-secondary" id="btnRefrescarSucursales">🔄 Refrescar</button>
     </div>
@@ -198,6 +206,12 @@
     let bultosMap = {};
     let bultoActual = null;
 
+    // modoActivo: 'pendiente' = pedidos normales, 'faltante' = filas que en
+    // CONSOLIDADO tienen estado FALTANTE (se sincronizan con tipo:'FALTANTE'
+    // y van aparte para poder priorizarlas en el armado).
+    let modoActivo = 'pendiente';
+    let todosPendientesRaw = []; // última consulta cruda (sin separar por tipo), para no re-leer Firestore al cambiar de pestaña
+
     cargarBultos();
     cargarSucursales();
 
@@ -216,41 +230,75 @@
     document.getElementById('btnRefrescarSucursales').addEventListener('click', cargarSucursales);
     document.getElementById('filtroProveedorArmador').addEventListener('change', renderizarPendientes);
     document.getElementById('btnCambiarSucursal').addEventListener('click', volverAElegirSucursal);
+    document.getElementById('tabModoPendientes').addEventListener('click', () => cambiarModo('pendiente'));
+    document.getElementById('tabModoFaltantes').addEventListener('click', () => cambiarModo('faltante'));
+
+    function cambiarModo(modo) {
+      if (modoActivo === modo) return;
+      modoActivo = modo;
+      actualizarTabsModo();
+      renderizarSucursalesDesdeCache();
+    }
+
+    function actualizarTabsModo() {
+      document.getElementById('tabModoPendientes').classList.toggle('activo', modoActivo === 'pendiente');
+      document.getElementById('tabModoFaltantes').classList.toggle('activo', modoActivo === 'faltante');
+    }
 
     async function cargarSucursales() {
       document.getElementById('listaSucursales').innerHTML = '<div class="cargando">Cargando...</div>';
       try {
-        // Pendiente = todavía no procesado Y sin nada en armado ni diferencia
+        // Pendiente = todavía no procesado Y sin nada en armado ni diferencia.
+        // Se trae UNA sola vez, sin filtrar por tipo, y Pendientes/Faltantes
+        // se separan en memoria — así cambiar de pestaña no dispara otra
+        // consulta a Firestore.
         const q = query(pedidosCol, where('procesado', '==', false), where('armado', '==', null));
         const snap = await getDocs(q);
-        const conteo = {};
+        todosPendientesRaw = [];
         snap.forEach(d => {
           const data = d.data();
           if (data.diferencia) return; // ya resuelto por diferencia, no cuenta como pendiente
-          const sucursal = data.sucursal || '(sin sucursal)';
-          conteo[sucursal] = (conteo[sucursal] || 0) + 1;
+          todosPendientesRaw.push({ id: d.id, ...data });
         });
-        renderizarSucursales(Object.keys(conteo).map(s => ({ sucursal: s, pendientes: conteo[s] })));
+        renderizarSucursalesDesdeCache();
       } catch (err) {
         document.getElementById('listaSucursales').innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
       }
     }
 
+    function esFaltante_(data) { return data.tipo === 'FALTANTE'; }
+
+    function renderizarSucursalesDesdeCache() {
+      const conteo = {};
+      todosPendientesRaw
+        .filter(d => modoActivo === 'faltante' ? esFaltante_(d) : !esFaltante_(d))
+        .forEach(d => {
+          const sucursal = d.sucursal || '(sin sucursal)';
+          conteo[sucursal] = (conteo[sucursal] || 0) + 1;
+        });
+      renderizarSucursales(Object.keys(conteo).map(s => ({ sucursal: s, pendientes: conteo[s] })));
+    }
+
     function renderizarSucursales(datos) {
       const cont = document.getElementById('listaSucursales');
-      if (!datos.length) { cont.innerHTML = '<div class="empty-state">No hay pedidos pendientes de armar</div>'; return; }
+      if (!datos.length) {
+        cont.innerHTML = `<div class="empty-state">${modoActivo === 'faltante' ? '🎉 No hay faltantes pendientes de armar' : 'No hay pedidos pendientes de armar'}</div>`;
+        return;
+      }
+      const colorBadge = modoActivo === 'faltante' ? 'background:#dc2626;' : '';
       cont.innerHTML = datos.map(d => `
         <button class="sucursal-btn" onclick="window.__elegirSucursal('${d.sucursal.replace(/'/g, "\\'")}')">
           ${escapeHtml(d.sucursal)}
-          <span class="badge">${d.pendientes}</span>
+          <span class="badge" style="${colorBadge}">${d.pendientes}</span>
         </button>
       `).join('');
     }
 
     window.__elegirSucursal = function(sucursal) {
       sucursalActiva = sucursal;
-      document.getElementById('nombreSucursalActiva').textContent = sucursal;
-      document.getElementById('subtitulo').textContent = 'Armando para: ' + sucursal;
+      const prefijo = modoActivo === 'faltante' ? '🔴 FALTANTES — ' : '';
+      document.getElementById('nombreSucursalActiva').textContent = prefijo + sucursal;
+      document.getElementById('subtitulo').textContent = (modoActivo === 'faltante' ? 'Armando FALTANTES para: ' : 'Armando para: ') + sucursal;
       document.getElementById('pasoSucursal').style.display = 'none';
       document.getElementById('pasoArmar').style.display = 'block';
       document.getElementById('filtroProveedorArmador').value = '';
@@ -280,6 +328,7 @@
         for (const d of snap.docs) {
           const data = d.data();
           if (data.diferencia) continue; // ya resuelto
+          if (modoActivo === 'faltante' ? !esFaltante_(data) : esFaltante_(data)) continue; // separado por pestaña
           filas.push({ id: d.id, ...data });
         }
 
@@ -346,7 +395,10 @@
         ? (proveedorFiltro ? `(${visibles.length} de ${pendientes.length})` : `(${pendientes.length})`)
         : '';
 
-      if (!pendientes.length) { cont.innerHTML = '<div class="empty-state">🎉 No queda nada pendiente para esta sucursal</div>'; return; }
+      if (!pendientes.length) {
+        cont.innerHTML = `<div class="empty-state">${modoActivo === 'faltante' ? '🎉 No quedan faltantes para esta sucursal' : '🎉 No queda nada pendiente para esta sucursal'}</div>`;
+        return;
+      }
       if (!visibles.length) { cont.innerHTML = '<div class="empty-state">No hay pendientes de ese proveedor</div>'; return; }
 
       cont.innerHTML = visibles.map(p => `
@@ -716,7 +768,9 @@
         const datos = [];
         snap.forEach(d => {
           const data = d.data();
-          if (data.armado !== null || data.diferencia) datos.push({ id: d.id, ...data });
+          if (data.armado === null && !data.diferencia) return; // todavía no armado
+          if (modoActivo === 'faltante' ? !esFaltante_(data) : esFaltante_(data)) return; // separado por pestaña
+          datos.push({ id: d.id, ...data });
         });
         armadosCargados = datos;
         renderizarArmado(datos);
