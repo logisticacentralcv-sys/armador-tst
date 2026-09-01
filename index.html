@@ -146,6 +146,9 @@
           <strong>Pendientes de armar</strong>
           <span class="contador" id="contadorPendientes"></span>
         </div>
+        <select id="filtroProveedorArmador" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:10px; font-size:14px; margin-bottom:10px; display:none;">
+          <option value="">Todos los proveedores</option>
+        </select>
         <div id="listaPendientes"><div class="cargando">Cargando...</div></div>
       </div>
 
@@ -211,6 +214,7 @@
 
     // ---------------- PASO 1: SUCURSALES ----------------
     document.getElementById('btnRefrescarSucursales').addEventListener('click', cargarSucursales);
+    document.getElementById('filtroProveedorArmador').addEventListener('change', renderizarPendientes);
     document.getElementById('btnCambiarSucursal').addEventListener('click', volverAElegirSucursal);
 
     async function cargarSucursales() {
@@ -249,6 +253,7 @@
       document.getElementById('subtitulo').textContent = 'Armando para: ' + sucursal;
       document.getElementById('pasoSucursal').style.display = 'none';
       document.getElementById('pasoArmar').style.display = 'block';
+      document.getElementById('filtroProveedorArmador').value = '';
       cargarPendientes();
     };
 
@@ -301,13 +306,27 @@
           if (!(f.codigo in stockVirtual)) {
             stockVirtual[f.codigo] = info ? (info.stockTotal ?? null) : null;
           }
+          f.proveedor = info && info.proveedor ? info.proveedor : null;
         }
 
         pendientes = filas.sort((a, b) => compararPosicionNatural(a.posicion, b.posicion));
+        poblarFiltroProveedorArmador();
         renderizarPendientes();
       } catch (err) {
         document.getElementById('listaPendientes').innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
       }
+    }
+
+    function poblarFiltroProveedorArmador() {
+      const select = document.getElementById('filtroProveedorArmador');
+      const proveedorElegido = select.value; // conservar selección si sigue existiendo
+      const proveedores = [...new Set(pendientes.map(p => p.proveedor).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+
+      select.innerHTML = '<option value="">Todos los proveedores</option>' +
+        proveedores.map(p => `<option value="${p.replace(/"/g, '&quot;')}">${p}</option>`).join('');
+      select.style.display = proveedores.length > 1 ? 'block' : 'none';
+
+      if (proveedores.includes(proveedorElegido)) select.value = proveedorElegido;
     }
 
     function updateDocSinEsperar(ref, datos) {
@@ -318,10 +337,20 @@
 
     function renderizarPendientes() {
       const cont = document.getElementById('listaPendientes');
-      document.getElementById('contadorPendientes').textContent = pendientes.length ? `(${pendientes.length})` : '';
+      const proveedorFiltro = document.getElementById('filtroProveedorArmador').value;
+      const visibles = pendientes
+        .map((p, idx) => Object.assign({}, p, { __idxReal: idx }))
+        .filter(p => !proveedorFiltro || p.proveedor === proveedorFiltro);
+
+      document.getElementById('contadorPendientes').textContent = pendientes.length
+        ? (proveedorFiltro ? `(${visibles.length} de ${pendientes.length})` : `(${pendientes.length})`)
+        : '';
+
       if (!pendientes.length) { cont.innerHTML = '<div class="empty-state">🎉 No queda nada pendiente para esta sucursal</div>'; return; }
-      cont.innerHTML = pendientes.map((p, idx) => `
-        <div class="item-pendiente" onclick="window.__seleccionarItem(${idx}, true)">
+      if (!visibles.length) { cont.innerHTML = '<div class="empty-state">No hay pendientes de ese proveedor</div>'; return; }
+
+      cont.innerHTML = visibles.map(p => `
+        <div class="item-pendiente" onclick="window.__seleccionarItem(${p.__idxReal}, true)">
           <div class="posicion-tag">${escapeHtml(p.posicion || '—')}</div>
           <div class="info">
             <div class="nombre">${escapeHtml(p.producto)}</div>
