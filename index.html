@@ -66,8 +66,16 @@
 <body>
 
   <header>
-    <h1>📋 Armador de Pedidos</h1>
-    <p id="subtitulo">Elegí la sucursal para armar</p>
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+      <div>
+        <h1>📋 Armador de Pedidos</h1>
+        <p id="subtitulo">Elegí la sucursal para armar</p>
+      </div>
+      <div style="display:flex; gap:6px; flex-shrink:0;">
+        <button id="btnVerStockGlobal" title="Ver stock" style="background:rgba(255,255,255,0.18); border:none; color:white; border-radius:8px; padding:8px 10px; font-size:16px; cursor:pointer;">📦</button>
+        <button id="btnVerAdmin" title="Administrador" style="background:rgba(255,255,255,0.18); border:none; color:white; border-radius:8px; padding:8px 10px; font-size:16px; cursor:pointer;">🔧</button>
+      </div>
+    </div>
   </header>
 
   <div class="container">
@@ -175,6 +183,27 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="modalStockGlobal">
+    <div class="modal">
+      <h2>📦 Stock (todos los productos)</h2>
+      <input type="text" id="buscarEnStockGlobal" placeholder="Buscar por código o nombre..."
+        style="width:100%; padding:10px; border:1px solid var(--border); border-radius:10px; font-size:14px; margin-bottom:10px;">
+      <div id="stockGlobalContenido"><div class="cargando">Cargando...</div></div>
+      <button class="btn btn-secondary" id="btnDescargarStockCSV">⬇ Descargar CSV</button>
+      <button class="btn btn-secondary" onclick="cerrarModal('modalStockGlobal')">Cerrar</button>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalAdmin">
+    <div class="modal">
+      <h2>🔧 Armado pendiente de procesar (todas las sucursales)</h2>
+      <input type="text" id="buscarEnAdmin" placeholder="Buscar por código, nombre o sucursal..."
+        style="width:100%; padding:10px; border:1px solid var(--border); border-radius:10px; font-size:14px; margin-bottom:10px;">
+      <div id="adminContenido"><div class="cargando">Cargando...</div></div>
+      <button class="btn btn-secondary" onclick="cerrarModal('modalAdmin')">Cerrar</button>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script type="module">
@@ -203,6 +232,7 @@
     let pendientes = [];
     let itemSeleccionado = null;
     let stockVirtual = {};
+    let comprometidoPorCodigo = {}; // codigo -> unidades armadas en cualquier sucursal, todavía sin procesar
     let bultosMap = {};
     let bultoActual = null;
 
@@ -323,7 +353,7 @@
           where('procesado', '==', false),
           where('armado', '==', null)
         );
-        const snap = await getDocs(q);
+        const [snap] = await Promise.all([getDocs(q), cargarComprometidos()]);
         const filas = [];
         for (const d of snap.docs) {
           const data = d.data();
@@ -406,15 +436,43 @@
           <div class="posicion-tag">${escapeHtml(p.posicion || '—')}</div>
           <div class="info">
             <div class="nombre">${escapeHtml(p.producto)}</div>
-            <div class="detalle">${escapeHtml(p.codigo || '')} ${renderStockPill(stockVirtual[p.codigo])}</div>
+            <div class="detalle">${escapeHtml(p.codigo || '')} ${renderStockPill(stockVirtual[p.codigo], p.codigo)}</div>
           </div>
           <div class="cant">x${p.cantidadPedida}</div>
         </div>
       `).join('');
     }
 
-    function renderStockPill(stock) {
+    // Suma, por código, cuánto está "armado" (en CUALQUIER sucursal) pero
+    // todavía sin procesar en el Sheet — eso es stock que ya está tomado
+    // aunque Firestore todavía no lo descontó. Se recalcula cada vez que
+    // se entra o se refresca una sucursal (no queda un contador guardado
+    // aparte, así nunca se desincroniza).
+    async function cargarComprometidos() {
+      try {
+        const q = query(pedidosCol, where('procesado', '==', false));
+        const snap = await getDocs(q);
+        const mapa = {};
+        snap.forEach(d => {
+          const data = d.data();
+          if (data.armado === null || data.armado === undefined) return; // todavía no armado, no compromete nada
+          if (!data.codigo) return;
+          mapa[data.codigo] = (mapa[data.codigo] || 0) + (Number(data.armado) || 0);
+        });
+        comprometidoPorCodigo = mapa;
+      } catch (err) {
+        console.error('Error cargando comprometidos', err);
+      }
+    }
+
+    function renderStockPill(stock, codigo) {
       if (stock === null || stock === undefined) return '<span style="color:var(--muted);">· sin contar</span>';
+      const comprometido = (codigo && comprometidoPorCodigo[codigo]) || 0;
+      if (comprometido > 0) {
+        const disponible = stock - comprometido;
+        const color = disponible <= 0 ? '#dc2626' : 'var(--green)';
+        return `<span style="color:${color}; font-weight:700;">· ${disponible} disponibles</span> <span style="color:#ea580c; font-weight:700;">/ ${comprometido} comprometidas</span>`;
+      }
       if (stock <= 0) return '<span style="color:#dc2626; font-weight:700;">· sin stock</span>';
       return `<span style="color:var(--green); font-weight:700;">· stock: ${stock}</span>`;
     }
@@ -505,7 +563,7 @@
       document.getElementById('pNombre').textContent = itemSeleccionado.producto;
       document.getElementById('pCodigo').textContent = itemSeleccionado.codigo || '';
       document.getElementById('pPedido').textContent = `Pedido: ${itemSeleccionado.cantidadPedida} unidad(es)`;
-      document.getElementById('pStockVirtual').innerHTML = 'Stock disponible: ' + renderStockPill(stockVirtual[itemSeleccionado.codigo]);
+      document.getElementById('pStockVirtual').innerHTML = 'Stock disponible: ' + renderStockPill(stockVirtual[itemSeleccionado.codigo], itemSeleccionado.codigo);
 
       if (bultoActual) {
         document.getElementById('pBultoAviso').style.display = 'block';
@@ -744,6 +802,174 @@
       }
       return candidatos.length;
     }
+
+    // ---------------- VER STOCK GLOBAL (+ descarga CSV) ----------------
+    document.getElementById('btnVerStockGlobal').addEventListener('click', abrirStockGlobal);
+    document.getElementById('btnDescargarStockCSV').addEventListener('click', descargarStockCSV);
+    let stockGlobalCargado = [];
+
+    document.getElementById('buscarEnStockGlobal').addEventListener('input', () => {
+      const texto = document.getElementById('buscarEnStockGlobal').value.trim().toLowerCase();
+      const filtrados = !texto ? stockGlobalCargado : stockGlobalCargado.filter(d =>
+        (d.codigo || '').toLowerCase().includes(texto) || (d.producto || '').toLowerCase().includes(texto)
+      );
+      renderizarStockGlobal(filtrados);
+    });
+
+    async function abrirStockGlobal() {
+      document.getElementById('modalStockGlobal').classList.add('show');
+      document.getElementById('buscarEnStockGlobal').value = '';
+      document.getElementById('stockGlobalContenido').innerHTML = '<div class="cargando">Cargando stock (puede tardar unos segundos)...</div>';
+      try {
+        const snap = await getDocs(collection(db, 'productos'));
+        stockGlobalCargado = [];
+        snap.forEach(d => {
+          const data = d.data();
+          stockGlobalCargado.push({
+            codigo: d.id,
+            producto: data.producto || '',
+            stockTotal: data.stockTotal ?? 0,
+            posicionPrincipal: data.posicionPrincipal || ''
+          });
+        });
+        stockGlobalCargado.sort((a, b) => (a.producto || '').localeCompare(b.producto || '', 'es'));
+        renderizarStockGlobal(stockGlobalCargado);
+      } catch (err) {
+        document.getElementById('stockGlobalContenido').innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
+      }
+    }
+
+    function renderizarStockGlobal(datos) {
+      const cont = document.getElementById('stockGlobalContenido');
+      if (!datos.length) { cont.innerHTML = '<div class="empty-state">Sin resultados</div>'; return; }
+      let html = '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
+      html += '<tr><th style="text-align:left; padding:6px 4px; color:var(--muted);">Código</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Producto</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Stock</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Posición</th></tr>';
+      datos.forEach(d => {
+        html += `<tr>
+          <td style="padding:6px 4px; border-top:1px solid var(--border); font-family:monospace;">${escapeHtml(d.codigo)}</td>
+          <td style="padding:6px 4px; border-top:1px solid var(--border);">${escapeHtml(d.producto)}</td>
+          <td style="padding:6px 4px; border-top:1px solid var(--border); font-weight:700;">${d.stockTotal}</td>
+          <td style="padding:6px 4px; border-top:1px solid var(--border);">${escapeHtml(d.posicionPrincipal)}</td>
+        </tr>`;
+      });
+      html += '</table>';
+      cont.innerHTML = html;
+    }
+
+    // Genera el CSV en el navegador y lo descarga directo — no hace falta
+    // pasar por Sheets ni por Apps Script (si además querés que quede
+    // volcado en una hoja de cálculo del lado del Sheet, seguí usando
+    // "Actualizar Stock/Totales en Sheets" del menú de Sincronización).
+    function descargarStockCSV() {
+      if (!stockGlobalCargado.length) { mostrarToast("Todavía no cargó el stock", true); return; }
+      const filas = [['Codigo', 'Producto', 'StockTotal', 'PosicionPrincipal']];
+      stockGlobalCargado.forEach(d => filas.push([d.codigo, d.producto, d.stockTotal, d.posicionPrincipal]));
+      const csv = filas.map(f => f.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
+      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `stock_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // ---------------- ADMINISTRADOR: todo lo armado sin procesar, de todas las sucursales ----------------
+    document.getElementById('btnVerAdmin').addEventListener('click', abrirAdmin);
+    let adminCargado = [];
+
+    document.getElementById('buscarEnAdmin').addEventListener('input', () => {
+      const texto = document.getElementById('buscarEnAdmin').value.trim().toLowerCase();
+      const filtrados = !texto ? adminCargado : adminCargado.filter(d =>
+        (d.codigo || '').toLowerCase().includes(texto) ||
+        (d.producto || '').toLowerCase().includes(texto) ||
+        (d.sucursal || '').toLowerCase().includes(texto)
+      );
+      renderizarAdmin(filtrados);
+    });
+
+    async function abrirAdmin() {
+      document.getElementById('modalAdmin').classList.add('show');
+      document.getElementById('buscarEnAdmin').value = '';
+      document.getElementById('adminContenido').innerHTML = '<div class="cargando">Cargando...</div>';
+      try {
+        // Solo lo armado (o con diferencia) que todavía no se procesó, sin
+        // filtrar por sucursal — esta es la diferencia con "Ver armado".
+        const q = query(pedidosCol, where('procesado', '==', false));
+        const snap = await getDocs(q);
+        const datos = [];
+        snap.forEach(d => {
+          const data = d.data();
+          if (data.armado === null && !data.diferencia) return; // todavía sin armar, no interesa acá
+          datos.push({ id: d.id, ...data });
+        });
+        datos.sort((a, b) => (a.sucursal || '').localeCompare(b.sucursal || '', 'es'));
+        adminCargado = datos;
+        renderizarAdmin(datos);
+      } catch (err) {
+        document.getElementById('adminContenido').innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
+      }
+    }
+
+    function renderizarAdmin(datos) {
+      const cont = document.getElementById('adminContenido');
+      if (!datos.length) { cont.innerHTML = '<div class="empty-state">Nada armado pendiente de procesar</div>'; return; }
+      let html = '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
+      html += '<tr><th style="text-align:left; padding:6px 4px; color:var(--muted);">Sucursal</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Código</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Producto</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Pedido</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Armado</th><th></th></tr>';
+      datos.forEach(d => {
+        const tagFaltante = d.tipo === 'FALTANTE' ? ' <span style="color:#dc2626; font-weight:700;" title="Faltante">🔴</span>' : '';
+        html += `<tr id="fila-admin-${d.id}">
+          <td style="padding:6px 4px; border-top:1px solid var(--border);">${escapeHtml(d.sucursal || '')}${tagFaltante}</td>
+          <td style="padding:6px 4px; border-top:1px solid var(--border);">${escapeHtml(d.codigo || '')}</td>
+          <td style="padding:6px 4px; border-top:1px solid var(--border);">${escapeHtml(d.producto)}</td>
+          <td style="padding:6px 4px; border-top:1px solid var(--border);">${d.cantidadPedida}</td>
+          <td style="padding:6px 4px; border-top:1px solid var(--border); font-weight:700;">${d.armado ?? 0}${d.diferencia ? '<br><span style="font-weight:400; color:var(--muted); font-size:11px;">' + escapeHtml(d.diferencia) + '</span>' : ''}</td>
+          <td style="padding:6px 4px; border-top:1px solid var(--border);"><button onclick="window.__editarAdminInline('${d.id}')" style="background:none; border:none; font-size:15px; cursor:pointer;">✏️</button></td>
+        </tr>`;
+      });
+      html += '</table>';
+      cont.innerHTML = html;
+    }
+
+    window.__editarAdminInline = function(id) {
+      const d = adminCargado.find(x => x.id === id);
+      if (!d) return;
+      const fila = document.getElementById('fila-admin-' + id);
+      fila.innerHTML = `
+        <td colspan="6" style="padding:8px 4px; border-top:1px solid var(--border);">
+          <div style="font-weight:600; margin-bottom:6px;">${escapeHtml(d.producto)} <span style="color:var(--muted); font-weight:400;">(${escapeHtml(d.codigo || '')} — ${escapeHtml(d.sucursal || '')})</span></div>
+          <div style="display:flex; gap:8px;">
+            <input type="number" id="editAdmin-${id}" value="${d.armado ?? 0}" min="0"
+              style="flex:1; padding:8px; border:1px solid var(--border); border-radius:8px;">
+            <button onclick="window.__guardarEdicionAdmin('${id}')"
+              style="padding:8px 14px; border:none; border-radius:8px; background:var(--green); color:white; font-weight:600;">Guardar</button>
+            <button onclick="renderizarAdmin(adminCargado)"
+              style="padding:8px 14px; border:none; border-radius:8px; background:#e5e7eb;">Cancelar</button>
+          </div>
+        </td>
+      `;
+    };
+
+    window.__guardarEdicionAdmin = async function(id) {
+      const input = document.getElementById('editAdmin-' + id);
+      const nuevaCantidad = parseInt(input.value, 10);
+      if (isNaN(nuevaCantidad) || nuevaCantidad < 0) { mostrarToast("Cantidad inválida", true); return; }
+      try {
+        const d = adminCargado.find(x => x.id === id);
+        const { updateDoc } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js");
+        const datosUpdate = { armado: nuevaCantidad };
+        if (nuevaCantidad === d.cantidadPedida) datosUpdate.diferencia = null;
+        await updateDoc(doc(db, 'pedidos', id), datosUpdate);
+        mostrarToast("Actualizado ✓");
+        d.armado = nuevaCantidad;
+        if (nuevaCantidad === d.cantidadPedida) d.diferencia = null;
+        renderizarAdmin(adminCargado);
+      } catch (err) {
+        mostrarToast("Error: " + err.message, true);
+      }
+    };
 
     // ---------------- VER ARMADO ----------------
     document.getElementById('btnVerArmado').addEventListener('click', abrirArmado);
