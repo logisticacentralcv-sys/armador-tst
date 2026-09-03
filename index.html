@@ -129,6 +129,7 @@
         <div class="producto-codigo" id="pCodigo"></div>
         <div class="producto-pedido" id="pPedido"></div>
         <div class="producto-pedido" id="pStockVirtual" style="margin-top:-8px;"></div>
+        <div id="pReparto"></div>
         <div id="pBultoAviso" style="display:none; background:#fef3c7; color:#92400e; border:1px solid #fde68a; border-radius:8px; padding:8px 10px; font-size:13px; margin-bottom:10px;"></div>
 
         <div class="field">
@@ -233,6 +234,7 @@
     let itemSeleccionado = null;
     let stockVirtual = {};
     let comprometidoPorCodigo = {}; // codigo -> unidades armadas en cualquier sucursal, todavía sin procesar
+    let panoramaPorCodigo = {}; // codigo -> [{sucursal, cantidadPedida, armado}] de TODAS las sucursales
     let bultosMap = {};
     let bultoActual = null;
 
@@ -431,38 +433,81 @@
       }
       if (!visibles.length) { cont.innerHTML = '<div class="empty-state">No hay pendientes de ese proveedor</div>'; return; }
 
-      cont.innerHTML = visibles.map(p => `
+      cont.innerHTML = visibles.map(p => {
+        const otrasSucursales = (panoramaPorCodigo[p.codigo] || []).length > 1;
+        const avisoReparto = otrasSucursales
+          ? '<span style="color:#ea580c; font-weight:700;" title="Otras sucursales también lo pidieron">⚠ +sucursales</span>'
+          : '';
+        return `
         <div class="item-pendiente" onclick="window.__seleccionarItem(${p.__idxReal}, true)">
           <div class="posicion-tag">${escapeHtml(p.posicion || '—')}</div>
           <div class="info">
             <div class="nombre">${escapeHtml(p.producto)}</div>
-            <div class="detalle">${escapeHtml(p.codigo || '')} ${renderStockPill(stockVirtual[p.codigo], p.codigo)}</div>
+            <div class="detalle">${escapeHtml(p.codigo || '')} ${renderStockPill(stockVirtual[p.codigo], p.codigo)} ${avisoReparto}</div>
           </div>
           <div class="cant">x${p.cantidadPedida}</div>
         </div>
-      `).join('');
+      `;
+      }).join('');
     }
 
-    // Suma, por código, cuánto está "armado" (en CUALQUIER sucursal) pero
-    // todavía sin procesar en el Sheet — eso es stock que ya está tomado
-    // aunque Firestore todavía no lo descontó. Se recalcula cada vez que
-    // se entra o se refresca una sucursal (no queda un contador guardado
-    // aparte, así nunca se desincroniza).
+    // Trae, de una sola consulta, todo lo que hay pendiente de procesar
+    // en CUALQUIER sucursal para armar dos cosas:
+    //   - comprometidoPorCodigo: total ya armado (para el cartelito de stock)
+    //   - panoramaPorCodigo: el detalle sucursal por sucursal (quién pidió
+    //     cuánto y quién ya armó cuánto) — esto es solo INFORMACIÓN para
+    //     que el armador decida cómo repartir viendo la mercadería real
+    //     que tiene en frente; no bloquea ni calcula ningún "disponible".
     async function cargarComprometidos() {
       try {
         const q = query(pedidosCol, where('procesado', '==', false));
         const snap = await getDocs(q);
-        const mapa = {};
+        const comprometido = {};
+        const panorama = {};
         snap.forEach(d => {
           const data = d.data();
-          if (data.armado === null || data.armado === undefined) return; // todavía no armado, no compromete nada
           if (!data.codigo) return;
-          mapa[data.codigo] = (mapa[data.codigo] || 0) + (Number(data.armado) || 0);
+
+          if (!panorama[data.codigo]) panorama[data.codigo] = [];
+          panorama[data.codigo].push({
+            sucursal: data.sucursal || '(sin sucursal)',
+            cantidadPedida: Number(data.cantidadPedida) || 0,
+            armado: (data.armado === null || data.armado === undefined) ? null : Number(data.armado)
+          });
+
+          if (data.armado !== null && data.armado !== undefined) {
+            comprometido[data.codigo] = (comprometido[data.codigo] || 0) + (Number(data.armado) || 0);
+          }
         });
-        comprometidoPorCodigo = mapa;
+        comprometidoPorCodigo = comprometido;
+        panoramaPorCodigo = panorama;
       } catch (err) {
         console.error('Error cargando comprometidos', err);
       }
+    }
+
+    // Panelito informativo: qué otras sucursales tienen pedido este mismo
+    // código y cuánto armó cada una hasta ahora. Solo se muestra si hay
+    // más de una sucursal interesada — si sos el único, no aporta nada.
+    function renderReparto(codigo) {
+      const cont = document.getElementById('pReparto');
+      if (!cont) return;
+      const filas = panoramaPorCodigo[codigo] || [];
+      if (filas.length <= 1) { cont.innerHTML = ''; return; }
+
+      let html = '<div style="margin-top:8px; padding:10px; background:#fff7ed; border:1px solid #fed7aa; border-radius:10px; font-size:13px;">';
+      html += '<div style="font-weight:700; color:#9a3412; margin-bottom:6px;">📊 Este código también lo pidieron:</div>';
+      filas.forEach(f => {
+        const esActual = f.sucursal === sucursalActiva;
+        const estado = f.armado === null
+          ? '<span style="color:var(--muted);">sin armar todavía</span>'
+          : `<span style="color:#ea580c; font-weight:700;">ya armó ${f.armado}</span>`;
+        html += `<div style="padding:2px 0; ${esActual ? 'font-weight:700;' : ''}">
+          ${escapeHtml(f.sucursal)}${esActual ? ' (esta)' : ''} — pidió ${f.cantidadPedida} · ${estado}
+        </div>`;
+      });
+      html += '</div>';
+      cont.innerHTML = html;
     }
 
     function renderStockPill(stock, codigo) {
@@ -564,6 +609,7 @@
       document.getElementById('pCodigo').textContent = itemSeleccionado.codigo || '';
       document.getElementById('pPedido').textContent = `Pedido: ${itemSeleccionado.cantidadPedida} unidad(es)`;
       document.getElementById('pStockVirtual').innerHTML = 'Stock disponible: ' + renderStockPill(stockVirtual[itemSeleccionado.codigo], itemSeleccionado.codigo);
+      renderReparto(itemSeleccionado.codigo);
 
       if (bultoActual) {
         document.getElementById('pBultoAviso').style.display = 'block';
