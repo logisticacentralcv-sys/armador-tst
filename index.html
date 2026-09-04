@@ -434,8 +434,8 @@
       if (!visibles.length) { cont.innerHTML = '<div class="empty-state">No hay pendientes de ese proveedor</div>'; return; }
 
       cont.innerHTML = visibles.map(p => {
-        const otrasSucursales = (panoramaPorCodigo[p.codigo] || []).length > 1;
-        const avisoReparto = otrasSucursales
+        const sucursalesDistintas = new Set((panoramaPorCodigo[p.codigo] || []).map(f => f.sucursal)).size;
+        const avisoReparto = sucursalesDistintas > 1
           ? '<span style="color:#ea580c; font-weight:700;" title="Otras sucursales también lo pidieron">⚠ +sucursales</span>'
           : '';
         return `
@@ -489,21 +489,46 @@
     // Panelito informativo: qué otras sucursales tienen pedido este mismo
     // código y cuánto armó cada una hasta ahora. Solo se muestra si hay
     // más de una sucursal interesada — si sos el único, no aporta nada.
+    //
+    // Se agrupa por sucursal: si un código quedó varios días sin
+    // procesar, cada sincronización desde CONSOLIDADO le agrega una fila
+    // nueva a esa misma sucursal (no la reemplaza) — sin agrupar, se ven
+    // 4 líneas de "Paunero" con números distintos y parece que hay 4
+    // pedidos en paralelo, cuando en realidad es backlog acumulado de
+    // varios días sin resolver.
+    function agruparPanoramaPorSucursal_(filas) {
+      const porSucursal = {};
+      filas.forEach(f => {
+        if (!porSucursal[f.sucursal]) {
+          porSucursal[f.sucursal] = { sucursal: f.sucursal, totalPedido: 0, totalArmado: 0, cantidadFilas: 0 };
+        }
+        const acc = porSucursal[f.sucursal];
+        acc.totalPedido += f.cantidadPedida;
+        acc.cantidadFilas++;
+        if (f.armado !== null) acc.totalArmado += f.armado;
+      });
+      return Object.values(porSucursal);
+    }
+
     function renderReparto(codigo) {
       const cont = document.getElementById('pReparto');
       if (!cont) return;
       const filas = panoramaPorCodigo[codigo] || [];
       if (filas.length <= 1) { cont.innerHTML = ''; return; }
 
+      const agrupado = agruparPanoramaPorSucursal_(filas);
+      if (agrupado.length <= 1) { cont.innerHTML = ''; return; } // una sola sucursal (aunque tenga varias filas viejas), no aporta reparto
+
       let html = '<div style="margin-top:8px; padding:10px; background:#fff7ed; border:1px solid #fed7aa; border-radius:10px; font-size:13px;">';
       html += '<div style="font-weight:700; color:#9a3412; margin-bottom:6px;">📊 Este código también lo pidieron:</div>';
-      filas.forEach(f => {
-        const esActual = f.sucursal === sucursalActiva;
-        const estado = f.armado === null
-          ? '<span style="color:var(--muted);">sin armar todavía</span>'
-          : `<span style="color:#ea580c; font-weight:700;">ya armó ${f.armado}</span>`;
+      agrupado.forEach(a => {
+        const esActual = a.sucursal === sucursalActiva;
+        const detalleFilas = a.cantidadFilas > 1 ? ` <span style="color:var(--muted); font-weight:400;">(${a.cantidadFilas} pedidos acumulados)</span>` : '';
+        const estado = a.totalArmado > 0
+          ? `<span style="color:#ea580c; font-weight:700;">ya armó ${a.totalArmado}</span>`
+          : '<span style="color:var(--muted);">sin armar todavía</span>';
         html += `<div style="padding:2px 0; ${esActual ? 'font-weight:700;' : ''}">
-          ${escapeHtml(f.sucursal)}${esActual ? ' (esta)' : ''} — pidió ${f.cantidadPedida} · ${estado}
+          ${escapeHtml(a.sucursal)}${esActual ? ' (esta)' : ''} — pidió ${a.totalPedido}${detalleFilas} · ${estado}
         </div>`;
       });
       html += '</div>';
