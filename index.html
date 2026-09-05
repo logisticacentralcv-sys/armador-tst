@@ -114,10 +114,11 @@
       </div>
 
       <div class="card producto-box" id="productoBox">
-        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">
           <div class="producto-posicion" id="pPosicion" style="margin-bottom:0;"></div>
           <button id="btnEditarPosicion" style="background:none; border:none; font-size:15px; cursor:pointer; padding:2px 4px;">✏️</button>
         </div>
+        <div id="pTodasLasPosiciones" style="font-size:12px; color:var(--muted); margin-bottom:6px;"></div>
         <div id="editorPosicionBox" style="display:none; background:#f9fafb; border:1px solid var(--border); border-radius:10px; padding:10px; margin-bottom:10px;">
           <div style="font-size:12px; color:var(--muted); margin-bottom:6px;">Corregir dónde está realmente este producto (mueve el stock, no suma ni resta cantidad):</div>
           <div style="display:flex; gap:8px;">
@@ -510,6 +511,35 @@
       return Object.values(porSucursal);
     }
 
+    // El Armador, hasta ahora, solo mostraba "posicionPrincipal" (una única
+    // posición "sugerida", que puede quedar vieja si el producto después
+    // se contó en otro lado). La app de conteo, en cambio, siempre muestra
+    // TODAS las posiciones reales de la subcolección — acá hacemos lo
+    // mismo: una consulta puntual a productos/{codigo}/posiciones cuando
+    // se abre el detalle de un producto (no en la lista entera, para no
+    // multiplicar lecturas de más).
+    async function cargarTodasLasPosiciones(codigo) {
+      const cont = document.getElementById('pTodasLasPosiciones');
+      if (!cont || !codigo) { if (cont) cont.textContent = ''; return; }
+      cont.textContent = 'Buscando dónde está...';
+      try {
+        const snap = await getDocs(collection(db, 'productos', codigo, 'posiciones'));
+        const posiciones = [];
+        snap.forEach(d => {
+          const cantidad = Number(d.data().cantidad) || 0;
+          if (cantidad > 0) posiciones.push({ posicion: d.id, cantidad });
+        });
+        if (!posiciones.length) {
+          cont.textContent = 'No hay stock contado en ninguna posición todavía.';
+          return;
+        }
+        posiciones.sort((a, b) => b.cantidad - a.cantidad);
+        cont.innerHTML = '📍 Está en: ' + posiciones.map(p => `<strong>${escapeHtml(p.posicion)}</strong> (${p.cantidad})`).join(' · ');
+      } catch (err) {
+        cont.textContent = '';
+      }
+    }
+
     function renderReparto(codigo) {
       const cont = document.getElementById('pReparto');
       if (!cont) return;
@@ -635,6 +665,7 @@
       document.getElementById('pPedido').textContent = `Pedido: ${itemSeleccionado.cantidadPedida} unidad(es)`;
       document.getElementById('pStockVirtual').innerHTML = 'Stock disponible: ' + renderStockPill(stockVirtual[itemSeleccionado.codigo], itemSeleccionado.codigo);
       renderReparto(itemSeleccionado.codigo);
+      cargarTodasLasPosiciones(itemSeleccionado.codigo);
 
       if (bultoActual) {
         document.getElementById('pBultoAviso').style.display = 'block';
