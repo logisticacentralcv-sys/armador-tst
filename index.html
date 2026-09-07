@@ -534,6 +534,15 @@
           return;
         }
         posiciones.sort((a, b) => b.cantidad - a.cantidad);
+
+        // Si hay una sola posición y es la misma que ya se ve arriba en el
+        // cartelito (posición principal), no repetir la misma info dos veces.
+        const posicionArriba = itemSeleccionado ? (itemSeleccionado.posicion || '') : '';
+        if (posiciones.length === 1 && posiciones[0].posicion === posicionArriba) {
+          cont.textContent = '';
+          return;
+        }
+
         cont.innerHTML = '📍 Está en: ' + posiciones.map(p => `<span style="font-size:17px; font-weight:800; color:var(--primary-dark);">${escapeHtml(p.posicion)}</span> <span style="color:var(--muted);">(${p.cantidad})</span>`).join(' · ');
       } catch (err) {
         cont.textContent = '';
