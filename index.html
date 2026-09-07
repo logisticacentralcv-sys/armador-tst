@@ -30,7 +30,7 @@
     #reader { width: 100%; border-radius: 12px; overflow: hidden; }
     .producto-box { display: none; }
     .producto-box.show { display: block; }
-    .producto-posicion { display: inline-block; background: #eff6ff; color: var(--primary-dark); border: 1px solid #bfdbfe; border-radius: 8px; padding: 4px 10px; font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+    .producto-posicion { display: inline-block; background: #eff6ff; color: var(--primary-dark); border: 1px solid #bfdbfe; border-radius: 8px; padding: 6px 14px; font-size: 20px; font-weight: 800; letter-spacing: 0.5px; margin-bottom: 6px; }
     .producto-nombre { font-size: 18px; font-weight: 700; margin-bottom: 2px; }
     .producto-codigo { font-size: 13px; color: var(--muted); font-family: monospace; margin-bottom: 10px; }
     .producto-pedido { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
@@ -42,7 +42,7 @@
     .qty-btn { width: 46px; height: 46px; border-radius: 10px; border: none; background: var(--primary); color: white; font-size: 22px; font-weight: 700; cursor: pointer; }
     .item-pendiente { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
     .item-pendiente:last-child { border-bottom: none; }
-    .item-pendiente .posicion-tag { background: #f3f4f6; color: var(--text); border-radius: 8px; padding: 4px 8px; font-size: 12px; font-weight: 700; font-family: monospace; white-space: nowrap; }
+    .item-pendiente .posicion-tag { background: #f3f4f6; color: var(--text); border-radius: 8px; padding: 6px 10px; font-size: 15px; font-weight: 800; font-family: monospace; white-space: nowrap; }
     .item-pendiente .info { flex: 1; min-width: 0; }
     .item-pendiente .info .nombre { font-size: 14px; font-weight: 600; }
     .item-pendiente .info .detalle { font-size: 12px; color: var(--muted); }
@@ -118,7 +118,7 @@
           <div class="producto-posicion" id="pPosicion" style="margin-bottom:0;"></div>
           <button id="btnEditarPosicion" style="background:none; border:none; font-size:15px; cursor:pointer; padding:2px 4px;">✏️</button>
         </div>
-        <div id="pTodasLasPosiciones" style="font-size:12px; color:var(--muted); margin-bottom:6px;"></div>
+        <div id="pTodasLasPosiciones" style="font-size:15px; color:var(--text); margin-bottom:8px;"></div>
         <div id="editorPosicionBox" style="display:none; background:#f9fafb; border:1px solid var(--border); border-radius:10px; padding:10px; margin-bottom:10px;">
           <div style="font-size:12px; color:var(--muted); margin-bottom:6px;">Corregir dónde está realmente este producto (mueve el stock, no suma ni resta cantidad):</div>
           <div style="display:flex; gap:8px;">
@@ -391,7 +391,7 @@
           f.proveedor = info && info.proveedor ? info.proveedor : null;
         }
 
-        pendientes = filas.sort((a, b) => compararPosicionNatural(a.posicion, b.posicion));
+        pendientes = filas.sort(compararPendientes);
         poblarFiltroProveedorArmador();
         renderizarPendientes();
       } catch (err) {
@@ -534,7 +534,7 @@
           return;
         }
         posiciones.sort((a, b) => b.cantidad - a.cantidad);
-        cont.innerHTML = '📍 Está en: ' + posiciones.map(p => `<strong>${escapeHtml(p.posicion)}</strong> (${p.cantidad})`).join(' · ');
+        cont.innerHTML = '📍 Está en: ' + posiciones.map(p => `<span style="font-size:17px; font-weight:800; color:var(--primary-dark);">${escapeHtml(p.posicion)}</span> <span style="color:var(--muted);">(${p.cantidad})</span>`).join(' · ');
       } catch (err) {
         cont.textContent = '';
       }
@@ -588,6 +588,19 @@
         if (pa !== pb) return pa < pb ? -1 : 1;
       }
       return 0;
+    }
+
+    // Prioriza en la lista los productos "listos para ir a buscar" (tienen
+    // stock contado Y posición conocida) por sobre los que no se sabe bien
+    // dónde están o si hay stock — así el armador arranca por lo seguro y
+    // deja para después lo que probablemente necesite preguntar o revisar.
+    function compararPendientes(a, b) {
+      const aListo = (stockVirtual[a.codigo] > 0) && !!a.posicion;
+      const bListo = (stockVirtual[b.codigo] > 0) && !!b.posicion;
+      if (aListo && !bListo) return -1;
+      if (!aListo && bListo) return 1;
+      if (aListo && bListo) return compararPosicionNatural(a.posicion, b.posicion);
+      return (a.producto || '').localeCompare(b.producto || '', 'es');
     }
 
     // ---------------- ESCANEO ----------------
