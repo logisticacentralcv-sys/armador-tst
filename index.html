@@ -65,6 +65,17 @@
 </head>
 <body>
 
+  <div class="modal-overlay" id="loginOverlay" style="align-items:center; z-index:200;">
+    <div class="modal" style="border-radius:18px; max-width:360px; margin:0 auto;">
+      <h2>👤 ¿Quién sos?</h2>
+      <p style="color:var(--muted); font-size:13px; margin-top:-8px;">Ingresá tu número de documento para identificarte. Queda registrado en cada pedido que armes.</p>
+      <input type="text" id="inputDocumentoLogin" placeholder="Documento (sin puntos)" inputmode="numeric"
+        style="width:100%; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:16px; margin-bottom:8px;">
+      <div id="errorLogin" style="color:#dc2626; font-size:13px; margin-bottom:8px; display:none;"></div>
+      <button class="btn btn-primary" id="btnConfirmarLogin">Ingresar</button>
+    </div>
+  </div>
+
   <header>
     <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
       <div>
@@ -76,7 +87,12 @@
         <button id="btnVerAdmin" title="Administrador" style="background:rgba(255,255,255,0.18); border:none; color:white; border-radius:8px; padding:8px 10px; font-size:16px; cursor:pointer;">🔧</button>
       </div>
     </div>
+    <div style="margin-top:6px; font-size:12px; opacity:0.9;">
+      👤 <span id="nombrePersonaActual">—</span>
+      <button id="btnCambiarPersona" style="background:none; border:none; color:white; text-decoration:underline; font-size:12px; cursor:pointer; padding:0; margin-left:6px;">cambiar</button>
+    </div>
   </header>
+
 
   <div class="container">
 
@@ -229,6 +245,19 @@
     const db = getFirestore(app);
     const pedidosCol = collection(db, 'pedidos');
 
+    // Documento -> nombre. Lista chica y fija, se edita acá directo si
+    // entra o sale alguien del equipo (no hace falta tocar Firestore).
+    const PERSONAS = {
+      "40865366": "Paulo David Mandon",
+      "43985774": "Martin Carmelo Mazzeo",
+      "45779563": "Brandon Jesus Carrizo",
+      "35918123": "Franco Palomino",
+      "41556471": "Julian Hector Casabianca Perdriel",
+      "43458682": "Taiel Isidro Madoery",
+      "31944489": "Diego Terrein"
+    };
+    let personaActual = null; // {documento, nombre}
+
     let html5QrCode = null;
     let sucursalActiva = null;
     let pendientes = [];
@@ -245,8 +274,61 @@
     let modoActivo = 'pendiente';
     let todosPendientesRaw = []; // última consulta cruda (sin separar por tipo), para no re-leer Firestore al cambiar de pestaña
 
-    cargarBultos();
-    cargarSucursales();
+    // ---------------- IDENTIFICACIÓN POR DOCUMENTO ----------------
+    document.getElementById('btnConfirmarLogin').addEventListener('click', intentarLogin);
+    document.getElementById('inputDocumentoLogin').addEventListener('keydown', e => { if (e.key === 'Enter') intentarLogin(); });
+    document.getElementById('btnCambiarPersona').addEventListener('click', cerrarSesionPersona);
+
+    function intentarLogin() {
+      const input = document.getElementById('inputDocumentoLogin');
+      const documento = input.value.trim().replace(/\D/g, '');
+      const nombre = PERSONAS[documento];
+      const errorDiv = document.getElementById('errorLogin');
+      if (!nombre) {
+        errorDiv.textContent = 'Documento no reconocido. Fijate que esté bien escrito, o pedile a un encargado que te agregue.';
+        errorDiv.style.display = 'block';
+        return;
+      }
+      errorDiv.style.display = 'none';
+      personaActual = { documento, nombre };
+      try { localStorage.setItem('armador_persona', JSON.stringify(personaActual)); } catch (e) { /* si el navegador bloquea storage, sigue igual pero pide login cada vez */ }
+      input.value = '';
+      mostrarPersonaEnHeader();
+      document.getElementById('loginOverlay').classList.remove('show');
+      arrancarApp();
+    }
+
+    function cerrarSesionPersona() {
+      personaActual = null;
+      try { localStorage.removeItem('armador_persona'); } catch (e) {}
+      document.getElementById('loginOverlay').classList.add('show');
+      document.getElementById('inputDocumentoLogin').focus();
+    }
+
+    function mostrarPersonaEnHeader() {
+      document.getElementById('nombrePersonaActual').textContent = personaActual ? personaActual.nombre : '—';
+    }
+
+    let appYaArrancada = false;
+    function arrancarApp() {
+      if (appYaArrancada) return;
+      appYaArrancada = true;
+      cargarBultos();
+      cargarSucursales();
+    }
+
+    (function iniciarSesionSiCorresponde() {
+      try {
+        const guardada = localStorage.getItem('armador_persona');
+        if (guardada) {
+          personaActual = JSON.parse(guardada);
+          mostrarPersonaEnHeader();
+          arrancarApp();
+          return;
+        }
+      } catch (e) { /* localStorage no disponible o dato corrupto: pide login igual */ }
+      document.getElementById('loginOverlay').classList.add('show');
+    })();
 
     // ---------------- BULTOS (una sola carga, se comparte con app de conteo) ----------------
     async function cargarBultos() {
@@ -876,10 +958,15 @@
     // Escribe directo por ID de documento (ya lo tenemos, no hace falta query transaccional acá)
     async function guardarArmado(pedidoId, cantidadArmada, diferencia) {
       const { updateDoc } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js");
-      await updateDoc(doc(db, 'pedidos', pedidoId), {
+      const datos = {
         armado: cantidadArmada,
         diferencia: diferencia || null
-      });
+      };
+      if (personaActual) {
+        datos.armadoPor = personaActual.nombre;
+        datos.armadoPorDocumento = personaActual.documento;
+      }
+      await updateDoc(doc(db, 'pedidos', pedidoId), datos);
     }
 
     function confirmarSinStock() {
@@ -920,7 +1007,12 @@
       for (let i = 0; i < candidatos.length; i += 400) {
         const batch = writeBatch(db);
         candidatos.slice(i, i + 400).forEach(d => {
-          batch.update(d.ref, { armado: 0, diferencia: 'Falta de stock' });
+          const datos = { armado: 0, diferencia: 'Falta de stock' };
+          if (personaActual) {
+            datos.armadoPor = personaActual.nombre;
+            datos.armadoPorDocumento = personaActual.documento;
+          }
+          batch.update(d.ref, datos);
         });
         await batch.commit();
       }
@@ -1041,15 +1133,18 @@
       const cont = document.getElementById('adminContenido');
       if (!datos.length) { cont.innerHTML = '<div class="empty-state">Nada armado pendiente de procesar</div>'; return; }
       let html = '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
-      html += '<tr><th style="text-align:left; padding:6px 4px; color:var(--muted);">Sucursal</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Código</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Producto</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Pedido</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Armado</th><th></th></tr>';
+      html += '<tr><th style="text-align:left; padding:6px 4px; color:var(--muted);">Sucursal</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Código</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Producto</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Pedido</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Armado</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Quién</th><th></th></tr>';
       datos.forEach(d => {
         const tagFaltante = d.tipo === 'FALTANTE' ? ' <span style="color:#dc2626; font-weight:700;" title="Faltante">🔴</span>' : '';
+        const quien = (d.armadoPor ? escapeHtml(d.armadoPor) : '<span style="color:var(--muted);">—</span>')
+          + (d.editadoPor ? `<br><span style="color:var(--muted); font-size:11px;">editó: ${escapeHtml(d.editadoPor)}</span>` : '');
         html += `<tr id="fila-admin-${d.id}">
           <td style="padding:6px 4px; border-top:1px solid var(--border);">${escapeHtml(d.sucursal || '')}${tagFaltante}</td>
           <td style="padding:6px 4px; border-top:1px solid var(--border);">${escapeHtml(d.codigo || '')}</td>
           <td style="padding:6px 4px; border-top:1px solid var(--border);">${escapeHtml(d.producto)}</td>
           <td style="padding:6px 4px; border-top:1px solid var(--border);">${d.cantidadPedida}</td>
           <td style="padding:6px 4px; border-top:1px solid var(--border); font-weight:700;">${d.armado ?? 0}${d.diferencia ? '<br><span style="font-weight:400; color:var(--muted); font-size:11px;">' + escapeHtml(d.diferencia) + '</span>' : ''}</td>
+          <td style="padding:6px 4px; border-top:1px solid var(--border); font-size:12px;">${quien}</td>
           <td style="padding:6px 4px; border-top:1px solid var(--border);"><button onclick="window.__editarAdminInline('${d.id}')" style="background:none; border:none; font-size:15px; cursor:pointer;">✏️</button></td>
         </tr>`;
       });
@@ -1062,7 +1157,7 @@
       if (!d) return;
       const fila = document.getElementById('fila-admin-' + id);
       fila.innerHTML = `
-        <td colspan="6" style="padding:8px 4px; border-top:1px solid var(--border);">
+        <td colspan="7" style="padding:8px 4px; border-top:1px solid var(--border);">
           <div style="font-weight:600; margin-bottom:6px;">${escapeHtml(d.producto)} <span style="color:var(--muted); font-weight:400;">(${escapeHtml(d.codigo || '')} — ${escapeHtml(d.sucursal || '')})</span></div>
           <div style="display:flex; gap:8px;">
             <input type="number" id="editAdmin-${id}" value="${d.armado ?? 0}" min="0"
@@ -1085,10 +1180,15 @@
         const { updateDoc } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js");
         const datosUpdate = { armado: nuevaCantidad };
         if (nuevaCantidad === d.cantidadPedida) datosUpdate.diferencia = null;
+        if (personaActual) {
+          datosUpdate.editadoPor = personaActual.nombre;
+          datosUpdate.editadoPorDocumento = personaActual.documento;
+        }
         await updateDoc(doc(db, 'pedidos', id), datosUpdate);
         mostrarToast("Actualizado ✓");
         d.armado = nuevaCantidad;
         if (nuevaCantidad === d.cantidadPedida) d.diferencia = null;
+        if (personaActual) d.editadoPor = personaActual.nombre;
         renderizarAdmin(adminCargado);
       } catch (err) {
         mostrarToast("Error: " + err.message, true);
@@ -1133,13 +1233,16 @@
       const cont = document.getElementById('armadoContenido');
       if (!datos.length) { cont.innerHTML = '<div class="empty-state">Nada para mostrar</div>'; return; }
       let html = '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
-      html += '<tr><th style="text-align:left; padding:6px 4px; color:var(--muted);">Código</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Producto</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Pedido</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Armado</th><th></th></tr>';
+      html += '<tr><th style="text-align:left; padding:6px 4px; color:var(--muted);">Código</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Producto</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Pedido</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Armado</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Quién</th><th></th></tr>';
       datos.forEach(d => {
+        const quien = (d.armadoPor ? escapeHtml(d.armadoPor) : '<span style="color:var(--muted);">—</span>')
+          + (d.editadoPor ? `<br><span style="color:var(--muted); font-size:11px;">editó: ${escapeHtml(d.editadoPor)}</span>` : '');
         html += `<tr id="fila-armado-${d.id}">
           <td style="padding:6px 4px; border-top:1px solid var(--border);">${escapeHtml(d.codigo || '')}</td>
           <td style="padding:6px 4px; border-top:1px solid var(--border);">${escapeHtml(d.producto)}</td>
           <td style="padding:6px 4px; border-top:1px solid var(--border);">${d.cantidadPedida}</td>
           <td style="padding:6px 4px; border-top:1px solid var(--border); font-weight:700;">${d.armado ?? 0}${d.diferencia ? '<br><span style="font-weight:400; color:var(--muted); font-size:11px;">' + escapeHtml(d.diferencia) + '</span>' : ''}</td>
+          <td style="padding:6px 4px; border-top:1px solid var(--border); font-size:12px;">${quien}</td>
           <td style="padding:6px 4px; border-top:1px solid var(--border);"><button onclick="window.__editarArmadoInline('${d.id}')" style="background:none; border:none; font-size:15px; cursor:pointer;">✏️</button></td>
         </tr>`;
       });
@@ -1152,7 +1255,7 @@
       if (!d) return;
       const fila = document.getElementById('fila-armado-' + id);
       fila.innerHTML = `
-        <td colspan="5" style="padding:8px 4px; border-top:1px solid var(--border);">
+        <td colspan="6" style="padding:8px 4px; border-top:1px solid var(--border);">
           <div style="font-weight:600; margin-bottom:6px;">${escapeHtml(d.producto)} <span style="color:var(--muted); font-weight:400;">(${escapeHtml(d.codigo || '')})</span></div>
           <div style="display:flex; gap:8px;">
             <input type="number" id="editArmado-${id}" value="${d.armado ?? 0}" min="0"
@@ -1175,10 +1278,15 @@
         const { updateDoc } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js");
         const datosUpdate = { armado: nuevaCantidad };
         if (nuevaCantidad === d.cantidadPedida) datosUpdate.diferencia = null;
+        if (personaActual) {
+          datosUpdate.editadoPor = personaActual.nombre;
+          datosUpdate.editadoPorDocumento = personaActual.documento;
+        }
         await updateDoc(doc(db, 'pedidos', id), datosUpdate);
         mostrarToast("Actualizado ✓");
         d.armado = nuevaCantidad;
         if (nuevaCantidad === d.cantidadPedida) d.diferencia = null;
+        if (personaActual) d.editadoPor = personaActual.nombre;
         renderizarArmado(armadosCargados);
       } catch (err) {
         mostrarToast("Error: " + err.message, true);
