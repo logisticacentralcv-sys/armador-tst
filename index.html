@@ -275,6 +275,8 @@
     let todosPendientesRaw = []; // última consulta cruda (sin separar por tipo), para no re-leer Firestore al cambiar de pestaña
 
     // ---------------- IDENTIFICACIÓN POR DOCUMENTO ----------------
+    const DURACION_SESION_MS = 4 * 60 * 60 * 1000; // 4 horas
+
     document.getElementById('btnConfirmarLogin').addEventListener('click', intentarLogin);
     document.getElementById('inputDocumentoLogin').addEventListener('keydown', e => { if (e.key === 'Enter') intentarLogin(); });
     document.getElementById('btnCambiarPersona').addEventListener('click', cerrarSesionPersona);
@@ -291,7 +293,9 @@
       }
       errorDiv.style.display = 'none';
       personaActual = { documento, nombre };
-      try { localStorage.setItem('armador_persona', JSON.stringify(personaActual)); } catch (e) { /* si el navegador bloquea storage, sigue igual pero pide login cada vez */ }
+      try {
+        localStorage.setItem('armador_persona', JSON.stringify({ documento, nombre, expira: Date.now() + DURACION_SESION_MS }));
+      } catch (e) { /* si el navegador bloquea storage, sigue igual pero pide login cada vez */ }
       input.value = '';
       mostrarPersonaEnHeader();
       document.getElementById('loginOverlay').classList.remove('show');
@@ -319,13 +323,14 @@
 
     (function iniciarSesionSiCorresponde() {
       try {
-        const guardada = localStorage.getItem('armador_persona');
-        if (guardada) {
-          personaActual = JSON.parse(guardada);
+        const guardada = JSON.parse(localStorage.getItem('armador_persona') || 'null');
+        if (guardada && guardada.expira && Date.now() < guardada.expira) {
+          personaActual = { documento: guardada.documento, nombre: guardada.nombre };
           mostrarPersonaEnHeader();
           arrancarApp();
           return;
         }
+        if (guardada) localStorage.removeItem('armador_persona'); // sesión vencida (pasaron las 4hs), se limpia
       } catch (e) { /* localStorage no disponible o dato corrupto: pide login igual */ }
       document.getElementById('loginOverlay').classList.add('show');
     })();
