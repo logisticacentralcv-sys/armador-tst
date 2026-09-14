@@ -190,6 +190,25 @@
       <button class="btn btn-secondary" id="btnVerArmado">✅ Ver lo que ya armé</button>
     </div>
 
+    <div id="pasoHabilitar" style="display:none;">
+      <div class="card">
+        <div class="barra-sucursal">
+          <span class="nombre">📥 Habilitar Pendientes</span>
+          <button id="btnCerrarHabilitar">← Volver</button>
+        </div>
+        <p style="font-size:12px; color:var(--muted); margin:8px 0 12px;">Pedidos de CONSOLIDADO (estado PENDIENTE) que todavía no se liberaron para armar. Elegí el proveedor que llegó y decidí cuánto de cada sucursal habilitar.</p>
+
+        <select id="selectProveedorHabilitar" style="width:100%; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:15px; margin-bottom:10px;">
+          <option value="">Cargando proveedores con pendientes...</option>
+        </select>
+
+        <input type="text" id="buscarProductoHabilitar" placeholder="🔎 Buscar producto por nombre o código..."
+          style="width:100%; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:15px; margin-bottom:14px; display:none;">
+
+        <div id="habilitarPendientesContenido"><div class="empty-state">Elegí un proveedor para ver sus pendientes.</div></div>
+      </div>
+    </div>
+
   </div>
 
   <div class="modal-overlay" id="modalArmado">
@@ -220,18 +239,6 @@
         style="width:100%; padding:10px; border:1px solid var(--border); border-radius:10px; font-size:14px; margin-bottom:10px;">
       <div id="adminContenido"><div class="cargando">Cargando...</div></div>
       <button class="btn btn-secondary" onclick="cerrarModal('modalAdmin')">Cerrar</button>
-    </div>
-  </div>
-
-  <div class="modal-overlay" id="modalHabilitarPendientes">
-    <div class="modal">
-      <h2>📥 Habilitar Pendientes</h2>
-      <p style="font-size:12px; color:var(--muted); margin-top:-8px;">Pedidos de CONSOLIDADO (estado PENDIENTE) que todavía no se liberaron para armar. Elegí el proveedor que llegó y decidí cuánto de cada sucursal habilitar.</p>
-      <select id="selectProveedorHabilitar" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:10px; font-size:14px; margin-bottom:12px;">
-        <option value="">— Elegir proveedor —</option>
-      </select>
-      <div id="habilitarPendientesContenido"><div class="empty-state">Elegí un proveedor para ver sus pendientes.</div></div>
-      <button class="btn btn-secondary" onclick="cerrarModal('modalHabilitarPendientes')">Cerrar</button>
     </div>
   </div>
 
@@ -1230,106 +1237,148 @@
 
     // ---------------- HABILITAR PENDIENTES (solo 2 DNI autorizados) ----------------
     document.getElementById('btnHabilitarPendientes').addEventListener('click', abrirHabilitarPendientes);
-    let proveedoresYaListadosHabilitar = false;
-    let pendientesSinHabilitarCargados = [];
+    document.getElementById('btnCerrarHabilitar').addEventListener('click', cerrarHabilitarPendientes);
+    document.getElementById('selectProveedorHabilitar').addEventListener('change', () => renderizarHabilitarPendientes_());
+    document.getElementById('buscarProductoHabilitar').addEventListener('input', () => renderizarHabilitarPendientes_());
 
-    async function abrirHabilitarPendientes() {
-      document.getElementById('modalHabilitarPendientes').classList.add('show');
-      if (!proveedoresYaListadosHabilitar) {
-        proveedoresYaListadosHabilitar = true;
-        try {
-          const snap = await getDocs(collection(db, 'proveedores'));
-          const nombres = [];
-          snap.forEach(d => nombres.push(d.data().nombre || d.id));
-          nombres.sort((a, b) => a.localeCompare(b, 'es'));
-          const select = document.getElementById('selectProveedorHabilitar');
-          nombres.forEach(nombre => {
-            const opt = document.createElement('option');
-            opt.value = nombre; opt.textContent = nombre;
-            select.appendChild(opt);
-          });
-        } catch (err) {
-          mostrarToast('Error cargando proveedores: ' + err.message, true);
+    let todosPendientesSinHabilitar = []; // TODOS los proveedores, cargado una sola vez por apertura
+
+    function abrirHabilitarPendientes() {
+      document.getElementById('pasoSucursal').style.display = 'none';
+      document.getElementById('pasoArmar').style.display = 'none';
+      document.getElementById('pasoHabilitar').style.display = 'block';
+      cargarTodosLosPendientesSinHabilitar_();
+    }
+
+    function cerrarHabilitarPendientes() {
+      document.getElementById('pasoHabilitar').style.display = 'none';
+      document.getElementById('pasoSucursal').style.display = 'block';
+    }
+
+    async function cargarTodosLosPendientesSinHabilitar_() {
+      const select = document.getElementById('selectProveedorHabilitar');
+      const cont = document.getElementById('habilitarPendientesContenido');
+      select.innerHTML = '<option value="">Cargando...</option>';
+      cont.innerHTML = '<div class="cargando">Cargando pendientes...</div>';
+      document.getElementById('buscarProductoHabilitar').style.display = 'none';
+      document.getElementById('buscarProductoHabilitar').value = '';
+
+      try {
+        const q = query(pedidosCol, where('procesado', '==', false), where('habilitado', '==', false));
+        const snap = await getDocs(q);
+        todosPendientesSinHabilitar = [];
+        snap.forEach(d => todosPendientesSinHabilitar.push({ id: d.id, ...d.data() }));
+
+        // Armar el desplegable SOLO con proveedores que realmente tienen
+        // algo pendiente ahora mismo, con el conteo al lado.
+        const conteoPorProveedor = {};
+        todosPendientesSinHabilitar.forEach(p => {
+          const prov = p.proveedor || '(sin proveedor asociado)';
+          conteoPorProveedor[prov] = (conteoPorProveedor[prov] || 0) + 1;
+        });
+        const proveedoresConPendientes = Object.keys(conteoPorProveedor).sort((a, b) => a.localeCompare(b, 'es'));
+
+        if (!proveedoresConPendientes.length) {
+          select.innerHTML = '<option value="">No hay ningún proveedor con pendientes</option>';
+          cont.innerHTML = '<div class="empty-state">🎉 No hay pedidos pendientes sin habilitar en este momento</div>';
+          return;
         }
+
+        select.innerHTML = '<option value="">— Elegir proveedor —</option>' +
+          proveedoresConPendientes.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)} (${conteoPorProveedor[p]})</option>`).join('');
+        cont.innerHTML = '<div class="empty-state">Elegí un proveedor para ver sus pendientes.</div>';
+      } catch (err) {
+        select.innerHTML = '<option value="">Error</option>';
+        cont.innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
       }
     }
 
-    document.getElementById('selectProveedorHabilitar').addEventListener('change', async (e) => {
-      const proveedor = e.target.value;
-      const cont = document.getElementById('habilitarPendientesContenido');
-      if (!proveedor) { cont.innerHTML = '<div class="empty-state">Elegí un proveedor para ver sus pendientes.</div>'; return; }
-      cont.innerHTML = '<div class="cargando">Cargando...</div>';
-      try {
-        const q = query(pedidosCol,
-          where('procesado', '==', false),
-          where('proveedor', '==', proveedor),
-          where('habilitado', '==', false)
-        );
-        const snap = await getDocs(q);
-        pendientesSinHabilitarCargados = [];
-        snap.forEach(d => pendientesSinHabilitarCargados.push({ id: d.id, ...d.data() }));
-        renderizarHabilitarPendientes_();
-      } catch (err) {
-        cont.innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
-      }
-    });
-
     function renderizarHabilitarPendientes_() {
+      const proveedor = document.getElementById('selectProveedorHabilitar').value;
+      const buscador = document.getElementById('buscarProductoHabilitar');
       const cont = document.getElementById('habilitarPendientesContenido');
-      if (!pendientesSinHabilitarCargados.length) {
-        cont.innerHTML = '<div class="empty-state">🎉 No hay pendientes sin habilitar de este proveedor</div>';
+
+      if (!proveedor) {
+        buscador.style.display = 'none';
+        cont.innerHTML = '<div class="empty-state">Elegí un proveedor para ver sus pendientes.</div>';
         return;
       }
+      buscador.style.display = 'block';
+
+      let filas = todosPendientesSinHabilitar.filter(p => (p.proveedor || '(sin proveedor asociado)') === proveedor);
+
+      const texto = buscador.value.trim().toLowerCase();
+      if (texto) {
+        filas = filas.filter(p => (p.producto || '').toLowerCase().includes(texto) || (p.codigo || '').toLowerCase().includes(texto));
+      }
+
+      if (!filas.length) {
+        cont.innerHTML = '<div class="empty-state">🎉 No hay pendientes de este proveedor (o ninguno coincide con la búsqueda)</div>';
+        return;
+      }
+
       // Agrupar por código, para ver de un vistazo cuánto pide cada sucursal
       const porCodigo = {};
-      pendientesSinHabilitarCargados.forEach(p => {
+      filas.forEach(p => {
         if (!porCodigo[p.codigo]) porCodigo[p.codigo] = { codigo: p.codigo, producto: p.producto, filas: [] };
         porCodigo[p.codigo].filas.push(p);
       });
+      const grupos = Object.values(porCodigo).sort((a, b) => (a.producto || '').localeCompare(b.producto || '', 'es'));
 
       let html = '';
-      Object.values(porCodigo).forEach(grupo => {
+      grupos.forEach(grupo => {
         const totalPedido = grupo.filas.reduce((acc, f) => acc + (f.cantidadPedida || 0), 0);
-        html += `<div style="border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:10px;">
-          <div style="font-weight:700; margin-bottom:2px;">${escapeHtml(grupo.producto)}</div>
-          <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">${escapeHtml(grupo.codigo || '')} · total pedido entre todas las sucursales: ${totalPedido}</div>`;
+        html += `<div class="grupo-habilitar" data-codigo="${escapeHtml(grupo.codigo || '')}" style="border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:14px;">
+          <div style="font-weight:700; font-size:16px; margin-bottom:2px;">${escapeHtml(grupo.producto)}</div>
+          <div style="font-size:13px; color:var(--muted); margin-bottom:12px;">${escapeHtml(grupo.codigo || '')} · total pedido entre todas las sucursales: <strong>${totalPedido}</strong></div>`;
         grupo.filas.forEach(f => {
-          html += `<div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
-            <div style="flex:1; font-size:13px;">${escapeHtml(f.sucursal)} <span style="color:var(--muted);">(pidió ${f.cantidadPedida})</span></div>
-            <input type="number" min="0" id="hab-${f.id}" value="${f.cantidadPedida}" style="width:80px; padding:6px; border:1px solid var(--border); border-radius:8px;">
+          html += `<div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+            <div style="flex:1; font-size:14px;">${escapeHtml(f.sucursal)} <span style="color:var(--muted);">(pidió ${f.cantidadPedida})</span></div>
+            <input type="number" min="0" class="input-habilitar" data-id="${escapeHtml(f.id)}" value="${f.cantidadPedida}"
+              style="width:90px; padding:10px; border:1px solid var(--border); border-radius:10px; font-size:15px; text-align:center;">
           </div>`;
         });
-        html += `<button onclick="window.__habilitarGrupo('${escapeAttrJs(grupo.codigo)}')" style="margin-top:4px; padding:8px 14px; border:none; border-radius:8px; background:var(--green); color:white; font-weight:600; cursor:pointer;">✔ Habilitar este producto</button>
+        html += `<button class="btn btn-success btn-habilitar-grupo" style="margin-top:4px;">✔ Habilitar este producto</button>
         </div>`;
       });
       cont.innerHTML = html;
     }
 
-    window.__habilitarGrupo = async function(codigo) {
-      const filasDelGrupo = pendientesSinHabilitarCargados.filter(f => f.codigo === codigo);
+    // Delegación de eventos: un solo listener para todos los botones
+    // "Habilitar este producto" (evita tener que armar onclick con texto
+    // escapado a mano, que es justo lo que se rompió la primera vez).
+    document.getElementById('habilitarPendientesContenido').addEventListener('click', async (e) => {
+      const btn = e.target.closest('.btn-habilitar-grupo');
+      if (!btn) return;
+      const grupoDiv = btn.closest('.grupo-habilitar');
+      const codigo = grupoDiv.dataset.codigo;
+      await habilitarGrupo_(codigo, grupoDiv);
+    });
+
+    async function habilitarGrupo_(codigo, grupoDiv) {
+      const filasDelGrupo = todosPendientesSinHabilitar.filter(f => (f.codigo || '') === codigo);
       const { updateDoc } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js");
       let habilitados = 0;
+      const idsHabilitados = new Set();
+
       for (const f of filasDelGrupo) {
-        const input = document.getElementById('hab-' + f.id);
+        const input = grupoDiv.querySelector(`.input-habilitar[data-id="${f.id}"]`);
+        if (!input) continue;
         const cantidad = parseInt(input.value, 10);
         if (isNaN(cantidad) || cantidad <= 0) continue; // se deja 0 = no habilitar esta fila todavía
         try {
           await updateDoc(doc(db, 'pedidos', f.id), { habilitado: true, cantidadHabilitada: cantidad });
           habilitados++;
+          idsHabilitados.add(f.id);
         } catch (err) {
           mostrarToast('Error habilitando ' + f.sucursal + ': ' + err.message, true);
         }
       }
+
       mostrarToast(`✔ Habilitado en ${habilitados} sucursal(es)`);
-      // Sacar del listado local lo que ya se habilitó (las que quedaron en 0 siguen pendientes)
-      pendientesSinHabilitarCargados = pendientesSinHabilitarCargados.filter(f => {
-        if (f.codigo !== codigo) return true;
-        const input = document.getElementById('hab-' + f.id);
-        const cantidad = input ? parseInt(input.value, 10) : 0;
-        return !(cantidad > 0);
-      });
+      todosPendientesSinHabilitar = todosPendientesSinHabilitar.filter(f => !idsHabilitados.has(f.id));
       renderizarHabilitarPendientes_();
-    };
+    }
 
     // ---------------- VER ARMADO ----------------
     document.getElementById('btnVerArmado').addEventListener('click', abrirArmado);
