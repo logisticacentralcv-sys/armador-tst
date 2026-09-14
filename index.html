@@ -85,6 +85,7 @@
       <div style="display:flex; gap:6px; flex-shrink:0;">
         <button id="btnVerStockGlobal" title="Ver stock" style="background:rgba(255,255,255,0.18); border:none; color:white; border-radius:8px; padding:8px 10px; font-size:16px; cursor:pointer;">📦</button>
         <button id="btnVerAdmin" title="Administrador" style="background:rgba(255,255,255,0.18); border:none; color:white; border-radius:8px; padding:8px 10px; font-size:16px; cursor:pointer;">🔧</button>
+        <button id="btnHabilitarPendientes" title="Habilitar Pendientes" style="display:none; background:rgba(255,255,255,0.18); border:none; color:white; border-radius:8px; padding:8px 10px; font-size:16px; cursor:pointer;">📥</button>
       </div>
     </div>
     <div style="margin-top:6px; font-size:12px; opacity:0.9;">
@@ -222,6 +223,18 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="modalHabilitarPendientes">
+    <div class="modal">
+      <h2>📥 Habilitar Pendientes</h2>
+      <p style="font-size:12px; color:var(--muted); margin-top:-8px;">Pedidos de CONSOLIDADO (estado PENDIENTE) que todavía no se liberaron para armar. Elegí el proveedor que llegó y decidí cuánto de cada sucursal habilitar.</p>
+      <select id="selectProveedorHabilitar" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:10px; font-size:14px; margin-bottom:12px;">
+        <option value="">— Elegir proveedor —</option>
+      </select>
+      <div id="habilitarPendientesContenido"><div class="empty-state">Elegí un proveedor para ver sus pendientes.</div></div>
+      <button class="btn btn-secondary" onclick="cerrarModal('modalHabilitarPendientes')">Cerrar</button>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script type="module">
@@ -278,6 +291,7 @@
 
     // ---------------- IDENTIFICACIÓN POR DOCUMENTO ----------------
     const DURACION_SESION_MS = 4 * 60 * 60 * 1000; // 4 horas
+    const DNI_AUTORIZADOS_HABILITAR = new Set(['43458682', '43985774']);
 
     document.getElementById('btnConfirmarLogin').addEventListener('click', intentarLogin);
     document.getElementById('inputDocumentoLogin').addEventListener('keydown', e => { if (e.key === 'Enter') intentarLogin(); });
@@ -313,6 +327,8 @@
 
     function mostrarPersonaEnHeader() {
       document.getElementById('nombrePersonaActual').textContent = personaActual ? personaActual.nombre : '—';
+      document.getElementById('btnHabilitarPendientes').style.display =
+        (personaActual && DNI_AUTORIZADOS_HABILITAR.has(personaActual.documento)) ? 'inline-block' : 'none';
     }
 
     let appYaArrancada = false;
@@ -380,6 +396,7 @@
         snap.forEach(d => {
           const data = d.data();
           if (data.diferencia) return; // ya resuelto por diferencia, no cuenta como pendiente
+          if (data.habilitado === false) return; // pendiente de CONSOLIDADO todavía sin habilitar para armar
           todosPendientesRaw.push({ id: d.id, ...data });
         });
         renderizarSucursalesDesdeCache();
@@ -389,6 +406,14 @@
     }
 
     function esFaltante_(data) { return data.tipo === 'FALTANTE'; }
+
+    // Si Compras/Planificación racionó este pedido (por ejemplo, llegaron
+    // 10 y hay 4 sucursales pidiendo 5 cada una), cantidadHabilitada tiene
+    // el número que realmente corresponde armar — cantidadPedida se
+    // conserva intacta solo para el historial, al armador no le interesa.
+    function cantidadEfectiva_(item) {
+      return (item.cantidadHabilitada !== null && item.cantidadHabilitada !== undefined) ? item.cantidadHabilitada : item.cantidadPedida;
+    }
 
     function renderizarSucursalesDesdeCache() {
       const conteo = {};
@@ -450,6 +475,7 @@
         for (const d of snap.docs) {
           const data = d.data();
           if (data.diferencia) continue; // ya resuelto
+          if (data.habilitado === false) continue; // todavía sin habilitar para armar
           if (modoActivo === 'faltante' ? !esFaltante_(data) : esFaltante_(data)) continue; // separado por pestaña
           filas.push({ id: d.id, ...data });
         }
@@ -535,7 +561,7 @@
             <div class="nombre">${escapeHtml(p.producto)}</div>
             <div class="detalle">${escapeHtml(p.codigo || '')} ${renderStockPill(stockVirtual[p.codigo], p.codigo)} ${avisoReparto}</div>
           </div>
-          <div class="cant">x${p.cantidadPedida}</div>
+          <div class="cant">x${cantidadEfectiva_(p)}</div>
         </div>
       `;
       }).join('');
@@ -773,7 +799,7 @@
       document.getElementById('pPosicion').textContent = itemSeleccionado.posicion || 'Sin posición';
       document.getElementById('pNombre').textContent = itemSeleccionado.producto;
       document.getElementById('pCodigo').textContent = itemSeleccionado.codigo || '';
-      document.getElementById('pPedido').textContent = `Pedido: ${itemSeleccionado.cantidadPedida} unidad(es)`;
+      document.getElementById('pPedido').textContent = `Pedido: ${cantidadEfectiva_(itemSeleccionado)} unidad(es)`;
       document.getElementById('pStockVirtual').innerHTML = 'Stock disponible: ' + renderStockPill(stockVirtual[itemSeleccionado.codigo], itemSeleccionado.codigo);
       renderReparto(itemSeleccionado.codigo);
       cargarTodasLasPosiciones(itemSeleccionado.codigo);
@@ -786,7 +812,7 @@
       } else {
         document.getElementById('pBultoAviso').style.display = 'none';
         document.getElementById('labelCantidadArmador').textContent = 'Cantidad armada';
-        document.getElementById('inputCantidad').value = itemSeleccionado.cantidadPedida;
+        document.getElementById('inputCantidad').value = cantidadEfectiva_(itemSeleccionado);
       }
 
       document.getElementById('selectMotivo').value = '';
@@ -829,7 +855,7 @@
       if (!itemSeleccionado) return;
       const cantidad = parseInt(document.getElementById('inputCantidad').value, 10);
       const cantidadEnUnidades = bultoActual ? cantidad * bultoActual.unidadesPorBulto : cantidad;
-      const difiere = !isNaN(cantidadEnUnidades) && cantidadEnUnidades !== itemSeleccionado.cantidadPedida;
+      const difiere = !isNaN(cantidadEnUnidades) && cantidadEnUnidades !== cantidadEfectiva_(itemSeleccionado);
       document.getElementById('motivoField').style.display = difiere ? 'block' : 'none';
     }
 
@@ -931,7 +957,7 @@
       const cantidadEnUnidades = bultoActual ? cantidadIngresada * bultoActual.unidadesPorBulto : cantidadIngresada;
 
       let motivo = "";
-      const difiere = cantidadEnUnidades !== itemSeleccionado.cantidadPedida;
+      const difiere = cantidadEnUnidades !== cantidadEfectiva_(itemSeleccionado);
       if (difiere) {
         const seleccionMotivo = document.getElementById('selectMotivo').value;
         if (!seleccionMotivo) { mostrarToast("Elegí el motivo de la diferencia", true); return; }
@@ -1149,7 +1175,7 @@
           <td style="padding:6px 4px; border-top:1px solid var(--border);">${escapeHtml(d.sucursal || '')}${tagFaltante}</td>
           <td style="padding:6px 4px; border-top:1px solid var(--border);">${escapeHtml(d.codigo || '')}</td>
           <td style="padding:6px 4px; border-top:1px solid var(--border);">${escapeHtml(d.producto)}</td>
-          <td style="padding:6px 4px; border-top:1px solid var(--border);">${d.cantidadPedida}</td>
+          <td style="padding:6px 4px; border-top:1px solid var(--border);">${cantidadEfectiva_(d)}${cantidadEfectiva_(d) !== d.cantidadPedida ? `<div style="color:var(--muted); font-size:11px;">pedido: ${d.cantidadPedida}</div>` : ''}</td>
           <td style="padding:6px 4px; border-top:1px solid var(--border); font-weight:700;">${d.armado ?? 0}${d.diferencia ? '<br><span style="font-weight:400; color:var(--muted); font-size:11px;">' + escapeHtml(d.diferencia) + '</span>' : ''}</td>
           <td style="padding:6px 4px; border-top:1px solid var(--border); font-size:12px;">${quien}</td>
           <td style="padding:6px 4px; border-top:1px solid var(--border);"><button onclick="window.__editarAdminInline('${d.id}')" style="background:none; border:none; font-size:15px; cursor:pointer;">✏️</button></td>
@@ -1186,7 +1212,7 @@
         const d = adminCargado.find(x => x.id === id);
         const { updateDoc } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js");
         const datosUpdate = { armado: nuevaCantidad };
-        if (nuevaCantidad === d.cantidadPedida) datosUpdate.diferencia = null;
+        if (nuevaCantidad === cantidadEfectiva_(d)) datosUpdate.diferencia = null;
         if (personaActual) {
           datosUpdate.editadoPor = personaActual.nombre;
           datosUpdate.editadoPorDocumento = personaActual.documento;
@@ -1194,12 +1220,115 @@
         await updateDoc(doc(db, 'pedidos', id), datosUpdate);
         mostrarToast("Actualizado ✓");
         d.armado = nuevaCantidad;
-        if (nuevaCantidad === d.cantidadPedida) d.diferencia = null;
+        if (nuevaCantidad === cantidadEfectiva_(d)) d.diferencia = null;
         if (personaActual) d.editadoPor = personaActual.nombre;
         renderizarAdmin(adminCargado);
       } catch (err) {
         mostrarToast("Error: " + err.message, true);
       }
+    };
+
+    // ---------------- HABILITAR PENDIENTES (solo 2 DNI autorizados) ----------------
+    document.getElementById('btnHabilitarPendientes').addEventListener('click', abrirHabilitarPendientes);
+    let proveedoresYaListadosHabilitar = false;
+    let pendientesSinHabilitarCargados = [];
+
+    async function abrirHabilitarPendientes() {
+      document.getElementById('modalHabilitarPendientes').classList.add('show');
+      if (!proveedoresYaListadosHabilitar) {
+        proveedoresYaListadosHabilitar = true;
+        try {
+          const snap = await getDocs(collection(db, 'proveedores'));
+          const nombres = [];
+          snap.forEach(d => nombres.push(d.data().nombre || d.id));
+          nombres.sort((a, b) => a.localeCompare(b, 'es'));
+          const select = document.getElementById('selectProveedorHabilitar');
+          nombres.forEach(nombre => {
+            const opt = document.createElement('option');
+            opt.value = nombre; opt.textContent = nombre;
+            select.appendChild(opt);
+          });
+        } catch (err) {
+          mostrarToast('Error cargando proveedores: ' + err.message, true);
+        }
+      }
+    }
+
+    document.getElementById('selectProveedorHabilitar').addEventListener('change', async (e) => {
+      const proveedor = e.target.value;
+      const cont = document.getElementById('habilitarPendientesContenido');
+      if (!proveedor) { cont.innerHTML = '<div class="empty-state">Elegí un proveedor para ver sus pendientes.</div>'; return; }
+      cont.innerHTML = '<div class="cargando">Cargando...</div>';
+      try {
+        const q = query(pedidosCol,
+          where('procesado', '==', false),
+          where('proveedor', '==', proveedor),
+          where('habilitado', '==', false)
+        );
+        const snap = await getDocs(q);
+        pendientesSinHabilitarCargados = [];
+        snap.forEach(d => pendientesSinHabilitarCargados.push({ id: d.id, ...d.data() }));
+        renderizarHabilitarPendientes_();
+      } catch (err) {
+        cont.innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
+      }
+    });
+
+    function renderizarHabilitarPendientes_() {
+      const cont = document.getElementById('habilitarPendientesContenido');
+      if (!pendientesSinHabilitarCargados.length) {
+        cont.innerHTML = '<div class="empty-state">🎉 No hay pendientes sin habilitar de este proveedor</div>';
+        return;
+      }
+      // Agrupar por código, para ver de un vistazo cuánto pide cada sucursal
+      const porCodigo = {};
+      pendientesSinHabilitarCargados.forEach(p => {
+        if (!porCodigo[p.codigo]) porCodigo[p.codigo] = { codigo: p.codigo, producto: p.producto, filas: [] };
+        porCodigo[p.codigo].filas.push(p);
+      });
+
+      let html = '';
+      Object.values(porCodigo).forEach(grupo => {
+        const totalPedido = grupo.filas.reduce((acc, f) => acc + (f.cantidadPedida || 0), 0);
+        html += `<div style="border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:10px;">
+          <div style="font-weight:700; margin-bottom:2px;">${escapeHtml(grupo.producto)}</div>
+          <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">${escapeHtml(grupo.codigo || '')} · total pedido entre todas las sucursales: ${totalPedido}</div>`;
+        grupo.filas.forEach(f => {
+          html += `<div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+            <div style="flex:1; font-size:13px;">${escapeHtml(f.sucursal)} <span style="color:var(--muted);">(pidió ${f.cantidadPedida})</span></div>
+            <input type="number" min="0" id="hab-${f.id}" value="${f.cantidadPedida}" style="width:80px; padding:6px; border:1px solid var(--border); border-radius:8px;">
+          </div>`;
+        });
+        html += `<button onclick="window.__habilitarGrupo('${escapeAttrJs(grupo.codigo)}')" style="margin-top:4px; padding:8px 14px; border:none; border-radius:8px; background:var(--green); color:white; font-weight:600; cursor:pointer;">✔ Habilitar este producto</button>
+        </div>`;
+      });
+      cont.innerHTML = html;
+    }
+
+    window.__habilitarGrupo = async function(codigo) {
+      const filasDelGrupo = pendientesSinHabilitarCargados.filter(f => f.codigo === codigo);
+      const { updateDoc } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js");
+      let habilitados = 0;
+      for (const f of filasDelGrupo) {
+        const input = document.getElementById('hab-' + f.id);
+        const cantidad = parseInt(input.value, 10);
+        if (isNaN(cantidad) || cantidad <= 0) continue; // se deja 0 = no habilitar esta fila todavía
+        try {
+          await updateDoc(doc(db, 'pedidos', f.id), { habilitado: true, cantidadHabilitada: cantidad });
+          habilitados++;
+        } catch (err) {
+          mostrarToast('Error habilitando ' + f.sucursal + ': ' + err.message, true);
+        }
+      }
+      mostrarToast(`✔ Habilitado en ${habilitados} sucursal(es)`);
+      // Sacar del listado local lo que ya se habilitó (las que quedaron en 0 siguen pendientes)
+      pendientesSinHabilitarCargados = pendientesSinHabilitarCargados.filter(f => {
+        if (f.codigo !== codigo) return true;
+        const input = document.getElementById('hab-' + f.id);
+        const cantidad = input ? parseInt(input.value, 10) : 0;
+        return !(cantidad > 0);
+      });
+      renderizarHabilitarPendientes_();
     };
 
     // ---------------- VER ARMADO ----------------
@@ -1247,7 +1376,7 @@
         html += `<tr id="fila-armado-${d.id}">
           <td style="padding:6px 4px; border-top:1px solid var(--border);">${escapeHtml(d.codigo || '')}</td>
           <td style="padding:6px 4px; border-top:1px solid var(--border);">${escapeHtml(d.producto)}</td>
-          <td style="padding:6px 4px; border-top:1px solid var(--border);">${d.cantidadPedida}</td>
+          <td style="padding:6px 4px; border-top:1px solid var(--border);">${cantidadEfectiva_(d)}${cantidadEfectiva_(d) !== d.cantidadPedida ? `<div style="color:var(--muted); font-size:11px;">pedido: ${d.cantidadPedida}</div>` : ''}</td>
           <td style="padding:6px 4px; border-top:1px solid var(--border); font-weight:700;">${d.armado ?? 0}${d.diferencia ? '<br><span style="font-weight:400; color:var(--muted); font-size:11px;">' + escapeHtml(d.diferencia) + '</span>' : ''}</td>
           <td style="padding:6px 4px; border-top:1px solid var(--border); font-size:12px;">${quien}</td>
           <td style="padding:6px 4px; border-top:1px solid var(--border);"><button onclick="window.__editarArmadoInline('${d.id}')" style="background:none; border:none; font-size:15px; cursor:pointer;">✏️</button></td>
@@ -1284,7 +1413,7 @@
         const d = armadosCargados.find(x => x.id === id);
         const { updateDoc } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js");
         const datosUpdate = { armado: nuevaCantidad };
-        if (nuevaCantidad === d.cantidadPedida) datosUpdate.diferencia = null;
+        if (nuevaCantidad === cantidadEfectiva_(d)) datosUpdate.diferencia = null;
         if (personaActual) {
           datosUpdate.editadoPor = personaActual.nombre;
           datosUpdate.editadoPorDocumento = personaActual.documento;
@@ -1292,7 +1421,7 @@
         await updateDoc(doc(db, 'pedidos', id), datosUpdate);
         mostrarToast("Actualizado ✓");
         d.armado = nuevaCantidad;
-        if (nuevaCantidad === d.cantidadPedida) d.diferencia = null;
+        if (nuevaCantidad === cantidadEfectiva_(d)) d.diferencia = null;
         if (personaActual) d.editadoPor = personaActual.nombre;
         renderizarArmado(armadosCargados);
       } catch (err) {
