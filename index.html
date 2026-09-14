@@ -86,6 +86,7 @@
         <button id="btnVerStockGlobal" title="Ver stock" style="background:rgba(255,255,255,0.18); border:none; color:white; border-radius:8px; padding:8px 10px; font-size:16px; cursor:pointer;">📦</button>
         <button id="btnVerAdmin" title="Administrador" style="background:rgba(255,255,255,0.18); border:none; color:white; border-radius:8px; padding:8px 10px; font-size:16px; cursor:pointer;">🔧</button>
         <button id="btnHabilitarPendientes" title="Habilitar Pendientes" style="display:none; background:rgba(255,255,255,0.18); border:none; color:white; border-radius:8px; padding:8px 10px; font-size:16px; cursor:pointer;">📥</button>
+        <button id="btnBorrarSinArmar" title="Borrar pedidos sin armar" style="display:none; background:rgba(220,38,38,0.5); border:none; color:white; border-radius:8px; padding:8px 10px; font-size:16px; cursor:pointer;">🗑</button>
       </div>
     </div>
     <div style="margin-top:6px; font-size:12px; opacity:0.9;">
@@ -334,8 +335,9 @@
 
     function mostrarPersonaEnHeader() {
       document.getElementById('nombrePersonaActual').textContent = personaActual ? personaActual.nombre : '—';
-      document.getElementById('btnHabilitarPendientes').style.display =
-        (personaActual && DNI_AUTORIZADOS_HABILITAR.has(personaActual.documento)) ? 'inline-block' : 'none';
+      const autorizado = personaActual && DNI_AUTORIZADOS_HABILITAR.has(personaActual.documento);
+      document.getElementById('btnHabilitarPendientes').style.display = autorizado ? 'inline-block' : 'none';
+      document.getElementById('btnBorrarSinArmar').style.display = autorizado ? 'inline-block' : 'none';
     }
 
     let appYaArrancada = false;
@@ -1253,6 +1255,48 @@
     function cerrarHabilitarPendientes() {
       document.getElementById('pasoHabilitar').style.display = 'none';
       document.getElementById('pasoSucursal').style.display = 'block';
+    }
+
+    // ---------------- BORRAR PEDIDOS SIN ARMAR (solo 2 DNI autorizados) ----------------
+    // Borra de Firestore TODO lo que esté en "pedidos" con procesado:false
+    // y armado:null (nunca se tocó) — habilitado o no, PEDIDO/PENDIENTE/
+    // FALTANTE, de cualquier sucursal. Para cuando quedó mugre acumulada
+    // (duplicados de días viejos, pendientes trabados) y hace falta
+    // arrancar de cero y volver a "Sincronizar ahora" desde CONSOLIDADO.
+    // NO toca lo ya armado ni lo ya procesado.
+    document.getElementById('btnBorrarSinArmar').addEventListener('click', borrarPedidosSinArmar_);
+
+    async function borrarPedidosSinArmar_() {
+      const btn = document.getElementById('btnBorrarSinArmar');
+      btn.disabled = true;
+      try {
+        const q = query(pedidosCol, where('procesado', '==', false), where('armado', '==', null));
+        const snap = await getDocs(q);
+        const ids = snap.docs.map(d => d.id);
+
+        if (!ids.length) {
+          mostrarToast('No hay ningún pedido sin armar para borrar 🎉');
+          return;
+        }
+        if (!confirm(`¿Seguro que querés borrar ${ids.length} pedido(s) sin armar (de todas las sucursales)?\n\nEsto NO se puede deshacer. Después tenés que volver a "Sincronizar ahora" desde el Sheet para traerlos de nuevo.`)) {
+          return;
+        }
+
+        for (let i = 0; i < ids.length; i += 400) {
+          const batch = writeBatch(db);
+          ids.slice(i, i + 400).forEach(id => batch.delete(doc(db, 'pedidos', id)));
+          await batch.commit();
+        }
+
+        mostrarToast(`✔ Borrados ${ids.length} pedido(s) sin armar`);
+        // Refrescar lo que esté visible en pantalla, si corresponde
+        if (document.getElementById('pasoSucursal').style.display !== 'none') cargarSucursales();
+        if (document.getElementById('pasoHabilitar').style.display !== 'none') cargarTodosLosPendientesSinHabilitar_();
+      } catch (err) {
+        mostrarToast('Error borrando: ' + err.message, true);
+      } finally {
+        btn.disabled = false;
+      }
     }
 
     async function cargarTodosLosPendientesSinHabilitar_() {
