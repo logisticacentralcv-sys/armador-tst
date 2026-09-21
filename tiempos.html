@@ -146,17 +146,17 @@
 
       return Object.keys(porSucursal).map(suc => {
         const evs = porSucursal[suc];
-        let tiempoActivoMs = 0, tiempoPausaMs = 0;
+        let tiempoActivoMs = 0, tiempoPausaMs = 0, cantidadPausas = 0;
         for (let i = 1; i < evs.length; i++) {
           const gap = evs[i].timestampMs - evs[i - 1].timestampMs;
-          if (gap <= UMBRAL_PAUSA_MS) tiempoActivoMs += gap; else tiempoPausaMs += gap;
+          if (gap <= UMBRAL_PAUSA_MS) { tiempoActivoMs += gap; } else { tiempoPausaMs += gap; cantidadPausas++; }
         }
         return {
           sucursal: suc,
           picks: evs.length,
           primerPick: evs[0].timestampMs,
           ultimoPick: evs[evs.length - 1].timestampMs,
-          tiempoActivoMs, tiempoPausaMs,
+          tiempoActivoMs, tiempoPausaMs, cantidadPausas,
           tiempoTotalMs: evs[evs.length - 1].timestampMs - evs[0].timestampMs
         };
       });
@@ -166,24 +166,37 @@
     // hacia atrás mientras los gaps sean chicos, para encontrar dónde
     // arrancó la racha activa actual (puede cruzar de una sucursal a otra
     // sin cortarse, si lo hizo rápido).
-    function calcularRachaActual_(eventosPersonaOrdenados, ahoraMs) {
+    // Calcula, para HOY completo, el tiempo activo acumulado (excluyendo
+    // por completo cada pausa detectada, no solo "hasta el umbral") y
+    // cuántas pausas hubo — como un cronómetro que se detiene solo
+    // durante cada pausa y retoma cuando vuelve a marcar algo.
+    function calcularEstadoHoy_(eventosPersonaOrdenados, ahoraMs) {
       if (!eventosPersonaOrdenados.length) return null;
-      const ultimo = eventosPersonaOrdenados[eventosPersonaOrdenados.length - 1];
-      const inactivoDesde = ahoraMs - ultimo.timestampMs;
 
-      let inicio = eventosPersonaOrdenados.length - 1;
-      while (inicio > 0 && (eventosPersonaOrdenados[inicio].timestampMs - eventosPersonaOrdenados[inicio - 1].timestampMs) <= UMBRAL_PAUSA_MS) {
-        inicio--;
+      let tiempoActivoMs = 0;
+      const pausas = [];
+      for (let i = 1; i < eventosPersonaOrdenados.length; i++) {
+        const gap = eventosPersonaOrdenados[i].timestampMs - eventosPersonaOrdenados[i - 1].timestampMs;
+        if (gap <= UMBRAL_PAUSA_MS) {
+          tiempoActivoMs += gap; // picks seguidos: el tiempo entre uno y otro es tiempo armando
+        } else {
+          pausas.push(gap); // más de 5 min sin marcar nada: NINGUNO de esos minutos cuenta como activo
+        }
       }
-      const racha = eventosPersonaOrdenados.slice(inicio);
+
+      const ultimo = eventosPersonaOrdenados[eventosPersonaOrdenados.length - 1];
+      const inactivoDesdeMs = ahoraMs - ultimo.timestampMs;
+      const activo = inactivoDesdeMs <= UMBRAL_PAUSA_MS;
+      if (activo) tiempoActivoMs += inactivoDesdeMs; // el tramo en curso, todavía no "cerrado" por el próximo pick
 
       return {
-        activo: inactivoDesde <= UMBRAL_PAUSA_MS,
-        inactivoDesdeMs: inactivoDesde,
+        activo,
+        inactivoDesdeMs,
+        tiempoActivoHoyMs: tiempoActivoMs,
+        cantidadPausas: pausas.length,
         sucursal: ultimo.sucursal,
         producto: ultimo.producto,
-        inicioMs: racha[0].timestampMs,
-        picks: racha.length
+        totalPicksHoy: eventosPersonaOrdenados.length
       };
     }
 
@@ -266,32 +279,33 @@
       }
 
       const filas = personas.map(p => {
-        const racha = calcularRachaActual_(p.eventos, ahoraMs);
-        return { nombre: p.nombre, racha, totalHoy: p.eventos.length };
-      }).sort((a, b) => (b.racha.activo - a.racha.activo) || (a.racha.inactivoDesdeMs - b.racha.inactivoDesdeMs));
+        const estado = calcularEstadoHoy_(p.eventos, ahoraMs);
+        return { nombre: p.nombre, estado };
+      }).sort((a, b) => (b.estado.activo - a.estado.activo) || (a.estado.inactivoDesdeMs - b.estado.inactivoDesdeMs));
 
       cont.innerHTML = filas.map(f => {
-        const r = f.racha;
-        if (r.activo) {
+        const e = f.estado;
+        const pausasTexto = e.cantidadPausas > 0 ? ` · ${e.cantidadPausas} pausa${e.cantidadPausas === 1 ? '' : 's'} hoy` : '';
+        if (e.activo) {
           return `<div class="persona-activa armando">
             <div>
               <div style="font-weight:700;"><span class="estado-dot verde"></span>${escapeHtml(f.nombre)}</div>
-              <div style="font-size:12px; color:var(--muted); margin-top:2px;">${escapeHtml(r.sucursal || '')} · último: ${escapeHtml(r.producto || '')}</div>
+              <div style="font-size:12px; color:var(--muted); margin-top:2px;">${escapeHtml(e.sucursal || '')} · último: ${escapeHtml(e.producto || '')}</div>
             </div>
             <div style="text-align:right;">
-              <div style="font-weight:700; color:var(--green);">${formatearDuracion_(ahoraMs - r.inicioMs)}</div>
-              <div style="font-size:12px; color:var(--muted);">${f.totalHoy} pedido(s) hoy</div>
+              <div style="font-weight:700; color:var(--green);">${formatearDuracion_(e.tiempoActivoHoyMs)}</div>
+              <div style="font-size:12px; color:var(--muted);">${e.totalPicksHoy} pedido(s) hoy${pausasTexto}</div>
             </div>
           </div>`;
         }
         return `<div class="persona-activa pausado">
           <div>
             <div style="font-weight:700;"><span class="estado-dot naranja"></span>${escapeHtml(f.nombre)}</div>
-            <div style="font-size:12px; color:var(--muted); margin-top:2px;">${escapeHtml(r.sucursal || '')} · último: ${escapeHtml(r.producto || '')}</div>
+            <div style="font-size:12px; color:var(--muted); margin-top:2px;">${escapeHtml(e.sucursal || '')} · último: ${escapeHtml(e.producto || '')}</div>
           </div>
           <div style="text-align:right;">
-            <div style="font-weight:700; color:var(--orange);">Pausado hace ${formatearDuracion_(r.inactivoDesdeMs)}</div>
-            <div style="font-size:12px; color:var(--muted);">${f.totalHoy} pedido(s) hoy</div>
+            <div style="font-weight:700; color:var(--orange);">Pausado hace ${formatearDuracion_(e.inactivoDesdeMs)}</div>
+            <div style="font-size:12px; color:var(--muted);">${formatearDuracion_(e.tiempoActivoHoyMs)} activo hoy · ${e.totalPicksHoy} pedido(s)${pausasTexto}</div>
           </div>
         </div>`;
       }).join('');
@@ -330,7 +344,7 @@
           return;
         }
 
-        let html = '<table><tr><th>Persona</th><th>Sucursal</th><th>Picks</th><th>Desde</th><th>Hasta</th><th>T. activo</th><th>T. pausas</th></tr>';
+        let html = '<table><tr><th>Persona</th><th>Sucursal</th><th>Picks</th><th>Desde</th><th>Hasta</th><th>T. activo</th><th>Pausas</th><th>T. pausas</th></tr>';
         personas.forEach(p => {
           const filas = calcularResumenPorSucursal_(p.eventos).sort((a, b) => a.primerPick - b.primerPick);
           filas.forEach((f, idx) => {
@@ -341,6 +355,7 @@
               <td>${formatearHora_(new Date(f.primerPick))}</td>
               <td>${formatearHora_(new Date(f.ultimoPick))}</td>
               <td style="font-weight:700; color:var(--green);">${formatearDuracion_(f.tiempoActivoMs)}</td>
+              <td style="color:${f.cantidadPausas > 0 ? 'var(--orange)' : 'var(--muted)'};">${f.cantidadPausas || '—'}</td>
               <td style="color:${f.tiempoPausaMs > 0 ? 'var(--orange)' : 'var(--muted)'};">${f.tiempoPausaMs > 0 ? formatearDuracion_(f.tiempoPausaMs) : '—'}</td>
             </tr>`;
           });
