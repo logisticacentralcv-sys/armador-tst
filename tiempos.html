@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tiempos de armado</title>
+  <style>
+    :root {
+      --primary: #2563eb; --green: #16a34a; --orange: #ea580c; --red: #dc2626;
+      --bg: #f3f4f6; --card: #ffffff; --text: #111827; --muted: #6b7280; --border: #e5e7eb;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); }
+    header { background: #111827; color: white; padding: 18px 20px; }
+    header h1 { margin: 0; font-size: 19px; }
+    header p { margin: 4px 0 0; font-size: 12px; opacity: 0.75; }
+    .container { max-width: 920px; margin: 0 auto; padding: 18px 14px 60px; }
+    .card { background: var(--card); border-radius: 14px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .card h2 { margin: 0 0 12px; font-size: 15px; }
+    select, input[type=date] { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
+    .empty-state { color: var(--muted); font-size: 13px; text-align: center; padding: 20px 0; }
+    .persona-activa { border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .persona-activa.armando { border-color: #86efac; background: #f0fdf4; }
+    .persona-activa.pausado { border-color: #fed7aa; background: #fff7ed; }
+    .estado-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+    .estado-dot.verde { background: var(--green); }
+    .estado-dot.naranja { background: var(--orange); }
+    .badge-tipo { font-size: 10px; padding: 1px 6px; border-radius: 5px; background: #fee2e2; color: var(--red); font-weight: 700; margin-left: 6px; }
+  </style>
+</head>
+<body>
+
+  <div id="pantallaAcceso" style="min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px;">
+    <div class="card" style="max-width:340px; width:100%;">
+      <h2>🔒 Panel privado</h2>
+      <p style="font-size:13px; color:var(--muted); margin-top:-8px;">Ingresá tu documento para entrar.</p>
+      <input type="text" id="inputDniAcceso" placeholder="Documento" inputmode="numeric"
+        style="width:100%; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:16px; margin-bottom:10px;">
+      <div id="errorAcceso" style="color:var(--red); font-size:13px; margin-bottom:8px; display:none;"></div>
+      <button id="btnEntrarAcceso" style="width:100%; padding:12px; border:none; border-radius:10px; background:var(--primary); color:white; font-weight:700; font-size:15px; cursor:pointer;">Entrar</button>
+    </div>
+  </div>
+
+  <div id="pantallaPrincipal" style="display:none;">
+    <header>
+      <h1>⏱ Tiempos de armado</h1>
+      <p>Panel privado — no visible para los armadores</p>
+    </header>
+
+    <div class="container">
+
+      <div class="card">
+        <h2>🟢 Armando ahora mismo</h2>
+        <div id="contenidoTiempoReal"><div class="empty-state">Cargando...</div></div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+          <h2 style="margin:0;">📊 Resumen por día</h2>
+          <input type="date" id="inputFecha">
+        </div>
+        <div id="contenidoResumen"><div class="empty-state">Elegí una fecha.</div></div>
+      </div>
+
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+    import {
+      getFirestore, collection, query, where, orderBy, onSnapshot, getDocs, Timestamp
+    } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBjsx_gcl2X1yr8SPoi_tF3qGcrFRLK3bQ",
+      authDomain: "armador-de-pedidos-secos-119b3.firebaseapp.com",
+      projectId: "armador-de-pedidos-secos-119b3",
+      storageBucket: "armador-de-pedidos-secos-119b3.firebasestorage.app",
+      messagingSenderId: "713677759926",
+      appId: "1:713677759926:web:e0a8f512d79f75f2a5cd17"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const DNI_AUTORIZADOS = new Set(['43458682', '43985774']);
+    const UMBRAL_PAUSA_MS = 5 * 60 * 1000; // 5 minutos sin marcar nada = se considera pausa, no tiempo activo
+
+    // ---------------- ACCESO ----------------
+    document.getElementById('btnEntrarAcceso').addEventListener('click', intentarAcceso);
+    document.getElementById('inputDniAcceso').addEventListener('keydown', e => { if (e.key === 'Enter') intentarAcceso(); });
+
+    function intentarAcceso() {
+      const dni = document.getElementById('inputDniAcceso').value.trim().replace(/\D/g, '');
+      if (!DNI_AUTORIZADOS.has(dni)) {
+        document.getElementById('errorAcceso').textContent = 'No autorizado.';
+        document.getElementById('errorAcceso').style.display = 'block';
+        return;
+      }
+      document.getElementById('pantallaAcceso').style.display = 'none';
+      document.getElementById('pantallaPrincipal').style.display = 'block';
+      iniciar_();
+    }
+
+    // ---------------- UTILIDADES DE TIEMPO ----------------
+    function formatearDuracion_(ms) {
+      if (ms < 0) ms = 0;
+      const totalMin = Math.round(ms / 60000);
+      const horas = Math.floor(totalMin / 60);
+      const min = totalMin % 60;
+      if (horas > 0) return `${horas}h ${min}min`;
+      return `${min} min`;
+    }
+    function formatearHora_(fecha) {
+      return fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // Agrupa eventos (ya ordenados por tiempo) de una persona, separados
+    // por sucursal, y calcula tiempo activo (gaps chicos) vs en pausa
+    // (gaps grandes) para cada una.
+    function calcularResumenPorSucursal_(eventos) {
+      const porSucursal = {};
+      eventos.forEach(ev => {
+        const suc = ev.sucursal || '(sin sucursal)';
+        if (!porSucursal[suc]) porSucursal[suc] = [];
+        porSucursal[suc].push(ev);
+      });
+
+      return Object.keys(porSucursal).map(suc => {
+        const evs = porSucursal[suc];
+        let tiempoActivoMs = 0, tiempoPausaMs = 0;
+        for (let i = 1; i < evs.length; i++) {
+          const gap = evs[i].timestampMs - evs[i - 1].timestampMs;
+          if (gap <= UMBRAL_PAUSA_MS) tiempoActivoMs += gap; else tiempoPausaMs += gap;
+        }
+        return {
+          sucursal: suc,
+          picks: evs.length,
+          primerPick: evs[0].timestampMs,
+          ultimoPick: evs[evs.length - 1].timestampMs,
+          tiempoActivoMs, tiempoPausaMs,
+          tiempoTotalMs: evs[evs.length - 1].timestampMs - evs[0].timestampMs
+        };
+      });
+    }
+
+    // Para "en tiempo real": a partir del último pick de la persona, camina
+    // hacia atrás mientras los gaps sean chicos, para encontrar dónde
+    // arrancó la racha activa actual (puede cruzar de una sucursal a otra
+    // sin cortarse, si lo hizo rápido).
+    function calcularRachaActual_(eventosPersonaOrdenados, ahoraMs) {
+      if (!eventosPersonaOrdenados.length) return null;
+      const ultimo = eventosPersonaOrdenados[eventosPersonaOrdenados.length - 1];
+      const inactivoDesde = ahoraMs - ultimo.timestampMs;
+
+      let inicio = eventosPersonaOrdenados.length - 1;
+      while (inicio > 0 && (eventosPersonaOrdenados[inicio].timestampMs - eventosPersonaOrdenados[inicio - 1].timestampMs) <= UMBRAL_PAUSA_MS) {
+        inicio--;
+      }
+      const racha = eventosPersonaOrdenados.slice(inicio);
+
+      return {
+        activo: inactivoDesde <= UMBRAL_PAUSA_MS,
+        inactivoDesdeMs: inactivoDesde,
+        sucursal: ultimo.sucursal,
+        producto: ultimo.producto,
+        inicioMs: racha[0].timestampMs,
+        picks: racha.length
+      };
+    }
+
+    // ---------------- TIEMPO REAL (hoy, onSnapshot) ----------------
+    let eventosDeHoyPorPersona = {};
+
+    function iniciar_() {
+      const inicioHoy = new Date(); inicioHoy.setHours(0, 0, 0, 0);
+      const q = query(
+        collection(db, 'eventosArmado'),
+        where('timestamp', '>=', Timestamp.fromDate(inicioHoy)),
+        orderBy('timestamp', 'asc')
+      );
+      onSnapshot(q, (snap) => {
+        const porPersona = {};
+        snap.forEach(d => {
+          const data = d.data();
+          if (!data.timestamp) return; // por si el serverTimestamp todavía no resolvió (optimistic local write)
+          const ev = { ...data, timestampMs: data.timestamp.toMillis() };
+          const key = ev.personaDocumento || ev.personaNombre || '?';
+          if (!porPersona[key]) porPersona[key] = { nombre: ev.personaNombre, eventos: [] };
+          porPersona[key].eventos.push(ev);
+        });
+        eventosDeHoyPorPersona = porPersona;
+        renderizarTiempoReal_();
+      }, (err) => {
+        document.getElementById('contenidoTiempoReal').innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
+      });
+
+      setInterval(renderizarTiempoReal_, 20000); // refresca aunque no entren eventos nuevos, para que "hace X min" avance
+
+      const inputFecha = document.getElementById('inputFecha');
+      inputFecha.value = new Date().toISOString().slice(0, 10);
+      inputFecha.addEventListener('change', () => cargarResumenDia_(inputFecha.value));
+      cargarResumenDia_(inputFecha.value);
+    }
+
+    function renderizarTiempoReal_() {
+      const cont = document.getElementById('contenidoTiempoReal');
+      const ahoraMs = Date.now();
+      const personas = Object.values(eventosDeHoyPorPersona);
+
+      if (!personas.length) {
+        cont.innerHTML = '<div class="empty-state">Nadie armó nada todavía hoy</div>';
+        return;
+      }
+
+      const filas = personas.map(p => {
+        const racha = calcularRachaActual_(p.eventos, ahoraMs);
+        return { nombre: p.nombre, racha };
+      }).sort((a, b) => (b.racha.activo - a.racha.activo) || (a.racha.inactivoDesdeMs - b.racha.inactivoDesdeMs));
+
+      cont.innerHTML = filas.map(f => {
+        const r = f.racha;
+        if (r.activo) {
+          return `<div class="persona-activa armando">
+            <div>
+              <div style="font-weight:700;"><span class="estado-dot verde"></span>${escapeHtml(f.nombre)}</div>
+              <div style="font-size:12px; color:var(--muted); margin-top:2px;">${escapeHtml(r.sucursal || '')} · último: ${escapeHtml(r.producto || '')}</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-weight:700; color:var(--green);">${formatearDuracion_(ahoraMs - r.inicioMs)}</div>
+              <div style="font-size:12px; color:var(--muted);">${r.picks} pick(s)</div>
+            </div>
+          </div>`;
+        }
+        return `<div class="persona-activa pausado">
+          <div>
+            <div style="font-weight:700;"><span class="estado-dot naranja"></span>${escapeHtml(f.nombre)}</div>
+            <div style="font-size:12px; color:var(--muted); margin-top:2px;">${escapeHtml(r.sucursal || '')} · último: ${escapeHtml(r.producto || '')}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-weight:700; color:var(--orange);">Pausado hace ${formatearDuracion_(r.inactivoDesdeMs)}</div>
+            <div style="font-size:12px; color:var(--muted);">${r.picks} pick(s) en su última racha</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    // ---------------- RESUMEN POR DÍA (elegido) ----------------
+    async function cargarResumenDia_(fechaStr) {
+      const cont = document.getElementById('contenidoResumen');
+      cont.innerHTML = '<div class="empty-state">Cargando...</div>';
+      if (!fechaStr) return;
+
+      const inicio = new Date(fechaStr + 'T00:00:00');
+      const fin = new Date(fechaStr + 'T23:59:59.999');
+
+      try {
+        const q = query(
+          collection(db, 'eventosArmado'),
+          where('timestamp', '>=', Timestamp.fromDate(inicio)),
+          where('timestamp', '<=', Timestamp.fromDate(fin)),
+          orderBy('timestamp', 'asc')
+        );
+        const snap = await getDocs(q);
+        const porPersona = {};
+        snap.forEach(d => {
+          const data = d.data();
+          if (!data.timestamp) return;
+          const ev = { ...data, timestampMs: data.timestamp.toMillis() };
+          const key = ev.personaDocumento || ev.personaNombre || '?';
+          if (!porPersona[key]) porPersona[key] = { nombre: ev.personaNombre, eventos: [] };
+          porPersona[key].eventos.push(ev);
+        });
+
+        const personas = Object.values(porPersona);
+        if (!personas.length) {
+          cont.innerHTML = '<div class="empty-state">Nadie armó nada ese día</div>';
+          return;
+        }
+
+        let html = '<table><tr><th>Persona</th><th>Sucursal</th><th>Picks</th><th>Desde</th><th>Hasta</th><th>T. activo</th><th>T. pausas</th></tr>';
+        personas.forEach(p => {
+          const filas = calcularResumenPorSucursal_(p.eventos).sort((a, b) => a.primerPick - b.primerPick);
+          filas.forEach((f, idx) => {
+            html += `<tr>
+              <td>${idx === 0 ? escapeHtml(p.nombre) : ''}</td>
+              <td>${escapeHtml(f.sucursal)}</td>
+              <td>${f.picks}</td>
+              <td>${formatearHora_(new Date(f.primerPick))}</td>
+              <td>${formatearHora_(new Date(f.ultimoPick))}</td>
+              <td style="font-weight:700; color:var(--green);">${formatearDuracion_(f.tiempoActivoMs)}</td>
+              <td style="color:${f.tiempoPausaMs > 0 ? 'var(--orange)' : 'var(--muted)'};">${f.tiempoPausaMs > 0 ? formatearDuracion_(f.tiempoPausaMs) : '—'}</td>
+            </tr>`;
+          });
+        });
+        html += '</table>';
+        cont.innerHTML = html;
+      } catch (err) {
+        cont.innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
+      }
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '').replace(/[&<>"']/g, s => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
+    }
+  </script>
+</body>
+</html>

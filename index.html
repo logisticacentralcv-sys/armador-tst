@@ -249,7 +249,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
     import {
       getFirestore, doc, getDoc, collection, query, where, orderBy, limit,
-      getDocs, runTransaction, writeBatch, serverTimestamp, increment
+      getDocs, runTransaction, writeBatch, serverTimestamp, increment, addDoc
     } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
     // ⚠️ CONFIGURACIÓN: mismo proyecto de Firebase que app-firestore.html
@@ -979,7 +979,7 @@
       btn.textContent = 'Guardando...';
 
       try {
-        await guardarArmado(itemSeleccionado.id, cantidadEnUnidades, motivo);
+        await guardarArmado(itemSeleccionado, cantidadEnUnidades, motivo);
         if (itemSeleccionado.codigo in stockVirtual && stockVirtual[itemSeleccionado.codigo] !== null) {
           stockVirtual[itemSeleccionado.codigo] -= cantidadEnUnidades;
         }
@@ -997,18 +997,44 @@
       }
     }
 
-    // Escribe directo por ID de documento (ya lo tenemos, no hace falta query transaccional acá)
-    async function guardarArmado(pedidoId, cantidadArmada, diferencia) {
+    // Además de actualizar el pedido, registra un "evento de armado" en una
+    // colección aparte (eventosArmado) — así el historial de tiempos NUNCA
+    // se pierde, sin importar que el pedido después se procese, se archive
+    // o se borre de "pedidos". Es la única fuente de verdad para medir
+    // tiempos de picking.
+    async function guardarArmado(item, cantidadArmada, diferencia) {
       const { updateDoc } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js");
       const datos = {
         armado: cantidadArmada,
-        diferencia: diferencia || null
+        diferencia: diferencia || null,
+        armadoEn: serverTimestamp()
       };
       if (personaActual) {
         datos.armadoPor = personaActual.nombre;
         datos.armadoPorDocumento = personaActual.documento;
       }
-      await updateDoc(doc(db, 'pedidos', pedidoId), datos);
+      await updateDoc(doc(db, 'pedidos', item.id), datos);
+      registrarEventoArmado_(item, cantidadArmada, diferencia);
+    }
+
+    async function registrarEventoArmado_(item, cantidadArmada, diferencia) {
+      if (!personaActual) return; // sin identificarse no se puede medir de quién es
+      try {
+        await addDoc(collection(db, 'eventosArmado'), {
+          personaDocumento: personaActual.documento,
+          personaNombre: personaActual.nombre,
+          sucursal: item.sucursal || null,
+          codigo: item.codigo || null,
+          producto: item.producto || null,
+          cantidadPedida: item.cantidadPedida ?? null,
+          cantidadArmada: cantidadArmada,
+          diferencia: diferencia || null,
+          tipo: item.tipo || 'NORMAL',
+          timestamp: serverTimestamp()
+        });
+      } catch (err) {
+        console.error('Error registrando evento de armado (no afecta el pedido en sí)', err);
+      }
     }
 
     function confirmarSinStock() {
@@ -1024,7 +1050,7 @@
 
       (async () => {
         try {
-          await guardarArmado(item.id, 0, 'Falta de stock');
+          await guardarArmado(item, 0, 'Falta de stock');
           const filasActualizadas = await marcarSinStockGlobal(item.codigo, item.id);
           if (filasActualizadas > 0) {
             mostrarToast(`Sin stock marcado también en ${filasActualizadas} pedido(s) de otras sucursales`);
@@ -1049,7 +1075,7 @@
       for (let i = 0; i < candidatos.length; i += 400) {
         const batch = writeBatch(db);
         candidatos.slice(i, i + 400).forEach(d => {
-          const datos = { armado: 0, diferencia: 'Falta de stock' };
+          const datos = { armado: 0, diferencia: 'Falta de stock', armadoEn: serverTimestamp() };
           if (personaActual) {
             datos.armadoPor = personaActual.nombre;
             datos.armadoPorDocumento = personaActual.documento;
