@@ -66,6 +66,11 @@
       </div>
 
       <div class="card">
+        <h2>👤 Usuarios logueados ahora</h2>
+        <div id="contenidoSesiones"><div class="empty-state">Cargando...</div></div>
+      </div>
+
+      <div class="card">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
           <h2 style="margin:0;">📋 Últimos movimientos</h2>
           <span id="contadorTotalHoy" style="font-size:12px; color:var(--muted);"></span>
@@ -203,6 +208,32 @@
     // ---------------- TIEMPO REAL (hoy, onSnapshot) ----------------
     let eventosDeHoyPorPersona = {};
     let eventosDeHoyPlano = [];
+    let sesionesActivasCache = [];
+
+    // Muestra quién está identificado ahora mismo en algún celular —
+    // se arma solo (ver renderizarSesiones_), filtrando las que ya
+    // vencieron (pasaron las 4hs de sesión), aunque el documento en
+    // Firestore no se haya borrado todavía.
+    function renderizarSesiones_() {
+      const cont = document.getElementById('contenidoSesiones');
+      const ahoraMs = Date.now();
+      const vigentes = sesionesActivasCache
+        .filter(s => !s.expiraEnMs || s.expiraEnMs > ahoraMs)
+        .sort((a, b) => (b.iniciadoEnMs || 0) - (a.iniciadoEnMs || 0));
+
+      if (!vigentes.length) {
+        cont.innerHTML = '<div class="empty-state">Nadie está identificado en este momento</div>';
+        return;
+      }
+
+      cont.innerHTML = '<table><tr><th>Nombre</th><th>Documento</th><th>Desde</th><th>Vence</th></tr>' +
+        vigentes.map(s => `<tr>
+          <td style="font-weight:700;">${escapeHtml(s.nombre)}</td>
+          <td>${escapeHtml(s.documento)}</td>
+          <td>${s.iniciadoEnMs ? formatearHora_(new Date(s.iniciadoEnMs)) : '—'}</td>
+          <td>${s.expiraEnMs ? formatearHora_(new Date(s.expiraEnMs)) : '—'}</td>
+        </tr>`).join('') + '</table>';
+    }
 
     function iniciar_() {
       const inicioHoy = new Date(); inicioHoy.setHours(0, 0, 0, 0);
@@ -233,6 +264,24 @@
       });
 
       setInterval(renderizarTiempoReal_, 20000); // refresca aunque no entren eventos nuevos, para que "hace X min" avance
+
+      onSnapshot(collection(db, 'sesionesActivas'), (snap) => {
+        const sesiones = [];
+        snap.forEach(d => {
+          const data = d.data();
+          sesiones.push({
+            documento: data.documento || d.id,
+            nombre: data.nombre,
+            iniciadoEnMs: data.iniciadoEn ? data.iniciadoEn.toMillis() : null,
+            expiraEnMs: data.expiraEn ? data.expiraEn.toMillis() : null
+          });
+        });
+        sesionesActivasCache = sesiones;
+        renderizarSesiones_();
+      }, (err) => {
+        document.getElementById('contenidoSesiones').innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
+      });
+      setInterval(renderizarSesiones_, 30000); // para que las que vencen (pasaron las 4hs) desaparezcan solas
 
       const inputFecha = document.getElementById('inputFecha');
       inputFecha.value = new Date().toISOString().slice(0, 10);

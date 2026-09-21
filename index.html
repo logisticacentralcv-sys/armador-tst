@@ -248,7 +248,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
     import {
-      getFirestore, doc, getDoc, collection, query, where, orderBy, limit,
+      getFirestore, doc, getDoc, setDoc, deleteDoc, collection, query, where, orderBy, limit,
       getDocs, runTransaction, writeBatch, serverTimestamp, increment, addDoc
     } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
@@ -317,9 +317,11 @@
       }
       errorDiv.style.display = 'none';
       personaActual = { documento, nombre };
+      const expira = Date.now() + DURACION_SESION_MS;
       try {
-        localStorage.setItem('armador_persona', JSON.stringify({ documento, nombre, expira: Date.now() + DURACION_SESION_MS }));
+        localStorage.setItem('armador_persona', JSON.stringify({ documento, nombre, expira }));
       } catch (e) { /* si el navegador bloquea storage, sigue igual pero pide login cada vez */ }
+      registrarSesionFirestore_(documento, nombre, expira);
       input.value = '';
       mostrarPersonaEnHeader();
       document.getElementById('loginOverlay').classList.remove('show');
@@ -327,10 +329,31 @@
     }
 
     function cerrarSesionPersona() {
+      if (personaActual) cerrarSesionFirestore_(personaActual.documento);
       personaActual = null;
       try { localStorage.removeItem('armador_persona'); } catch (e) {}
       document.getElementById('loginOverlay').classList.add('show');
       document.getElementById('inputDocumentoLogin').focus();
+    }
+
+    // Deja un registro en Firestore de que esta persona está identificada
+    // en este celular — para poder verlo desde el panel privado de
+    // tiempos, ya que hasta ahora "estar logueado" solo vivía en el
+    // localStorage de cada aparato, sin manera de verlo desde afuera.
+    async function registrarSesionFirestore_(documento, nombre, expiraMs) {
+      try {
+        await setDoc(doc(db, 'sesionesActivas', documento), {
+          documento, nombre,
+          iniciadoEn: serverTimestamp(),
+          expiraEn: new Date(expiraMs)
+        });
+      } catch (err) {
+        console.error('Error registrando sesión', err);
+      }
+    }
+
+    async function cerrarSesionFirestore_(documento) {
+      try { await deleteDoc(doc(db, 'sesionesActivas', documento)); } catch (err) { console.error('Error cerrando sesión', err); }
     }
 
     function mostrarPersonaEnHeader() {
@@ -354,6 +377,7 @@
         if (guardada && guardada.expira && Date.now() < guardada.expira) {
           personaActual = { documento: guardada.documento, nombre: guardada.nombre };
           mostrarPersonaEnHeader();
+          registrarSesionFirestore_(guardada.documento, guardada.nombre, guardada.expira); // refresca el registro en cada apertura de la página
           arrancarApp();
           return;
         }
