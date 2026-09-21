@@ -29,6 +29,14 @@
     .estado-dot.verde { background: var(--green); }
     .estado-dot.naranja { background: var(--orange); }
     .badge-tipo { font-size: 10px; padding: 1px 6px; border-radius: 5px; background: #fee2e2; color: var(--red); font-weight: 700; margin-left: 6px; }
+    .fila-feed { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .fila-feed .hora { color: var(--muted); font-size: 11px; width: 42px; flex-shrink: 0; }
+    .fila-feed .persona-feed { font-weight: 700; width: 110px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fila-feed .detalle-feed { flex: 1; min-width: 0; }
+    .fila-feed .producto-feed { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fila-feed .sucursal-feed { color: var(--muted); font-size: 11px; }
+    .fila-feed .cantidad-feed { font-weight: 700; flex-shrink: 0; }
+    .fila-feed.sin-stock .cantidad-feed { color: var(--red); }
   </style>
 </head>
 <body>
@@ -55,6 +63,14 @@
       <div class="card">
         <h2>🟢 Armando ahora mismo</h2>
         <div id="contenidoTiempoReal"><div class="empty-state">Cargando...</div></div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <h2 style="margin:0;">📋 Últimos movimientos</h2>
+          <span id="contadorTotalHoy" style="font-size:12px; color:var(--muted);"></span>
+        </div>
+        <div id="contenidoFeed" style="max-height:420px; overflow-y:auto;"><div class="empty-state">Cargando...</div></div>
       </div>
 
       <div class="card">
@@ -173,6 +189,7 @@
 
     // ---------------- TIEMPO REAL (hoy, onSnapshot) ----------------
     let eventosDeHoyPorPersona = {};
+    let eventosDeHoyPlano = [];
 
     function iniciar_() {
       const inicioHoy = new Date(); inicioHoy.setHours(0, 0, 0, 0);
@@ -183,6 +200,7 @@
       );
       onSnapshot(q, (snap) => {
         const porPersona = {};
+        const plano = [];
         snap.forEach(d => {
           const data = d.data();
           if (!data.timestamp) return; // por si el serverTimestamp todavía no resolvió (optimistic local write)
@@ -190,11 +208,15 @@
           const key = ev.personaDocumento || ev.personaNombre || '?';
           if (!porPersona[key]) porPersona[key] = { nombre: ev.personaNombre, eventos: [] };
           porPersona[key].eventos.push(ev);
+          plano.push(ev);
         });
         eventosDeHoyPorPersona = porPersona;
+        eventosDeHoyPlano = plano; // ya viene ordenado ascendente por la query
         renderizarTiempoReal_();
+        renderizarFeed_();
       }, (err) => {
         document.getElementById('contenidoTiempoReal').innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
+        document.getElementById('contenidoFeed').innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
       });
 
       setInterval(renderizarTiempoReal_, 20000); // refresca aunque no entren eventos nuevos, para que "hace X min" avance
@@ -203,6 +225,34 @@
       inputFecha.value = new Date().toISOString().slice(0, 10);
       inputFecha.addEventListener('change', () => cargarResumenDia_(inputFecha.value));
       cargarResumenDia_(inputFecha.value);
+    }
+
+    // Lista cronológica (más nuevo primero) de cada movimiento individual
+    // de hoy — quién, qué, cuánto y a qué hora. Esto es lo que le faltaba
+    // al resumen: ver el detalle real, no solo el agregado por persona.
+    function renderizarFeed_() {
+      const cont = document.getElementById('contenidoFeed');
+      document.getElementById('contadorTotalHoy').textContent = `${eventosDeHoyPlano.length} movimiento(s) hoy`;
+
+      if (!eventosDeHoyPlano.length) {
+        cont.innerHTML = '<div class="empty-state">Todavía no armó nada nadie hoy</div>';
+        return;
+      }
+
+      const ultimos = eventosDeHoyPlano.slice().reverse().slice(0, 60); // más reciente arriba, tope de 60 para no saturar
+      cont.innerHTML = ultimos.map(ev => {
+        const sinStock = ev.diferencia === 'Falta de stock';
+        const tag = ev.tipo === 'FALTANTE' ? '<span class="badge-tipo">FALTANTE</span>' : '';
+        return `<div class="fila-feed ${sinStock ? 'sin-stock' : ''}">
+          <div class="hora">${formatearHora_(new Date(ev.timestampMs))}</div>
+          <div class="persona-feed">${escapeHtml(ev.personaNombre)}</div>
+          <div class="detalle-feed">
+            <div class="producto-feed">${escapeHtml(ev.producto || '')}${tag}</div>
+            <div class="sucursal-feed">${escapeHtml(ev.sucursal || '')}${ev.diferencia ? ' · ' + escapeHtml(ev.diferencia) : ''}</div>
+          </div>
+          <div class="cantidad-feed">${sinStock ? '✕' : '×' + ev.cantidadArmada}</div>
+        </div>`;
+      }).join('');
     }
 
     function renderizarTiempoReal_() {
@@ -217,7 +267,7 @@
 
       const filas = personas.map(p => {
         const racha = calcularRachaActual_(p.eventos, ahoraMs);
-        return { nombre: p.nombre, racha };
+        return { nombre: p.nombre, racha, totalHoy: p.eventos.length };
       }).sort((a, b) => (b.racha.activo - a.racha.activo) || (a.racha.inactivoDesdeMs - b.racha.inactivoDesdeMs));
 
       cont.innerHTML = filas.map(f => {
@@ -230,7 +280,7 @@
             </div>
             <div style="text-align:right;">
               <div style="font-weight:700; color:var(--green);">${formatearDuracion_(ahoraMs - r.inicioMs)}</div>
-              <div style="font-size:12px; color:var(--muted);">${r.picks} pick(s)</div>
+              <div style="font-size:12px; color:var(--muted);">${f.totalHoy} pedido(s) hoy</div>
             </div>
           </div>`;
         }
@@ -241,7 +291,7 @@
           </div>
           <div style="text-align:right;">
             <div style="font-weight:700; color:var(--orange);">Pausado hace ${formatearDuracion_(r.inactivoDesdeMs)}</div>
-            <div style="font-size:12px; color:var(--muted);">${r.picks} pick(s) en su última racha</div>
+            <div style="font-size:12px; color:var(--muted);">${f.totalHoy} pedido(s) hoy</div>
           </div>
         </div>`;
       }).join('');
