@@ -75,6 +75,7 @@
           <h2 style="margin:0;">📋 Últimos movimientos</h2>
           <span id="contadorTotalHoy" style="font-size:12px; color:var(--muted);"></span>
         </div>
+        <div id="statsHoy" style="display:flex; gap:16px; margin-bottom:10px; flex-wrap:wrap;"></div>
         <div id="contenidoFeed" style="max-height:420px; overflow-y:auto;"><div class="empty-state">Cargando...</div></div>
       </div>
 
@@ -219,20 +220,28 @@
       const ahoraMs = Date.now();
       const vigentes = sesionesActivasCache
         .filter(s => !s.expiraEnMs || s.expiraEnMs > ahoraMs)
-        .sort((a, b) => (b.iniciadoEnMs || 0) - (a.iniciadoEnMs || 0));
+        .sort((a, b) => (b.ultimaActividadMs || b.iniciadoEnMs || 0) - (a.ultimaActividadMs || a.iniciadoEnMs || 0));
 
       if (!vigentes.length) {
         cont.innerHTML = '<div class="empty-state">Nadie está identificado en este momento</div>';
         return;
       }
 
-      cont.innerHTML = '<table><tr><th>Nombre</th><th>Documento</th><th>Desde</th><th>Vence</th></tr>' +
-        vigentes.map(s => `<tr>
+      // El latido se manda cada 60s — si hace más de ~2.5 min que no llega
+      // ninguno, lo más probable es que cerró la app, se quedó sin señal,
+      // o el celular se bloqueó y dejó de correr el JS en segundo plano.
+      cont.innerHTML = '<table><tr><th></th><th>Nombre</th><th>Documento</th><th>Desde</th><th>Actividad</th></tr>' +
+        vigentes.map(s => {
+          const inactivaMs = s.ultimaActividadMs ? (ahoraMs - s.ultimaActividadMs) : null;
+          const presente = inactivaMs !== null && inactivaMs <= 150000;
+          return `<tr>
+          <td><span class="estado-dot ${presente ? 'verde' : 'naranja'}"></span></td>
           <td style="font-weight:700;">${escapeHtml(s.nombre)}</td>
           <td>${escapeHtml(s.documento)}</td>
           <td>${s.iniciadoEnMs ? formatearHora_(new Date(s.iniciadoEnMs)) : '—'}</td>
-          <td>${s.expiraEnMs ? formatearHora_(new Date(s.expiraEnMs)) : '—'}</td>
-        </tr>`).join('') + '</table>';
+          <td style="color:${presente ? 'var(--green)' : 'var(--orange)'};">${inactivaMs === null ? '—' : (presente ? 'app abierta' : `sin señal hace ${formatearDuracion_(inactivaMs)}`)}</td>
+        </tr>`;
+        }).join('') + '</table>';
     }
 
     function iniciar_() {
@@ -273,7 +282,8 @@
             documento: data.documento || d.id,
             nombre: data.nombre,
             iniciadoEnMs: data.iniciadoEn ? data.iniciadoEn.toMillis() : null,
-            expiraEnMs: data.expiraEn ? data.expiraEn.toMillis() : null
+            expiraEnMs: data.expiraEn ? data.expiraEn.toMillis() : null,
+            ultimaActividadMs: data.ultimaActividad ? data.ultimaActividad.toMillis() : null
           });
         });
         sesionesActivasCache = sesiones;
@@ -295,6 +305,18 @@
     function renderizarFeed_() {
       const cont = document.getElementById('contenidoFeed');
       document.getElementById('contadorTotalHoy').textContent = `${eventosDeHoyPlano.length} movimiento(s) hoy`;
+
+      let sinStock = 0, conDiferencia = 0, bien = 0;
+      eventosDeHoyPlano.forEach(ev => {
+        if (ev.diferencia === 'Falta de stock') sinStock++;
+        else if (ev.diferencia) conDiferencia++;
+        else bien++;
+      });
+      document.getElementById('statsHoy').innerHTML = eventosDeHoyPlano.length ? `
+        <div><span style="font-weight:700; color:var(--green);">${bien}</span> <span style="font-size:12px; color:var(--muted);">armados bien</span></div>
+        <div><span style="font-weight:700; color:var(--orange);">${conDiferencia}</span> <span style="font-size:12px; color:var(--muted);">con diferencia</span></div>
+        <div><span style="font-weight:700; color:var(--red);">${sinStock}</span> <span style="font-size:12px; color:var(--muted);">sin stock</span></div>
+      ` : '';
 
       if (!eventosDeHoyPlano.length) {
         cont.innerHTML = '<div class="empty-state">Todavía no armó nada nadie hoy</div>';

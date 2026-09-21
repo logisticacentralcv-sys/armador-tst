@@ -331,6 +331,7 @@
     function cerrarSesionPersona() {
       if (personaActual) cerrarSesionFirestore_(personaActual.documento);
       personaActual = null;
+      if (intervaloLatido) { clearInterval(intervaloLatido); intervaloLatido = null; }
       try { localStorage.removeItem('armador_persona'); } catch (e) {}
       document.getElementById('loginOverlay').classList.add('show');
       document.getElementById('inputDocumentoLogin').focus();
@@ -345,11 +346,29 @@
         await setDoc(doc(db, 'sesionesActivas', documento), {
           documento, nombre,
           iniciadoEn: serverTimestamp(),
-          expiraEn: new Date(expiraMs)
+          expiraEn: new Date(expiraMs),
+          ultimaActividad: serverTimestamp()
         });
       } catch (err) {
         console.error('Error registrando sesión', err);
       }
+      iniciarLatidoSesion_();
+    }
+
+    // Mientras la app esté abierta (sin importar si arman algo o no),
+    // cada 60 segundos actualiza "ultimaActividad" — así el panel puede
+    // saber "tiene la app abierta ahora mismo" sin depender de que
+    // recarguen la página ni de que estén armando en ese momento puntual.
+    let intervaloLatido = null;
+    function iniciarLatidoSesion_() {
+      if (intervaloLatido) return; // ya está corriendo
+      intervaloLatido = setInterval(async () => {
+        if (!personaActual) return;
+        try {
+          const { updateDoc } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js");
+          await updateDoc(doc(db, 'sesionesActivas', personaActual.documento), { ultimaActividad: serverTimestamp() });
+        } catch (err) { /* si falla un latido no pasa nada, se reintenta en el próximo */ }
+      }, 60000);
     }
 
     async function cerrarSesionFirestore_(documento) {
