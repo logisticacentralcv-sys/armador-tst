@@ -161,9 +161,15 @@
       return Object.keys(porSucursal).map(suc => {
         const evs = porSucursal[suc];
         let tiempoActivoMs = 0, tiempoPausaMs = 0, cantidadPausas = 0, gapsActivos = 0;
+        let tiempoHastaSinStockMs = 0, gapsSinStock = 0; // aparte, no se mezcla con lo de arriba
         for (let i = 1; i < evs.length; i++) {
           const gap = evs[i].timestampMs - evs[i - 1].timestampMs;
-          if (gap <= UMBRAL_PAUSA_MS) { tiempoActivoMs += gap; gapsActivos++; } else { tiempoPausaMs += gap; cantidadPausas++; }
+          if (gap <= UMBRAL_PAUSA_MS) {
+            tiempoActivoMs += gap; gapsActivos++;
+            if (evs[i].diferencia === 'Falta de stock') { tiempoHastaSinStockMs += gap; gapsSinStock++; }
+          } else {
+            tiempoPausaMs += gap; cantidadPausas++;
+          }
         }
         const picksSinStock = evs.filter(ev => ev.diferencia === 'Falta de stock').length;
         return {
@@ -172,6 +178,7 @@
           picksSinStock,
           porcentajeSinStock: evs.length ? (picksSinStock / evs.length * 100) : 0,
           promedioMsPorPick: gapsActivos ? (tiempoActivoMs / gapsActivos) : null,
+          promedioMsSinStock: gapsSinStock ? (tiempoHastaSinStockMs / gapsSinStock) : null,
           primerPick: evs[0].timestampMs,
           ultimoPick: evs[evs.length - 1].timestampMs,
           tiempoActivoMs, tiempoPausaMs, cantidadPausas,
@@ -427,7 +434,7 @@
           return;
         }
 
-        let html = '<table><tr><th>Persona</th><th>Sucursal</th><th>Picks</th><th>Desde</th><th>Hasta</th><th>T. activo</th><th>Prom./pick</th><th>Sin stock</th><th>Pausas</th><th>T. pausas</th></tr>';
+        let html = '<table><tr><th>Persona</th><th>Sucursal</th><th>Picks</th><th>Desde</th><th>Hasta</th><th>T. activo</th><th>Prom./pick</th><th>Sin stock</th><th>Prom. sin stock</th><th>Pausas</th><th>T. pausas</th></tr>';
         personas.forEach(p => {
           const filas = calcularResumenPorSucursal_(p.eventos).sort((a, b) => a.primerPick - b.primerPick);
           filas.forEach((f, idx) => {
@@ -440,6 +447,7 @@
               <td style="font-weight:700; color:var(--green);">${formatearDuracion_(f.tiempoActivoMs)}</td>
               <td>${formatearDuracionCorta_(f.promedioMsPorPick)}</td>
               <td style="color:${f.picksSinStock > 0 ? 'var(--red)' : 'var(--muted)'};">${f.picksSinStock > 0 ? `${f.picksSinStock} (${f.porcentajeSinStock.toFixed(0)}%)` : '—'}</td>
+              <td style="color:${f.promedioMsSinStock !== null ? 'var(--red)' : 'var(--muted)'};">${formatearDuracionCorta_(f.promedioMsSinStock)}</td>
               <td style="color:${f.cantidadPausas > 0 ? 'var(--orange)' : 'var(--muted)'};">${f.cantidadPausas || '—'}</td>
               <td style="color:${f.tiempoPausaMs > 0 ? 'var(--orange)' : 'var(--muted)'};">${f.tiempoPausaMs > 0 ? formatearDuracion_(f.tiempoPausaMs) : '—'}</td>
             </tr>`;
