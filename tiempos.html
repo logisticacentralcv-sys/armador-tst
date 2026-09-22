@@ -135,6 +135,14 @@
       if (horas > 0) return `${horas}h ${min}min`;
       return `${min} min`;
     }
+    // Para promedios por pick, que suelen ser cortos — "1 min" redondeado
+    // no dice mucho si en realidad son 20 o 50 segundos.
+    function formatearDuracionCorta_(ms) {
+      if (ms === null || ms === undefined) return '—';
+      if (ms < 0) ms = 0;
+      if (ms < 60000) return `${Math.round(ms / 1000)} seg`;
+      return formatearDuracion_(ms);
+    }
     function formatearHora_(fecha) {
       return fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
     }
@@ -152,14 +160,18 @@
 
       return Object.keys(porSucursal).map(suc => {
         const evs = porSucursal[suc];
-        let tiempoActivoMs = 0, tiempoPausaMs = 0, cantidadPausas = 0;
+        let tiempoActivoMs = 0, tiempoPausaMs = 0, cantidadPausas = 0, gapsActivos = 0;
         for (let i = 1; i < evs.length; i++) {
           const gap = evs[i].timestampMs - evs[i - 1].timestampMs;
-          if (gap <= UMBRAL_PAUSA_MS) { tiempoActivoMs += gap; } else { tiempoPausaMs += gap; cantidadPausas++; }
+          if (gap <= UMBRAL_PAUSA_MS) { tiempoActivoMs += gap; gapsActivos++; } else { tiempoPausaMs += gap; cantidadPausas++; }
         }
+        const picksSinStock = evs.filter(ev => ev.diferencia === 'Falta de stock').length;
         return {
           sucursal: suc,
           picks: evs.length,
+          picksSinStock,
+          porcentajeSinStock: evs.length ? (picksSinStock / evs.length * 100) : 0,
+          promedioMsPorPick: gapsActivos ? (tiempoActivoMs / gapsActivos) : null,
           primerPick: evs[0].timestampMs,
           ultimoPick: evs[evs.length - 1].timestampMs,
           tiempoActivoMs, tiempoPausaMs, cantidadPausas,
@@ -415,7 +427,7 @@
           return;
         }
 
-        let html = '<table><tr><th>Persona</th><th>Sucursal</th><th>Picks</th><th>Desde</th><th>Hasta</th><th>T. activo</th><th>Pausas</th><th>T. pausas</th></tr>';
+        let html = '<table><tr><th>Persona</th><th>Sucursal</th><th>Picks</th><th>Desde</th><th>Hasta</th><th>T. activo</th><th>Prom./pick</th><th>Sin stock</th><th>Pausas</th><th>T. pausas</th></tr>';
         personas.forEach(p => {
           const filas = calcularResumenPorSucursal_(p.eventos).sort((a, b) => a.primerPick - b.primerPick);
           filas.forEach((f, idx) => {
@@ -426,6 +438,8 @@
               <td>${formatearHora_(new Date(f.primerPick))}</td>
               <td>${formatearHora_(new Date(f.ultimoPick))}</td>
               <td style="font-weight:700; color:var(--green);">${formatearDuracion_(f.tiempoActivoMs)}</td>
+              <td>${formatearDuracionCorta_(f.promedioMsPorPick)}</td>
+              <td style="color:${f.picksSinStock > 0 ? 'var(--red)' : 'var(--muted)'};">${f.picksSinStock > 0 ? `${f.picksSinStock} (${f.porcentajeSinStock.toFixed(0)}%)` : '—'}</td>
               <td style="color:${f.cantidadPausas > 0 ? 'var(--orange)' : 'var(--muted)'};">${f.cantidadPausas || '—'}</td>
               <td style="color:${f.tiempoPausaMs > 0 ? 'var(--orange)' : 'var(--muted)'};">${f.tiempoPausaMs > 0 ? formatearDuracion_(f.tiempoPausaMs) : '—'}</td>
             </tr>`;
