@@ -654,8 +654,8 @@
       // "Sin stock" queda AFUERA del score a pedido (se sigue viendo la
       // columna/dato en las otras tablas, pero no entra en este número).
       const PESO_VELOCIDAD = 0.50;   // prom./pick más bajo = mejor
-      const PESO_CONTINUIDAD = 0.35; // % pausas más bajo = mejor
-      const PESO_VOLUMEN = 0.15;     // más picks totales = mejor
+      const PESO_CONTINUIDAD = 0.25; // % pausas más bajo = mejor
+      const PESO_VOLUMEN = 0.25;     // más picks totales = mejor
 
       const promedios = filas.map(f => f.promedioMsPorPick);
       const pausasPct = filas.map(f => f.porcentajePausas);
