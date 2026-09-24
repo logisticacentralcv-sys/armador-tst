@@ -87,6 +87,23 @@
         <div id="contenidoResumen"><div class="empty-state">Elegí una fecha.</div></div>
       </div>
 
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+          <h2 style="margin:0;">📅 Historial por rango de fechas</h2>
+          <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+            <input type="date" id="inputRangoDesde"> <span style="color:var(--muted); font-size:12px;">hasta</span> <input type="date" id="inputRangoHasta">
+            <button id="btnBuscarRango" style="padding:8px 14px; border:none; border-radius:8px; background:var(--primary); color:white; font-weight:700; cursor:pointer;">Buscar</button>
+          </div>
+        </div>
+        <div id="contenidoRango"><div class="empty-state">Elegí un rango de fechas y tocá "Buscar".</div></div>
+      </div>
+
+      <div class="card">
+        <h2>🏆 Scoring por armador (mismo rango de arriba)</h2>
+        <p style="font-size:12px; color:var(--muted); margin-top:-8px;">Compara a cada armador contra el resto del grupo en el mismo período — no es un estándar absoluto. El "% sin stock" no siempre depende del armador (puede ser que el depósito no tenía el producto), tenelo en cuenta antes de sacar conclusiones solo con este número.</p>
+        <div id="contenidoScoring"><div class="empty-state">Buscá un rango arriba primero.</div></div>
+      </div>
+
     </div>
   </div>
 
@@ -182,6 +199,7 @@
           porcentajeSinStock: evs.length ? (picksSinStock / evs.length * 100) : 0,
           promedioMsPorPick: gapsActivos ? (tiempoActivoMs / gapsActivos) : null,
           promedioMsSinStock: gapsSinStock ? (tiempoHastaSinStockMs / gapsSinStock) : null,
+          gapsActivos, gapsSinStock, tiempoHastaSinStockMs,
           porcentajePausas: tiempoTotalMs ? (tiempoPausaMs / tiempoTotalMs * 100) : 0,
           pausasDetalle,
           primerPick: evs[0].timestampMs,
@@ -327,6 +345,11 @@
       inputFecha.value = new Date().toISOString().slice(0, 10);
       inputFecha.addEventListener('change', () => cargarResumenDia_(inputFecha.value));
       cargarResumenDia_(inputFecha.value);
+
+      const hoy = new Date();
+      const hace7 = new Date(); hace7.setDate(hoy.getDate() - 6);
+      document.getElementById('inputRangoHasta').value = hoy.toISOString().slice(0, 10);
+      document.getElementById('inputRangoDesde').value = hace7.toISOString().slice(0, 10);
     }
 
     // Lista cronológica (más nuevo primero) de cada movimiento individual
@@ -483,7 +506,184 @@
       }
     }
 
-    function escapeHtml(str) {
+    // ---------------- HISTORIAL POR RANGO DE FECHAS + SCORING ----------------
+    document.getElementById('btnBuscarRango').addEventListener('click', () => {
+      const desde = document.getElementById('inputRangoDesde').value;
+      const hasta = document.getElementById('inputRangoHasta').value;
+      if (!desde || !hasta) { alert('Elegí las dos fechas'); return; }
+      cargarRango_(desde, hasta);
+    });
+
+    // Agrupa eventos por día calendario (clave "YYYY-MM-DD" en hora local)
+    function agruparPorDia_(eventos) {
+      const porDia = {};
+      eventos.forEach(ev => {
+        const d = new Date(ev.timestampMs);
+        const clave = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        if (!porDia[clave]) porDia[clave] = [];
+        porDia[clave].push(ev);
+      });
+      return porDia;
+    }
+
+    // Suma los totales de una persona a lo largo de TODO el rango, día por
+    // día — hay que cortar por día (y por sucursal, ya lo hace
+    // calcularResumenPorSucursal_) para no confundir "se fue a las 18hs y
+    // volvió a las 9hs del día siguiente" con una pausa gigante.
+    function calcularTotalesPersona_(eventosPersona) {
+      const porDia = agruparPorDia_(eventosPersona);
+      const dias = Object.keys(porDia);
+      let picks = 0, picksSinStock = 0, tiempoActivoMs = 0, tiempoPausaMs = 0, cantidadPausas = 0;
+      let gapsActivos = 0, gapsSinStock = 0, tiempoHastaSinStockMs = 0;
+
+      dias.forEach(dia => {
+        calcularResumenPorSucursal_(porDia[dia]).forEach(f => {
+          picks += f.picks;
+          picksSinStock += f.picksSinStock;
+          tiempoActivoMs += f.tiempoActivoMs;
+          tiempoPausaMs += f.tiempoPausaMs;
+          cantidadPausas += f.cantidadPausas;
+          gapsActivos += f.gapsActivos;
+          gapsSinStock += f.gapsSinStock;
+          tiempoHastaSinStockMs += f.tiempoHastaSinStockMs;
+        });
+      });
+
+      const tiempoTotalMs = tiempoActivoMs + tiempoPausaMs;
+      return {
+        diasTrabajados: dias.length,
+        picks, picksSinStock,
+        porcentajeSinStock: picks ? (picksSinStock / picks * 100) : 0,
+        tiempoActivoMs, tiempoPausaMs, cantidadPausas,
+        porcentajePausas: tiempoTotalMs ? (tiempoPausaMs / tiempoTotalMs * 100) : 0,
+        promedioMsPorPick: gapsActivos ? (tiempoActivoMs / gapsActivos) : null,
+        promedioMsSinStock: gapsSinStock ? (tiempoHastaSinStockMs / gapsSinStock) : null
+      };
+    }
+
+    let totalesPorPersonaCache = [];
+
+    async function cargarRango_(desde, hasta) {
+      const cont = document.getElementById('contenidoRango');
+      const contScoring = document.getElementById('contenidoScoring');
+      cont.innerHTML = '<div class="cargando">Cargando...</div>';
+      contScoring.innerHTML = '<div class="cargando">Cargando...</div>';
+
+      const inicio = new Date(desde + 'T00:00:00');
+      const fin = new Date(hasta + 'T23:59:59.999');
+
+      try {
+        const q = query(
+          collection(db, 'eventosArmado'),
+          where('timestamp', '>=', Timestamp.fromDate(inicio)),
+          where('timestamp', '<=', Timestamp.fromDate(fin)),
+          orderBy('timestamp', 'asc')
+        );
+        const snap = await getDocs(q);
+        const porPersona = {};
+        snap.forEach(d => {
+          const data = d.data();
+          if (!data.timestamp) return;
+          const ev = { ...data, timestampMs: data.timestamp.toMillis() };
+          const key = ev.personaDocumento || ev.personaNombre || '?';
+          if (!porPersona[key]) porPersona[key] = { nombre: ev.personaNombre, eventos: [] };
+          porPersona[key].eventos.push(ev);
+        });
+
+        const personas = Object.values(porPersona);
+        if (!personas.length) {
+          cont.innerHTML = '<div class="empty-state">Nadie armó nada en ese rango</div>';
+          contScoring.innerHTML = '<div class="empty-state">Nadie armó nada en ese rango</div>';
+          totalesPorPersonaCache = [];
+          return;
+        }
+
+        totalesPorPersonaCache = personas.map(p => ({ nombre: p.nombre, ...calcularTotalesPersona_(p.eventos) }));
+        renderizarRango_();
+        renderizarScoring_();
+      } catch (err) {
+        cont.innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
+        contScoring.innerHTML = '';
+      }
+    }
+
+    function renderizarRango_() {
+      const cont = document.getElementById('contenidoRango');
+      const filas = totalesPorPersonaCache.slice().sort((a, b) => b.picks - a.picks);
+      let html = '<table><tr><th>Persona</th><th>Días</th><th>Picks</th><th>T. activo</th><th>Prom./pick</th><th>Sin stock</th><th>Pausas</th><th>% pausas</th></tr>';
+      filas.forEach(f => {
+        html += `<tr>
+          <td style="font-weight:700;">${escapeHtml(f.nombre)}</td>
+          <td>${f.diasTrabajados}</td>
+          <td>${f.picks}</td>
+          <td style="color:var(--green); font-weight:700;">${formatearDuracion_(f.tiempoActivoMs)}</td>
+          <td>${formatearDuracionCorta_(f.promedioMsPorPick)}</td>
+          <td style="color:${f.picksSinStock > 0 ? 'var(--red)' : 'var(--muted)'};">${f.picksSinStock > 0 ? `${f.picksSinStock} (${f.porcentajeSinStock.toFixed(0)}%)` : '—'}</td>
+          <td style="color:${f.cantidadPausas > 0 ? 'var(--orange)' : 'var(--muted)'};">${f.cantidadPausas || '—'}</td>
+          <td style="color:${f.porcentajePausas > 0 ? 'var(--orange)' : 'var(--muted)'};">${f.porcentajePausas > 0 ? f.porcentajePausas.toFixed(0) + '%' : '—'}</td>
+        </tr>`;
+      });
+      html += '</table>';
+      cont.innerHTML = html;
+    }
+
+    // Normaliza una métrica a 0-100 DENTRO del grupo que se está mirando
+    // (el mejor del grupo saca 100, el peor saca 0) — es una comparación
+    // relativa entre estos armadores en este período, no una vara fija.
+    // "invertir:true" para métricas donde MENOS es mejor (tiempos, %).
+    function normalizar_(valores, valor, invertir) {
+      const validos = valores.filter(v => v !== null && v !== undefined);
+      if (!validos.length || valor === null || valor === undefined) return 50; // sin datos suficientes: neutro
+      const min = Math.min(...validos), max = Math.max(...validos);
+      if (max === min) return 100; // todos iguales
+      const norm = (valor - min) / (max - min);
+      return (invertir ? (1 - norm) : norm) * 100;
+    }
+
+    function renderizarScoring_() {
+      const cont = document.getElementById('contenidoScoring');
+      const filas = totalesPorPersonaCache;
+      if (!filas.length) { cont.innerHTML = '<div class="empty-state">Sin datos</div>'; return; }
+
+      // Pesos del score final — ajustables acá si hace falta cambiarlos.
+      const PESO_VELOCIDAD = 0.40;   // prom./pick más bajo = mejor
+      const PESO_CONTINUIDAD = 0.30; // % pausas más bajo = mejor
+      const PESO_SIN_STOCK = 0.20;   // % sin stock más bajo = mejor (ver aclaración arriba)
+      const PESO_VOLUMEN = 0.10;     // más picks totales = mejor
+
+      const promedios = filas.map(f => f.promedioMsPorPick);
+      const pausasPct = filas.map(f => f.porcentajePausas);
+      const sinStockPct = filas.map(f => f.porcentajeSinStock);
+      const volumenes = filas.map(f => f.picks);
+
+      const conScore = filas.map(f => {
+        const sVelocidad = normalizar_(promedios, f.promedioMsPorPick, true);
+        const sContinuidad = normalizar_(pausasPct, f.porcentajePausas, true);
+        const sSinStock = normalizar_(sinStockPct, f.porcentajeSinStock, true);
+        const sVolumen = normalizar_(volumenes, f.picks, false);
+        const scoreFinal = sVelocidad * PESO_VELOCIDAD + sContinuidad * PESO_CONTINUIDAD + sSinStock * PESO_SIN_STOCK + sVolumen * PESO_VOLUMEN;
+        return { ...f, sVelocidad, sContinuidad, sSinStock, sVolumen, scoreFinal };
+      }).sort((a, b) => b.scoreFinal - a.scoreFinal);
+
+      let html = '<table><tr><th>#</th><th>Persona</th><th>Velocidad</th><th>Continuidad</th><th>Sin stock</th><th>Volumen</th><th>Score final</th></tr>';
+      conScore.forEach((f, i) => {
+        const colorScore = f.scoreFinal >= 70 ? 'var(--green)' : (f.scoreFinal >= 40 ? 'var(--orange)' : 'var(--red)');
+        html += `<tr>
+          <td>${i + 1}</td>
+          <td style="font-weight:700;">${escapeHtml(f.nombre)}</td>
+          <td>${f.sVelocidad.toFixed(0)}</td>
+          <td>${f.sContinuidad.toFixed(0)}</td>
+          <td>${f.sSinStock.toFixed(0)}</td>
+          <td>${f.sVolumen.toFixed(0)}</td>
+          <td style="font-weight:700; color:${colorScore}; font-size:15px;">${f.scoreFinal.toFixed(0)}</td>
+        </tr>`;
+      });
+      html += '</table>';
+      html += `<div style="font-size:11px; color:var(--muted); margin-top:8px;">Pesos usados: Velocidad ${PESO_VELOCIDAD * 100}% · Continuidad ${PESO_CONTINUIDAD * 100}% · Sin stock ${PESO_SIN_STOCK * 100}% · Volumen ${PESO_VOLUMEN * 100}%. Cada columna (menos "Score final") es un puntaje relativo de 0 a 100 dentro de este grupo, no un valor absoluto.</div>`;
+      cont.innerHTML = html;
+    }
+
+
       return String(str ?? '').replace(/[&<>"']/g, s => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
     }
   </script>
