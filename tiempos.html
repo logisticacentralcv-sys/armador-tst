@@ -100,7 +100,7 @@
 
       <div class="card">
         <h2>🏆 Scoring por armador (mismo rango de arriba)</h2>
-        <p style="font-size:12px; color:var(--muted); margin-top:-8px;">Compara a cada armador contra el resto del grupo en el mismo período — no es un estándar absoluto. El "% sin stock" no siempre depende del armador (puede ser que el depósito no tenía el producto), tenelo en cuenta antes de sacar conclusiones solo con este número.</p>
+        <p style="font-size:12px; color:var(--muted); margin-top:-8px;">Compara a cada armador contra el resto del grupo en el mismo período — no es un estándar absoluto. (El "% sin stock" no entra en este score porque no siempre depende del armador — se ve aparte, en la tabla de "Historial por rango" de arriba.)</p>
         <div id="contenidoScoring"><div class="empty-state">Buscá un rango arriba primero.</div></div>
       </div>
 
@@ -646,26 +646,25 @@
       if (!filas.length) { cont.innerHTML = '<div class="empty-state">Sin datos</div>'; return; }
 
       // Pesos del score final — ajustables acá si hace falta cambiarlos.
-      const PESO_VELOCIDAD = 0.40;   // prom./pick más bajo = mejor
-      const PESO_CONTINUIDAD = 0.30; // % pausas más bajo = mejor
-      const PESO_SIN_STOCK = 0.20;   // % sin stock más bajo = mejor (ver aclaración arriba)
-      const PESO_VOLUMEN = 0.10;     // más picks totales = mejor
+      // "Sin stock" queda AFUERA del score a pedido (se sigue viendo la
+      // columna/dato en las otras tablas, pero no entra en este número).
+      const PESO_VELOCIDAD = 0.50;   // prom./pick más bajo = mejor
+      const PESO_CONTINUIDAD = 0.35; // % pausas más bajo = mejor
+      const PESO_VOLUMEN = 0.15;     // más picks totales = mejor
 
       const promedios = filas.map(f => f.promedioMsPorPick);
       const pausasPct = filas.map(f => f.porcentajePausas);
-      const sinStockPct = filas.map(f => f.porcentajeSinStock);
       const volumenes = filas.map(f => f.picks);
 
       const conScore = filas.map(f => {
         const sVelocidad = normalizar_(promedios, f.promedioMsPorPick, true);
         const sContinuidad = normalizar_(pausasPct, f.porcentajePausas, true);
-        const sSinStock = normalizar_(sinStockPct, f.porcentajeSinStock, true);
         const sVolumen = normalizar_(volumenes, f.picks, false);
-        const scoreFinal = sVelocidad * PESO_VELOCIDAD + sContinuidad * PESO_CONTINUIDAD + sSinStock * PESO_SIN_STOCK + sVolumen * PESO_VOLUMEN;
-        return { ...f, sVelocidad, sContinuidad, sSinStock, sVolumen, scoreFinal };
+        const scoreFinal = sVelocidad * PESO_VELOCIDAD + sContinuidad * PESO_CONTINUIDAD + sVolumen * PESO_VOLUMEN;
+        return { ...f, sVelocidad, sContinuidad, sVolumen, scoreFinal };
       }).sort((a, b) => b.scoreFinal - a.scoreFinal);
 
-      let html = '<table><tr><th>#</th><th>Persona</th><th>Velocidad</th><th>Continuidad</th><th>Sin stock</th><th>Volumen</th><th>Score final</th></tr>';
+      let html = '<table><tr><th>#</th><th>Persona</th><th>Velocidad</th><th>Continuidad</th><th>Volumen</th><th>Score final</th></tr>';
       conScore.forEach((f, i) => {
         const colorScore = f.scoreFinal >= 70 ? 'var(--green)' : (f.scoreFinal >= 40 ? 'var(--orange)' : 'var(--red)');
         html += `<tr>
@@ -673,13 +672,12 @@
           <td style="font-weight:700;">${escapeHtml(f.nombre)}</td>
           <td>${f.sVelocidad.toFixed(0)}</td>
           <td>${f.sContinuidad.toFixed(0)}</td>
-          <td>${f.sSinStock.toFixed(0)}</td>
           <td>${f.sVolumen.toFixed(0)}</td>
           <td style="font-weight:700; color:${colorScore}; font-size:15px;">${f.scoreFinal.toFixed(0)}</td>
         </tr>`;
       });
       html += '</table>';
-      html += `<div style="font-size:11px; color:var(--muted); margin-top:8px;">Pesos usados: Velocidad ${PESO_VELOCIDAD * 100}% · Continuidad ${PESO_CONTINUIDAD * 100}% · Sin stock ${PESO_SIN_STOCK * 100}% · Volumen ${PESO_VOLUMEN * 100}%. Cada columna (menos "Score final") es un puntaje relativo de 0 a 100 dentro de este grupo, no un valor absoluto.</div>`;
+      html += `<div style="font-size:11px; color:var(--muted); margin-top:8px;">Pesos usados: Velocidad ${PESO_VELOCIDAD * 100}% · Continuidad ${PESO_CONTINUIDAD * 100}% · Volumen ${PESO_VOLUMEN * 100}%. "Sin stock" no entra en este score (se ve aparte en la tabla de arriba). Cada columna (menos "Score final") es un puntaje relativo de 0 a 100 dentro de este grupo, no un valor absoluto.</div>`;
       cont.innerHTML = html;
     }
 
