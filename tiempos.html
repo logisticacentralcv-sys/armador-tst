@@ -152,13 +152,18 @@
       if (horas > 0) return `${horas}h ${min}min`;
       return `${min} min`;
     }
-    // Para promedios por pick, que suelen ser cortos — "1 min" redondeado
-    // no dice mucho si en realidad son 20 o 50 segundos.
+    // Para promedios (por pick, sin stock) — antes de un minuto redondeaba
+    // a minutos enteros, y cualquier cosa entre 60 y 89 segundos quedaba
+    // como "1 min" sin distinguir. Ahora siempre muestra minutos+segundos
+    // exactos (redondeados al segundo, no al minuto).
     function formatearDuracionCorta_(ms) {
       if (ms === null || ms === undefined) return '—';
       if (ms < 0) ms = 0;
-      if (ms < 60000) return `${Math.round(ms / 1000)} seg`;
-      return formatearDuracion_(ms);
+      const totalSeg = Math.round(ms / 1000);
+      const min = Math.floor(totalSeg / 60);
+      const seg = totalSeg % 60;
+      if (min > 0) return `${min} min ${String(seg).padStart(2, '0')}s`;
+      return `${seg} seg`;
     }
     function formatearHora_(fecha) {
       return fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
