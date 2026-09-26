@@ -104,6 +104,12 @@
         <div id="contenidoScoring"><div class="empty-state">Buscá un rango arriba primero.</div></div>
       </div>
 
+      <div class="card">
+        <h2>📈 Evolución del score por día</h2>
+        <p style="font-size:12px; color:var(--muted); margin-top:-8px;">Mismo score (Velocidad 50% / Continuidad 25% / Volumen 25%), calculado cada día por separado — cada día se compara solo contra quienes trabajaron ESE día.</p>
+        <div id="contenidoGrafico"><div class="empty-state">Buscá un rango arriba primero.</div></div>
+      </div>
+
     </div>
   </div>
 
@@ -571,8 +577,10 @@
     async function cargarRango_(desde, hasta) {
       const cont = document.getElementById('contenidoRango');
       const contScoring = document.getElementById('contenidoScoring');
+      const contGrafico = document.getElementById('contenidoGrafico');
       cont.innerHTML = '<div class="cargando">Cargando...</div>';
       contScoring.innerHTML = '<div class="cargando">Cargando...</div>';
+      contGrafico.innerHTML = '<div class="cargando">Cargando...</div>';
 
       const inicio = new Date(desde + 'T00:00:00');
       const fin = new Date(hasta + 'T23:59:59.999');
@@ -586,6 +594,7 @@
         );
         const snap = await getDocs(q);
         const porPersona = {};
+        const todosLosEventos = [];
         snap.forEach(d => {
           const data = d.data();
           if (!data.timestamp) return;
@@ -593,12 +602,14 @@
           const key = ev.personaDocumento || ev.personaNombre || '?';
           if (!porPersona[key]) porPersona[key] = { nombre: ev.personaNombre, eventos: [] };
           porPersona[key].eventos.push(ev);
+          todosLosEventos.push(ev);
         });
 
         const personas = Object.values(porPersona);
         if (!personas.length) {
           cont.innerHTML = '<div class="empty-state">Nadie armó nada en ese rango</div>';
           contScoring.innerHTML = '<div class="empty-state">Nadie armó nada en ese rango</div>';
+          contGrafico.innerHTML = '<div class="empty-state">Nadie armó nada en ese rango</div>';
           totalesPorPersonaCache = [];
           return;
         }
@@ -606,9 +617,11 @@
         totalesPorPersonaCache = personas.map(p => ({ nombre: p.nombre, ...calcularTotalesPersona_(p.eventos) }));
         renderizarRango_();
         renderizarScoring_();
+        renderizarGraficoEvolucion_(todosLosEventos);
       } catch (err) {
         cont.innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
         contScoring.innerHTML = '';
+        contGrafico.innerHTML = '';
       }
     }
 
@@ -686,6 +699,109 @@
       cont.innerHTML = html;
     }
 
+
+    // ---------------- GRÁFICO DE EVOLUCIÓN DEL SCORE POR DÍA ----------------
+    const COLORES_GRAFICO = ['#2563eb', '#dc2626', '#16a34a', '#ea580c', '#9333ea', '#0891b2', '#ca8a04', '#db2777', '#4d7c0f', '#7c3aed'];
+
+    // Mismo score que la tabla de arriba (Velocidad 50 / Continuidad 25 /
+    // Volumen 25), pero calculado UN DÍA A LA VEZ — cada día se compara
+    // solo contra quienes trabajaron ESE día (no contra todo el rango).
+    function calcularEvolucionDiaria_(todosLosEventos) {
+      const porDia = agruparPorDia_(todosLosEventos);
+      const dias = Object.keys(porDia).sort();
+      const seriePorPersona = {};
+
+      dias.forEach(dia => {
+        const porPersonaDelDia = {};
+        porDia[dia].forEach(ev => {
+          const key = ev.personaDocumento || ev.personaNombre || '?';
+          if (!porPersonaDelDia[key]) porPersonaDelDia[key] = { nombre: ev.personaNombre, eventos: [] };
+          porPersonaDelDia[key].eventos.push(ev);
+        });
+
+        const personasDelDia = Object.values(porPersonaDelDia).map(p => ({ nombre: p.nombre, ...calcularTotalesPersona_(p.eventos) }));
+        if (!personasDelDia.length) return;
+
+        const promedios = personasDelDia.map(f => f.promedioMsPorPick);
+        const pausasPct = personasDelDia.map(f => f.porcentajePausas);
+        const volumenes = personasDelDia.map(f => f.picks);
+
+        personasDelDia.forEach(f => {
+          const sVel = normalizar_(promedios, f.promedioMsPorPick, true);
+          const sCon = normalizar_(pausasPct, f.porcentajePausas, true);
+          const sVol = normalizar_(volumenes, f.picks, false);
+          const score = sVel * 0.50 + sCon * 0.25 + sVol * 0.25;
+          if (!seriePorPersona[f.nombre]) seriePorPersona[f.nombre] = [];
+          seriePorPersona[f.nombre].push({ dia, score });
+        });
+      });
+
+      return { dias, seriePorPersona };
+    }
+
+    function renderizarGraficoEvolucion_(todosLosEventos) {
+      const cont = document.getElementById('contenidoGrafico');
+      const { dias, seriePorPersona } = calcularEvolucionDiaria_(todosLosEventos);
+      const nombres = Object.keys(seriePorPersona);
+
+      if (!dias.length || !nombres.length) {
+        cont.innerHTML = '<div class="empty-state">Sin datos para graficar</div>';
+        return;
+      }
+
+      const anchoTotal = 800, altoTotal = 320;
+      const margenIzq = 40, margenDer = 20, margenSup = 20, margenInf = 50;
+      const anchoUtil = anchoTotal - margenIzq - margenDer;
+      const altoUtil = altoTotal - margenSup - margenInf;
+
+      const xPorIndice = (i) => margenIzq + (dias.length > 1 ? (i / (dias.length - 1)) * anchoUtil : anchoUtil / 2);
+      const yPorScore = (score) => margenSup + (1 - score / 100) * altoUtil;
+
+      let svg = `<svg viewBox="0 0 ${anchoTotal} ${altoTotal}" style="width:100%; height:auto; font-family:inherit;">`;
+
+      [0, 25, 50, 75, 100].forEach(v => {
+        const y = yPorScore(v);
+        svg += `<line x1="${margenIzq}" y1="${y}" x2="${anchoTotal - margenDer}" y2="${y}" stroke="#e5e7eb" stroke-width="1"/>`;
+        svg += `<text x="${margenIzq - 8}" y="${y + 4}" font-size="11" fill="#6b7280" text-anchor="end">${v}</text>`;
+      });
+
+      const salto = Math.ceil(dias.length / 10) || 1;
+      dias.forEach((dia, i) => {
+        if (i % salto !== 0 && i !== dias.length - 1) return;
+        const x = xPorIndice(i);
+        const partes = dia.split('-');
+        const etiqueta = `${partes[2]}/${partes[1]}`;
+        svg += `<text x="${x}" y="${altoTotal - margenInf + 18}" font-size="10" fill="#6b7280" text-anchor="middle">${etiqueta}</text>`;
+      });
+
+      nombres.forEach((nombre, idx) => {
+        const color = COLORES_GRAFICO[idx % COLORES_GRAFICO.length];
+        const puntosPorDia = {};
+        seriePorPersona[nombre].forEach(p => { puntosPorDia[p.dia] = p.score; });
+
+        const coords = [];
+        dias.forEach((dia, i) => {
+          if (puntosPorDia[dia] === undefined) return; // ese día no trabajó — se salta, no se inventa un punto
+          coords.push(`${xPorIndice(i)},${yPorScore(puntosPorDia[dia])}`);
+        });
+        if (coords.length) {
+          svg += `<polyline points="${coords.join(' ')}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+        }
+        dias.forEach((dia, i) => {
+          if (puntosPorDia[dia] === undefined) return;
+          svg += `<circle cx="${xPorIndice(i)}" cy="${yPorScore(puntosPorDia[dia])}" r="3.5" fill="${color}"><title>${escapeHtml(nombre)} — ${dia}: ${puntosPorDia[dia].toFixed(0)}</title></circle>`;
+        });
+      });
+
+      svg += '</svg>';
+
+      const leyenda = nombres.map((nombre, idx) => {
+        const color = COLORES_GRAFICO[idx % COLORES_GRAFICO.length];
+        return `<span style="display:inline-flex; align-items:center; gap:5px; margin-right:14px; font-size:12px;"><span style="width:10px; height:10px; border-radius:50%; background:${color}; display:inline-block;"></span>${escapeHtml(nombre)}</span>`;
+      }).join('');
+
+      cont.innerHTML = svg + `<div style="margin-top:10px;">${leyenda}</div>`;
+    }
 
     function escapeHtml(str) {
       return String(str ?? '').replace(/[&<>"']/g, s => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
