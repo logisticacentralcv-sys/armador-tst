@@ -87,6 +87,7 @@
         <button id="btnVerAdmin" title="Administrador" style="background:rgba(255,255,255,0.18); border:none; color:white; border-radius:8px; padding:8px 10px; font-size:16px; cursor:pointer;">🔧</button>
         <button id="btnHabilitarPendientes" title="Habilitar Pendientes" style="display:none; background:rgba(255,255,255,0.18); border:none; color:white; border-radius:8px; padding:8px 10px; font-size:16px; cursor:pointer;">📥</button>
         <button id="btnBorrarSinArmar" title="Borrar pedidos sin armar" style="display:none; background:rgba(220,38,38,0.5); border:none; color:white; border-radius:8px; padding:8px 10px; font-size:16px; cursor:pointer;">🗑</button>
+        <button id="btnAuditoria" title="Auditoría de sin stock" style="display:none; background:rgba(255,255,255,0.18); border:none; color:white; border-radius:8px; padding:8px 10px; font-size:16px; cursor:pointer;">🔎</button>
       </div>
     </div>
     <div style="margin-top:6px; font-size:12px; opacity:0.9;">
@@ -189,6 +190,37 @@
       </div>
 
       <button class="btn btn-secondary" id="btnVerArmado">✅ Ver lo que ya armé</button>
+    </div>
+
+    <div id="pasoAuditoria" style="display:none;">
+      <div class="card">
+        <div class="barra-sucursal">
+          <span class="nombre">🔎 Auditoría de sin stock</span>
+          <button id="btnCerrarAuditoria">← Volver</button>
+        </div>
+
+        <div style="display:flex; gap:8px; margin:10px 0 14px;">
+          <button id="btnTabAudPendientes" style="flex:1; padding:10px; border:none; border-radius:10px; font-weight:700; cursor:pointer;">Por auditar</button>
+          <button id="btnTabAudReporte" style="flex:1; padding:10px; border:none; border-radius:10px; font-weight:700; cursor:pointer;">Reporte</button>
+        </div>
+
+        <div id="audVistaPendientes">
+          <p style="font-size:12px; color:var(--muted); margin:0 0 6px;">Productos que alguien marcó "Sin stock" (se cancelaron en todas las sucursales). Verificá y elegí qué pasó.</p>
+          <div id="audContadorPendientes" style="font-size:12px; font-weight:700; margin-bottom:10px;"></div>
+          <div id="audPendientesContenido"><div class="cargando">Cargando...</div></div>
+        </div>
+
+        <div id="audVistaReporte" style="display:none;">
+          <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
+            <input type="date" id="audDesde" style="padding:9px; border:1px solid var(--border); border-radius:8px;">
+            <span style="font-size:12px; color:var(--muted);">hasta</span>
+            <input type="date" id="audHasta" style="padding:9px; border:1px solid var(--border); border-radius:8px;">
+            <button id="btnAudBuscarReporte" class="btn btn-primary" style="width:auto; margin-top:0; padding:10px 16px; font-size:14px;">Buscar</button>
+            <button id="btnAudCSV" class="btn btn-secondary" style="width:auto; margin-top:0; padding:10px 16px; font-size:14px;">⬇ CSV</button>
+          </div>
+          <div id="audReporteContenido"><div class="empty-state">Elegí un rango y tocá "Buscar".</div></div>
+        </div>
+      </div>
     </div>
 
     <div id="pasoHabilitar" style="display:none;">
@@ -380,6 +412,7 @@
       const autorizado = personaActual && DNI_AUTORIZADOS_HABILITAR.has(personaActual.documento);
       document.getElementById('btnHabilitarPendientes').style.display = autorizado ? 'inline-block' : 'none';
       document.getElementById('btnBorrarSinArmar').style.display = autorizado ? 'inline-block' : 'none';
+      document.getElementById('btnAuditoria').style.display = autorizado ? 'inline-block' : 'none';
     }
 
     let appYaArrancada = false;
@@ -1094,9 +1127,18 @@
       (async () => {
         try {
           await guardarArmado(item, 0, 'Falta de stock');
-          const filasActualizadas = await marcarSinStockGlobal(item.codigo, item.id);
-          if (filasActualizadas > 0) {
-            mostrarToast(`Sin stock marcado también en ${filasActualizadas} pedido(s) de otras sucursales`);
+          let afectadosEnCascada = [];
+          try {
+            afectadosEnCascada = await marcarSinStockGlobal(item.codigo, item.id);
+          } catch (errCascada) {
+            console.error('Error en la cascada de sin stock', errCascada);
+          }
+          // Un registro de auditoría por cada marcado (ID = el pedido donde se
+          // hizo el clic, así nunca se duplica). Se guarda ACÁ y no se deriva
+          // después de "pedidos", porque esos se procesan y se borran.
+          registrarAuditoriaSinStock_(item, afectadosEnCascada);
+          if (afectadosEnCascada.length > 0) {
+            mostrarToast(`Sin stock marcado también en ${afectadosEnCascada.length} pedido(s) de otras sucursales`);
             pendientes = pendientes.filter(p => p.codigo !== item.codigo);
             renderizarPendientes();
           }
@@ -1107,11 +1149,11 @@
     }
 
     async function marcarSinStockGlobal(codigo, idExcluir) {
-      if (!codigo) return 0;
+      if (!codigo) return [];
       const q = query(pedidosCol, where('codigo', '==', codigo), where('procesado', '==', false), where('armado', '==', null));
       const snap = await getDocs(q);
       const candidatos = snap.docs.filter(d => d.id !== idExcluir && !d.data().diferencia);
-      if (!candidatos.length) return 0;
+      if (!candidatos.length) return [];
 
       const { updateDoc } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js");
       // writeBatch soporta hasta 500 operaciones; vamos de a 400 por margen
@@ -1127,7 +1169,9 @@
         });
         await batch.commit();
       }
-      return candidatos.length;
+      // Devuelve los datos de cada pedido afectado: sirven para la auditoría
+      // (quedan guardados aunque después el pedido se procese o se borre).
+      return candidatos.map(d => resumenPedidoParaAuditoria_(d.id, d.data()));
     }
 
     // ---------------- VER STOCK GLOBAL (+ descarga CSV) ----------------
@@ -1305,6 +1349,384 @@
         mostrarToast("Error: " + err.message, true);
       }
     };
+
+    // ---------------- AUDITORÍA DE "SIN STOCK" (solo 2 DNI autorizados) ----------------
+    // Contexto: cuando alguien marca "Sin stock", ese producto se cancela en
+    // TODAS las sucursales. Si en realidad había, nunca se manda. Cada marcado
+    // deja un registro en "auditoriaSinStock" (quién, cuándo, qué pedidos
+    // arrastró) y un auditor lo revisa con uno de tres veredictos:
+    //   sin_stock_confirmado -> realmente no había (no es incidencia)
+    //   habia_stock          -> sí había (INCIDENCIA de quien marcó) y se
+    //                           vuelven a habilitar los pedidos
+    //   llego_despues        -> no había cuando se armó y llegó después (no es
+    //                           incidencia), pero como ahora sí hay, también
+    //                           se vuelven a habilitar los pedidos
+    // El registro es un evento propio: no depende de "pedidos", que se
+    // procesan y se borran, así que la trazabilidad no se pierde.
+
+    function resumenPedidoParaAuditoria_(id, data) {
+      return {
+        id: id,
+        sucursal: data.sucursal || null,
+        codigoInterno: data.codigoInterno || null,
+        cantidadPedida: Number(data.cantidadPedida) || 0,
+        cantidadHabilitada: Number(data.cantidadHabilitada ?? data.cantidadPedida) || 0,
+        tipo: data.tipo || 'NORMAL'
+      };
+    }
+
+    async function registrarAuditoriaSinStock_(item, afectadosEnCascada) {
+      try {
+        if (!personaActual) return;
+        const pedidos = [resumenPedidoParaAuditoria_(item.id, item)].concat(afectadosEnCascada || []);
+        const totalUnidades = pedidos.reduce((s, p) => s + (Number(p.cantidadPedida) || 0), 0);
+
+        // ID = el pedido donde se hizo el clic: un mismo clic nunca genera dos
+        // registros. Si ese pedido se reabrió (por una auditoría) y alguien lo
+        // volvió a marcar, se le agrega un sufijo para no pisar el anterior.
+        let auditId = item.id;
+        const existente = await getDoc(doc(db, 'auditoriaSinStock', auditId));
+        if (existente.exists()) auditId = item.id + '__' + Date.now();
+
+        await setDoc(doc(db, 'auditoriaSinStock', auditId), {
+          codigo: item.codigo || null,
+          codigoInterno: item.codigoInterno || null,
+          producto: item.producto || null,
+          proveedor: item.proveedor || null,
+          marcadoPor: personaActual.nombre,
+          marcadoPorDocumento: personaActual.documento,
+          marcadoEn: serverTimestamp(),
+          sucursalOrigen: item.sucursal || null,
+          pedidos: pedidos,
+          totalUnidades: totalUnidades,
+          estado: 'pendiente',
+          veredicto: null,
+          incidencia: null,
+          auditadoPor: null,
+          auditadoPorDocumento: null,
+          auditadoEn: null
+        });
+      } catch (err) {
+        console.error('No se pudo registrar la auditoría de sin stock (el pedido en sí sí quedó marcado)', err);
+      }
+    }
+
+    const VEREDICTOS_AUDITORIA = {
+      sin_stock_confirmado: { boton: '✅ No había stock', texto: 'No había stock' },
+      habia_stock: { boton: '⚠️ Sí había stock', texto: 'Sí había stock (incidencia)' },
+      llego_despues: { boton: '🚚 Llegó después', texto: 'Llegó después (no es incidencia)' }
+    };
+
+    document.getElementById('btnAuditoria').addEventListener('click', abrirAuditoria_);
+    document.getElementById('btnCerrarAuditoria').addEventListener('click', cerrarAuditoria_);
+    document.getElementById('btnTabAudPendientes').addEventListener('click', () => cambiarTabAuditoria_('pendientes'));
+    document.getElementById('btnTabAudReporte').addEventListener('click', () => cambiarTabAuditoria_('reporte'));
+    document.getElementById('btnAudBuscarReporte').addEventListener('click', cargarReporteAuditoria_);
+    document.getElementById('btnAudCSV').addEventListener('click', descargarAuditoriaCSV_);
+    document.getElementById('audPendientesContenido').addEventListener('click', (e) => {
+      const btn = e.target.closest('.btn-veredicto');
+      if (!btn) return;
+      auditarSinStock_(btn.dataset.id, btn.dataset.veredicto);
+    });
+
+    let auditoriasPendientes = [];
+    let auditoriaReporteFilas = [];
+    let auditandoAhora = false;
+
+    function auditorAutorizado_() {
+      return !!(personaActual && DNI_AUTORIZADOS_HABILITAR.has(personaActual.documento));
+    }
+
+    function msAud_(ts) { return ts && ts.toMillis ? ts.toMillis() : 0; }
+
+    function fechaHoraAud_(ts) {
+      if (!ts || !ts.toDate) return '—';
+      return ts.toDate().toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function fechaInputAud_(d) {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    function abrirAuditoria_() {
+      if (!auditorAutorizado_()) { mostrarToast('No estás autorizado para esto', true); return; }
+      document.getElementById('pasoSucursal').style.display = 'none';
+      document.getElementById('pasoArmar').style.display = 'none';
+      document.getElementById('pasoHabilitar').style.display = 'none';
+      document.getElementById('pasoAuditoria').style.display = 'block';
+
+      const inputDesde = document.getElementById('audDesde');
+      const inputHasta = document.getElementById('audHasta');
+      if (!inputHasta.value) {
+        const hoy = new Date();
+        const hace30 = new Date(); hace30.setDate(hoy.getDate() - 30);
+        inputHasta.value = fechaInputAud_(hoy);
+        inputDesde.value = fechaInputAud_(hace30);
+      }
+      cambiarTabAuditoria_('pendientes');
+    }
+
+    function cerrarAuditoria_() {
+      document.getElementById('pasoAuditoria').style.display = 'none';
+      document.getElementById('pasoSucursal').style.display = 'block';
+    }
+
+    function cambiarTabAuditoria_(tab) {
+      const esPendientes = tab === 'pendientes';
+      document.getElementById('audVistaPendientes').style.display = esPendientes ? 'block' : 'none';
+      document.getElementById('audVistaReporte').style.display = esPendientes ? 'none' : 'block';
+      const activa = 'background:var(--primary); color:white;';
+      const inactiva = 'background:#e5e7eb; color:var(--text);';
+      document.getElementById('btnTabAudPendientes').style.cssText = 'flex:1; padding:10px; border:none; border-radius:10px; font-weight:700; cursor:pointer;' + (esPendientes ? activa : inactiva);
+      document.getElementById('btnTabAudReporte').style.cssText = 'flex:1; padding:10px; border:none; border-radius:10px; font-weight:700; cursor:pointer;' + (esPendientes ? inactiva : activa);
+      if (esPendientes) cargarAuditoriasPendientes_();
+      else cargarReporteAuditoria_();
+    }
+
+    async function cargarAuditoriasPendientes_() {
+      const cont = document.getElementById('audPendientesContenido');
+      cont.innerHTML = '<div class="cargando">Cargando...</div>';
+      try {
+        // Un solo filtro de igualdad: no hace falta índice compuesto. El orden se hace acá.
+        const snap = await getDocs(query(collection(db, 'auditoriaSinStock'), where('estado', '==', 'pendiente')));
+        auditoriasPendientes = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => msAud_(a.marcadoEn) - msAud_(b.marcadoEn));
+        renderizarAuditoriasPendientes_();
+      } catch (err) {
+        cont.innerHTML = `<div class="empty-state">Error: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderizarAuditoriasPendientes_() {
+      const cont = document.getElementById('audPendientesContenido');
+      document.getElementById('audContadorPendientes').textContent = auditoriasPendientes.length
+        ? `${auditoriasPendientes.length} por auditar (los más viejos primero)` : '';
+
+      if (!auditoriasPendientes.length) {
+        cont.innerHTML = '<div class="empty-state">No hay nada para auditar ahora mismo.</div>';
+        return;
+      }
+
+      cont.innerHTML = auditoriasPendientes.map(a => {
+        const pedidos = a.pedidos || [];
+        const detalleSucursales = pedidos.map(p => `${escapeHtml(p.sucursal || '?')}: <b>${p.cantidadPedida}</b>`).join(' · ');
+        const botones = Object.keys(VEREDICTOS_AUDITORIA).map(v => `
+          <button class="btn-veredicto" data-id="${escapeHtml(a.id)}" data-veredicto="${v}"
+            style="flex:1; min-width:120px; padding:10px 6px; border:1px solid var(--border); border-radius:10px; background:white; font-size:13px; font-weight:700; cursor:pointer;">${VEREDICTOS_AUDITORIA[v].boton}</button>`).join('');
+        return `
+          <div style="border:1px solid var(--border); border-radius:12px; padding:12px; margin-bottom:10px;">
+            <div style="font-weight:700;">${escapeHtml(a.producto || '(sin nombre)')}</div>
+            <div style="font-size:12px; color:var(--muted); margin-top:2px;">Código ${escapeHtml(a.codigo || '—')}${a.proveedor ? ' · ' + escapeHtml(a.proveedor) : ''}</div>
+            <div style="font-size:13px; margin-top:8px;">Lo marcó sin stock <b>${escapeHtml(a.marcadoPor || '?')}</b> · ${fechaHoraAud_(a.marcadoEn)}</div>
+            <div style="font-size:13px; margin-top:4px;">Se canceló en ${pedidos.length} pedido(s), ${a.totalUnidades || 0} unidad(es): ${detalleSucursales}</div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;">${botones}</div>
+          </div>`;
+      }).join('');
+    }
+
+    async function auditarSinStock_(auditId, veredicto) {
+      if (auditandoAhora) return;
+      const a = auditoriasPendientes.find(x => x.id === auditId);
+      if (!a || !VEREDICTOS_AUDITORIA[veredicto]) return;
+      if (!auditorAutorizado_()) { mostrarToast('No estás autorizado para esto', true); return; }
+
+      const n = (a.pedidos || []).length;
+      const quien = a.marcadoPor || 'quien lo marcó';
+      let msg;
+      if (veredicto === 'sin_stock_confirmado') {
+        msg = `¿Confirmás que NO había stock de "${a.producto}"?\n\nSe cierra la auditoría y no se toca ningún pedido.`;
+      } else if (veredicto === 'habia_stock') {
+        msg = `¿Confirmás que SÍ había stock de "${a.producto}"?\n\nCuenta como INCIDENCIA de ${quien} y se vuelven a habilitar ${n} pedido(s) para armar.`;
+      } else {
+        msg = `¿Confirmás que el stock de "${a.producto}" LLEGÓ DESPUÉS de que ${quien} lo marcó?\n\nNo cuenta como incidencia, pero como ahora sí hay se vuelven a habilitar ${n} pedido(s) para armar.`;
+      }
+      if (!confirm(msg)) return;
+
+      auditandoAhora = true;
+      document.querySelectorAll('.btn-veredicto').forEach(b => { b.disabled = true; b.style.opacity = '0.5'; });
+      try {
+        let resultado = { reabiertos: 0, creados: 0 };
+        if (veredicto !== 'sin_stock_confirmado') resultado = await rehabilitarPedidosAuditoria_(a);
+
+        const { updateDoc } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js");
+        await updateDoc(doc(db, 'auditoriaSinStock', a.id), {
+          estado: 'auditado',
+          veredicto: veredicto,
+          incidencia: veredicto === 'habia_stock',
+          auditadoPor: personaActual.nombre,
+          auditadoPorDocumento: personaActual.documento,
+          auditadoEn: serverTimestamp(),
+          pedidosReabiertos: resultado.reabiertos,
+          faltantesCreados: resultado.creados
+        });
+
+        auditoriasPendientes = auditoriasPendientes.filter(x => x.id !== a.id);
+        renderizarAuditoriasPendientes_();
+        const extra = (resultado.reabiertos + resultado.creados) ? ` — ${resultado.reabiertos} reabierto(s), ${resultado.creados} nuevo(s) en Faltantes` : '';
+        mostrarToast('Auditoría guardada ✓' + extra);
+      } catch (err) {
+        mostrarToast('Error: ' + err.message, true);
+        document.querySelectorAll('.btn-veredicto').forEach(b => { b.disabled = false; b.style.opacity = '1'; });
+      } finally {
+        auditandoAhora = false;
+      }
+    }
+
+    // Vuelve a dejar armables los pedidos que el sin stock canceló:
+    //  - si el pedido sigue ahí sin procesar y tal cual lo dejó el sin stock -> se reabre
+    //  - si ya se procesó (o se borró) -> se crea uno nuevo tipo FALTANTE (aparece
+    //    en la pestaña prioritaria) con ID fijo, así reintentar nunca duplica
+    //  - si ya está reabierto o armado por otro lado -> no se toca
+    async function rehabilitarPedidosAuditoria_(a) {
+      const { updateDoc } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js");
+      let reabiertos = 0, creados = 0;
+
+      for (const p of (a.pedidos || [])) {
+        const ref = doc(db, 'pedidos', p.id);
+        const snap = await getDoc(ref);
+
+        if (snap.exists() && snap.data().procesado === false) {
+          const d = snap.data();
+          if (d.armado === 0 && d.diferencia === 'Falta de stock') {
+            await updateDoc(ref, { armado: null, diferencia: null, armadoEn: null, armadoPor: null, armadoPorDocumento: null });
+            reabiertos++;
+          }
+          continue;
+        }
+
+        const nuevoId = ('AUD_' + a.id + '_' + p.id).replace(/\//g, '_').substring(0, 400);
+        const refNuevo = doc(db, 'pedidos', nuevoId);
+        if ((await getDoc(refNuevo)).exists()) continue;
+
+        await setDoc(refNuevo, {
+          fecha: new Date(),
+          codigoInterno: p.codigoInterno || null,
+          codigo: a.codigo || null,
+          producto: a.producto || null,
+          cantidadPedida: p.cantidadPedida || 0,
+          cantidadHabilitada: p.cantidadHabilitada || p.cantidadPedida || 0,
+          sucursal: p.sucursal || null,
+          proveedor: a.proveedor || null,
+          posicion: null,
+          armado: null,
+          diferencia: null,
+          procesado: false,
+          tipo: 'FALTANTE',
+          habilitado: true,
+          origenAuditoria: a.id
+        });
+        creados++;
+      }
+      return { reabiertos, creados };
+    }
+
+    async function cargarReporteAuditoria_() {
+      const cont = document.getElementById('audReporteContenido');
+      const desde = document.getElementById('audDesde').value;
+      const hasta = document.getElementById('audHasta').value;
+      if (!desde || !hasta) { mostrarToast('Elegí las dos fechas', true); return; }
+      cont.innerHTML = '<div class="cargando">Cargando...</div>';
+      try {
+        const inicio = new Date(desde + 'T00:00:00');
+        const fin = new Date(hasta + 'T23:59:59.999');
+        const snap = await getDocs(query(
+          collection(db, 'auditoriaSinStock'),
+          where('marcadoEn', '>=', inicio), where('marcadoEn', '<=', fin), orderBy('marcadoEn', 'asc')
+        ));
+        auditoriaReporteFilas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderizarReporteAuditoria_();
+      } catch (err) {
+        cont.innerHTML = `<div class="empty-state">Error: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderizarReporteAuditoria_() {
+      const cont = document.getElementById('audReporteContenido');
+      const filas = auditoriaReporteFilas;
+      if (!filas.length) { cont.innerHTML = '<div class="empty-state">No hubo productos marcados sin stock en ese período.</div>'; return; }
+
+      const porArmador = {};
+      filas.forEach(a => {
+        const k = a.marcadoPorDocumento || a.marcadoPor || '?';
+        if (!porArmador[k]) porArmador[k] = { nombre: a.marcadoPor || k, marcados: 0, auditados: 0, incidencias: 0, llegoDespues: 0, confirmados: 0, pendientes: 0 };
+        const r = porArmador[k];
+        r.marcados++;
+        if (a.estado === 'pendiente') { r.pendientes++; return; }
+        r.auditados++;
+        if (a.veredicto === 'habia_stock') r.incidencias++;
+        else if (a.veredicto === 'llego_despues') r.llegoDespues++;
+        else r.confirmados++;
+      });
+
+      const pct = r => r.auditados ? (r.incidencias / r.auditados * 100) : -1;
+      const lista = Object.values(porArmador).sort((a, b) => (b.incidencias - a.incidencias) || (pct(b) - pct(a)) || (b.marcados - a.marcados));
+      const tot = lista.reduce((t, r) => {
+        Object.keys(t).forEach(k => { t[k] += r[k]; });
+        return t;
+      }, { marcados: 0, auditados: 0, incidencias: 0, llegoDespues: 0, confirmados: 0, pendientes: 0 });
+
+      const th = 'text-align:left; padding:6px 4px; font-size:12px; color:var(--muted);';
+      const td = 'padding:8px 4px; border-top:1px solid var(--border);';
+      const fmtPct = r => r.auditados ? Math.round(r.incidencias / r.auditados * 100) + '%' : '—';
+
+      let html = '<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:13px;">';
+      html += `<tr><th style="${th}">Armador</th><th style="${th}">Marcó sin stock</th><th style="${th}">Auditados</th><th style="${th}">Incidencias</th><th style="${th}">% incid.</th><th style="${th}">Llegó después</th><th style="${th}">Confirmado</th><th style="${th}">Sin auditar</th></tr>`;
+      lista.forEach((r, i) => {
+        const destacado = i === 0 && r.incidencias > 0;
+        html += `<tr style="${destacado ? 'background:#fef2f2;' : ''}">
+          <td style="${td} font-weight:700;">${escapeHtml(r.nombre)}</td>
+          <td style="${td}">${r.marcados}</td>
+          <td style="${td}">${r.auditados}</td>
+          <td style="${td} font-weight:700; color:${r.incidencias ? '#dc2626' : 'var(--muted)'};">${r.incidencias}</td>
+          <td style="${td}">${fmtPct(r)}</td>
+          <td style="${td}">${r.llegoDespues}</td>
+          <td style="${td}">${r.confirmados}</td>
+          <td style="${td} color:${r.pendientes ? 'var(--orange)' : 'var(--muted)'};">${r.pendientes}</td>
+        </tr>`;
+      });
+      html += `<tr style="background:#f9fafb; font-weight:700;"><td style="${td}">Total</td><td style="${td}">${tot.marcados}</td><td style="${td}">${tot.auditados}</td><td style="${td}">${tot.incidencias}</td><td style="${td}">${fmtPct(tot)}</td><td style="${td}">${tot.llegoDespues}</td><td style="${td}">${tot.confirmados}</td><td style="${td}">${tot.pendientes}</td></tr>`;
+      html += '</table></div>';
+      html += '<p style="font-size:11px; color:var(--muted); margin:8px 0 14px;">El % de incidencia se calcula sobre lo ya auditado. Lo "sin auditar" todavía no cuenta ni a favor ni en contra.</p>';
+
+      const incidencias = filas.filter(a => a.veredicto === 'habia_stock');
+      if (incidencias.length) {
+        html += '<div style="font-weight:700; margin-bottom:6px;">Detalle de incidencias</div>';
+        html += incidencias.slice().reverse().slice(0, 100).map(a => `
+          <div style="border-top:1px solid var(--border); padding:8px 0; font-size:13px;">
+            <b>${escapeHtml(a.producto || '')}</b> — ${escapeHtml(a.marcadoPor || '?')} · ${fechaHoraAud_(a.marcadoEn)}
+            <div style="font-size:12px; color:var(--muted);">${(a.pedidos || []).length} pedido(s), ${a.totalUnidades || 0} unidad(es) · auditó ${escapeHtml(a.auditadoPor || '?')}</div>
+          </div>`).join('');
+        if (incidencias.length > 100) html += '<div style="font-size:12px; color:var(--muted);">Se muestran las últimas 100; el CSV trae todas.</div>';
+      }
+      cont.innerHTML = html;
+    }
+
+    function descargarAuditoriaCSV_() {
+      if (!auditoriaReporteFilas.length) { mostrarToast('Primero buscá un rango con datos', true); return; }
+      const filas = [['FechaMarcado', 'Armador', 'DNIArmador', 'Codigo', 'CodigoInterno', 'Producto', 'Proveedor', 'SucursalOrigen', 'PedidosAfectados', 'UnidadesAfectadas', 'Estado', 'Veredicto', 'Incidencia', 'AuditadoPor', 'FechaAuditoria']];
+      auditoriaReporteFilas.forEach(a => {
+        filas.push([
+          a.marcadoEn && a.marcadoEn.toDate ? a.marcadoEn.toDate().toLocaleString('es-AR') : '',
+          a.marcadoPor, a.marcadoPorDocumento, a.codigo, a.codigoInterno, a.producto, a.proveedor, a.sucursalOrigen,
+          (a.pedidos || []).map(p => `${p.sucursal}:${p.cantidadPedida}`).join(' | '),
+          a.totalUnidades,
+          a.estado === 'pendiente' ? 'Sin auditar' : 'Auditado',
+          a.veredicto && VEREDICTOS_AUDITORIA[a.veredicto] ? VEREDICTOS_AUDITORIA[a.veredicto].texto : '',
+          a.estado === 'pendiente' ? '' : (a.incidencia ? 'SI' : 'NO'),
+          a.auditadoPor,
+          a.auditadoEn && a.auditadoEn.toDate ? a.auditadoEn.toDate().toLocaleString('es-AR') : ''
+        ]);
+      });
+      const csv = filas.map(f => f.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
+      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `auditoria_sin_stock_${document.getElementById('audDesde').value}_a_${document.getElementById('audHasta').value}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
 
     // ---------------- HABILITAR PENDIENTES (solo 2 DNI autorizados) ----------------
     document.getElementById('btnHabilitarPendientes').addEventListener('click', abrirHabilitarPendientes);
