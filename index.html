@@ -1395,7 +1395,8 @@
     const VEREDICTOS_AUDITORIA = {
       sin_stock_confirmado: { boton: '✅ No había stock', texto: 'No había stock' },
       habia_stock: { boton: '⚠️ Sí había stock', texto: 'Sí había stock (incidencia)' },
-      llego_despues: { boton: '🚚 Llegó después', texto: 'Llegó después (no es incidencia)' }
+      // oculto: true = no aparece el botón en la vista del auditor (la lógica queda por si se vuelve a habilitar)
+      llego_despues: { boton: '🚚 Llegó después', texto: 'Llegó después (no es incidencia)', oculto: true }
     };
 
     // Vista del auditor: es CIEGA a propósito. No muestra quién marcó el sin
@@ -1471,7 +1472,7 @@
         const formAbierto = audForm && audForm.id === a.id;
 
         const botones = formAbierto ? '' : `<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;">${
-          Object.keys(VEREDICTOS_AUDITORIA).map(v => `
+          Object.keys(VEREDICTOS_AUDITORIA).filter(v => !VEREDICTOS_AUDITORIA[v].oculto).map(v => `
             <button class="btn-veredicto" data-id="${escapeHtml(a.id)}" data-veredicto="${v}"
               style="flex:1; min-width:120px; padding:10px 6px; border:1px solid var(--border); border-radius:10px; background:white; font-size:13px; font-weight:700; cursor:pointer;">${VEREDICTOS_AUDITORIA[v].boton}</button>`).join('')
         }</div>`;
@@ -1509,7 +1510,7 @@
     }
 
     function elegirVeredicto_(auditId, veredicto) {
-      if (auditandoAhora || !VEREDICTOS_AUDITORIA[veredicto]) return;
+      if (auditandoAhora || !VEREDICTOS_AUDITORIA[veredicto] || VEREDICTOS_AUDITORIA[veredicto].oculto) return;
       if (veredicto === 'sin_stock_confirmado') { audForm = null; confirmarVeredicto_(auditId, veredicto); return; }
       audForm = { id: auditId, veredicto: veredicto };
       renderizarAuditoriasPendientes_();
