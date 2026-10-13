@@ -6,60 +6,127 @@
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
     :root {
-      --primary: #2563eb; --primary-dark: #1d4ed8; --green: #16a34a; --orange: #ea580c;
-      --bg: #f3f4f6; --card: #ffffff; --text: #111827; --muted: #6b7280; --border: #e5e7eb;
+      --primary: #2563eb; --primary-dark: #1d4ed8; --primary-soft: #eff6ff;
+      --green: #16a34a; --green-soft: #f0fdf4; --orange: #ea580c; --orange-soft: #fff7ed; --red: #dc2626; --red-soft: #fef2f2;
+      --bg: #f1f5f9; --card: #ffffff; --text: #0f172a; --muted: #64748b; --border: #e2e8f0;
+      --shadow: 0 1px 2px rgba(15,23,42,0.05), 0 6px 18px rgba(15,23,42,0.06);
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    button { outline: none; }
-    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); padding-bottom: 30px; }
-    header { background: var(--primary); color: white; padding: 16px 20px; position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-    header h1 { margin: 0; font-size: 18px; font-weight: 600; }
-    header p { margin: 2px 0 0; font-size: 12px; opacity: 0.85; }
-    .container { padding: 16px; }
-    .card { background: var(--card); border-radius: 14px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    button { outline: none; font-family: inherit; }
+    input, select { min-width: 0; font-family: inherit; }
+    input:focus, select:focus { outline: none; border-color: var(--primary) !important; box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); padding-bottom: 40px; }
+
+    /* ---------- Encabezado ---------- */
+    header { background: linear-gradient(135deg, #1e40af 0%, #2563eb 60%, #3b82f6 100%); color: white; padding: 12px 16px; position: sticky; top: 0; z-index: 10; box-shadow: 0 4px 16px rgba(30,64,175,0.25); }
+    .hdr-fila { max-width: 760px; margin: 0 auto; display: flex; align-items: center; gap: 10px; }
+    .hdr-volver { display: none; flex-shrink: 0; width: 40px; height: 40px; border: none; border-radius: 12px; background: rgba(255,255,255,0.18); color: white; font-size: 22px; font-weight: 700; cursor: pointer; }
+    .hdr-titulo { flex: 1; min-width: 0; }
+    .hdr-titulo h1 { margin: 0; font-size: 19px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .hdr-titulo p { margin: 1px 0 0; font-size: 12.5px; opacity: 0.88; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .hdr-menu { flex-shrink: 0; display: flex; align-items: center; gap: 6px; border: none; border-radius: 12px; background: white; color: var(--primary-dark); padding: 10px 14px; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.12); }
+    .hdr-usuario { max-width: 760px; margin: 9px auto 0; display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+    .avatar { width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,0.25); display: inline-grid; place-items: center; font-size: 11px; font-weight: 700; }
+    .hdr-usuario button { background: none; border: none; color: white; text-decoration: underline; font-size: 12px; cursor: pointer; padding: 0; margin-left: 2px; opacity: 0.9; }
+
+    .container { max-width: 760px; margin: 0 auto; padding: 16px; }
+
+    /* ---------- Tarjetas y botones ---------- */
+    .card { background: var(--card); border-radius: 16px; padding: 16px; margin-bottom: 14px; box-shadow: var(--shadow); border: 1px solid rgba(226,232,240,0.8); }
+    .card-titulo { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .card-titulo strong { font-size: 15px; }
     .btn { display: block; width: 100%; padding: 14px; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 10px; }
     .btn-primary { background: var(--primary); color: white; }
-    .btn-secondary { background: #e5e7eb; color: var(--text); }
+    .btn-secondary { background: #e8edf5; color: var(--text); }
     .btn-success { background: var(--green); color: white; }
     .btn:disabled { opacity: 0.5; }
-    .sucursal-btn { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 14px 16px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 12px; background: white; font-size: 15px; font-weight: 600; cursor: pointer; }
-    .sucursal-btn .badge { background: var(--primary); color: white; border-radius: 20px; padding: 3px 10px; font-size: 12px; font-weight: 700; }
-    .barra-sucursal { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-    .barra-sucursal .nombre { font-size: 16px; font-weight: 700; }
-    .barra-sucursal button { background: none; border: none; color: var(--primary); font-size: 13px; font-weight: 600; cursor: pointer; }
+    .btn-chico { background: var(--primary-soft); color: var(--primary-dark); border: none; border-radius: 10px; padding: 8px 12px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+    .btn-peligro { background: var(--red-soft); color: var(--red); }
+    .aviso { background: var(--primary-soft); border: 1px solid #bfdbfe; color: #1e3a8a; border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.45; margin-bottom: 14px; }
+    .aviso.extra { background: #fffbeb; border-color: #fde68a; color: #78350f; }
+
+    /* ---------- Inicio: pestañas y sucursales ---------- */
+    .resumen-home { font-size: 13px; color: var(--muted); margin: 0 2px 10px; }
+    .tabs-modo { display: flex; gap: 6px; background: #e3e9f2; padding: 5px; border-radius: 14px; margin-bottom: 14px; }
+    .tab-modo { flex: 1; padding: 11px 8px; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; background: transparent; color: var(--muted); }
+    .tab-modo.activo { background: white; color: var(--primary-dark); box-shadow: 0 1px 4px rgba(15,23,42,0.12); }
+    .tab-modo.faltantes.activo { color: var(--red); }
+    .tab-cuenta { display: inline-block; min-width: 22px; padding: 1px 7px; margin-left: 6px; border-radius: 20px; background: #d4dcea; color: var(--muted); font-size: 12px; font-weight: 800; }
+    .tab-modo.activo .tab-cuenta { background: var(--primary); color: white; }
+    .tab-modo.faltantes.activo .tab-cuenta { background: var(--red); }
+    .sucursal-btn { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 14px; background: white; cursor: pointer; text-align: left; box-shadow: var(--shadow); }
+    .sucursal-btn:active { transform: scale(0.99); background: #f8fafc; }
+    .suc-ico { flex-shrink: 0; width: 42px; height: 42px; border-radius: 12px; background: var(--primary-soft); display: grid; place-items: center; font-size: 20px; }
+    .suc-cuerpo { flex: 1; min-width: 0; }
+    .suc-nombre { display: block; font-size: 16px; font-weight: 700; color: var(--text); }
+    .suc-sub { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+    .sucursal-btn .badge { background: var(--primary); color: white; border-radius: 20px; padding: 4px 11px; font-size: 13px; font-weight: 800; }
+    .sucursal-btn .flecha { color: #94a3b8; font-size: 22px; }
+
+    /* ---------- Menú ---------- */
+    .menu-seccion { margin-bottom: 20px; }
+    .menu-seccion-titulo { font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 0 4px 8px; }
+    .menu-tile { display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 14px; background: white; cursor: pointer; text-align: left; box-shadow: var(--shadow); }
+    .menu-tile:active { transform: scale(0.99); background: #f8fafc; }
+    .menu-tile .ico { flex-shrink: 0; width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center; font-size: 22px; background: var(--primary-soft); }
+    .menu-tile .cuerpo { flex: 1; min-width: 0; }
+    .menu-tile .cuerpo b { display: block; font-size: 15.5px; color: var(--text); }
+    .menu-tile .cuerpo small { display: block; margin-top: 2px; font-size: 12.5px; color: var(--muted); line-height: 1.35; }
+    .menu-tile .flecha { color: #94a3b8; font-size: 22px; }
+    .menu-tile.extra .ico { background: #fef9c3; }
+    .menu-tile.control .ico { background: #ede9fe; }
+    .menu-tile.peligro .ico { background: var(--red-soft); }
+    .menu-tile.peligro .cuerpo b { color: var(--red); }
+
+    /* ---------- Armado ---------- */
     #reader { width: 100%; border-radius: 12px; overflow: hidden; }
     .producto-box { display: none; }
     .producto-box.show { display: block; }
-    .producto-posicion { display: inline-block; background: #eff6ff; color: var(--primary-dark); border: 1px solid #bfdbfe; border-radius: 8px; padding: 6px 14px; font-size: 20px; font-weight: 800; letter-spacing: 0.5px; margin-bottom: 6px; }
-    .producto-nombre { font-size: 18px; font-weight: 700; margin-bottom: 2px; }
+    .producto-posicion { display: inline-block; background: var(--primary-soft); color: var(--primary-dark); border: 1px solid #bfdbfe; border-radius: 10px; padding: 6px 14px; font-size: 22px; font-weight: 800; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .producto-nombre { font-size: 19px; font-weight: 700; margin-bottom: 2px; }
     .producto-codigo { font-size: 13px; color: var(--muted); font-family: monospace; margin-bottom: 10px; }
-    .producto-pedido { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
-    .field { margin-bottom: 12px; }
-    .field label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
-    .field input { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 16px; }
+    .producto-pedido { font-size: 14px; color: var(--muted); margin-bottom: 14px; }
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 5px; }
+    .field input, .field select { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 12px; font-size: 16px; background: white; }
+    .field input:focus, .field select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.15); outline: none; }
     .qty-row { display: flex; align-items: center; gap: 8px; }
     .qty-row input { text-align: center; font-size: 20px; font-weight: 700; }
-    .qty-btn { width: 46px; height: 46px; border-radius: 10px; border: none; background: var(--primary); color: white; font-size: 22px; font-weight: 700; cursor: pointer; }
-    .item-pendiente { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+    .qty-btn { width: 48px; height: 48px; flex-shrink: 0; border-radius: 12px; border: none; background: var(--primary); color: white; font-size: 22px; font-weight: 700; cursor: pointer; }
+    .item-pendiente { display: flex; align-items: center; gap: 12px; padding: 12px 4px; border-bottom: 1px solid var(--border); cursor: pointer; }
     .item-pendiente:last-child { border-bottom: none; }
-    .item-pendiente .posicion-tag { background: #f3f4f6; color: var(--text); border-radius: 8px; padding: 6px 10px; font-size: 15px; font-weight: 800; font-family: monospace; white-space: nowrap; }
+    .item-pendiente:active { background: #f8fafc; }
+    .item-pendiente .posicion-tag { background: var(--primary-soft); color: var(--primary-dark); border-radius: 10px; padding: 8px 10px; font-size: 14px; font-weight: 800; font-family: ui-monospace, monospace; min-width: 58px; text-align: center; white-space: nowrap; }
     .item-pendiente .info { flex: 1; min-width: 0; }
-    .item-pendiente .info .nombre { font-size: 14px; font-weight: 600; }
-    .item-pendiente .info .detalle { font-size: 12px; color: var(--muted); }
-    .item-pendiente .cant { font-weight: 700; color: var(--primary); font-size: 14px; white-space: nowrap; }
-    .empty-state { color: var(--muted); font-size: 14px; text-align: center; padding: 20px 0; }
-    .tabs-modo { display: flex; gap: 8px; margin-bottom: 12px; }
-    .tab-modo { flex: 1; padding: 12px; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; background: #e5e7eb; color: var(--text); }
-    .tab-modo.activo { background: var(--primary); color: white; }
-    .tab-modo.faltantes.activo { background: #dc2626; color: white; }
+    .item-pendiente .info .nombre { font-size: 14.5px; font-weight: 600; }
+    .item-pendiente .info .detalle { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .item-pendiente .cant { background: #f1f5f9; border-radius: 10px; padding: 6px 10px; font-weight: 800; color: var(--text); font-size: 15px; white-space: nowrap; }
+    .tag-extra { display: inline-block; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; border-radius: 20px; padding: 1px 8px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .empty-state { color: var(--muted); font-size: 14px; text-align: center; padding: 22px 0; }
     .cargando { color: var(--muted); font-size: 13px; text-align: center; padding: 16px 0; }
     .contador { font-size: 13px; color: var(--muted); font-weight: 400; }
-    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--green); color: white; padding: 12px 20px; border-radius: 10px; font-size: 14px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.2); opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 100; }
+
+    /* ---------- Pedido fuera de planificación ---------- */
+    .resultado-prod { display: block; width: 100%; text-align: left; padding: 11px 12px; margin-bottom: 6px; border: 1px solid var(--border); border-radius: 12px; background: white; cursor: pointer; }
+    .resultado-prod:active { background: #f8fafc; }
+    .rp-nombre { display: block; font-size: 14.5px; font-weight: 700; }
+    .rp-det { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .prod-elegido { display: flex; align-items: center; gap: 10px; background: var(--green-soft); border: 1px solid #bbf7d0; border-radius: 12px; padding: 10px 12px; }
+    .prod-elegido .pe-cuerpo { flex: 1; min-width: 0; }
+    .prod-elegido .pe-nombre { font-size: 15px; font-weight: 700; }
+    .prod-elegido .pe-det { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .extra-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .extra-item:last-child { border-bottom: none; }
+    .extra-item .ei-cuerpo { flex: 1; min-width: 0; }
+    .extra-item .ei-nombre { font-size: 14px; font-weight: 700; }
+    .extra-item .ei-det { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--green); color: white; padding: 12px 20px; border-radius: 10px; font-size: 14px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.2); opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 100; max-width: 92vw; text-align: center; }
     .toast.show { opacity: 1; }
     .toast.error { background: #dc2626; }
-    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 50; align-items: flex-end; }
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.5); z-index: 50; align-items: flex-end; }
     .modal-overlay.show { display: flex; }
-    .modal { background: white; width: 100%; max-height: 80vh; overflow-y: auto; border-radius: 18px 18px 0 0; padding: 20px; }
+    .modal { background: white; width: 100%; max-width: 760px; margin: 0 auto; max-height: 82vh; overflow-y: auto; border-radius: 20px 20px 0 0; padding: 20px; }
     .modal h2 { margin-top: 0; font-size: 17px; }
   </style>
 </head>
@@ -77,46 +144,81 @@
   </div>
 
   <header>
-    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
-      <div>
-        <h1>📋 Armador de Pedidos</h1>
+    <div class="hdr-fila">
+      <button id="btnVolverHeader" class="hdr-volver" aria-label="Volver">←</button>
+      <div class="hdr-titulo">
+        <h1 id="tituloPantalla">📋 Armador de Pedidos</h1>
         <p id="subtitulo">Elegí la sucursal para armar</p>
       </div>
-      <div style="display:flex; gap:6px; flex-shrink:0;">
-        <button id="btnVerStockGlobal" title="Ver stock" style="background:rgba(255,255,255,0.18); border:none; color:white; border-radius:8px; padding:8px 10px; font-size:16px; cursor:pointer;">📦</button>
-        <button id="btnVerAdmin" title="Administrador" style="background:rgba(255,255,255,0.18); border:none; color:white; border-radius:8px; padding:8px 10px; font-size:16px; cursor:pointer;">🔧</button>
-        <button id="btnHabilitarPendientes" title="Habilitar Pendientes" style="display:none; background:rgba(255,255,255,0.18); border:none; color:white; border-radius:8px; padding:8px 10px; font-size:16px; cursor:pointer;">📥</button>
-        <button id="btnBorrarSinArmar" title="Borrar pedidos sin armar" style="display:none; background:rgba(220,38,38,0.5); border:none; color:white; border-radius:8px; padding:8px 10px; font-size:16px; cursor:pointer;">🗑</button>
-        <button id="btnAuditoria" title="Auditoría de sin stock" style="display:none; background:rgba(255,255,255,0.18); border:none; color:white; border-radius:8px; padding:8px 10px; font-size:16px; cursor:pointer;">🔎</button>
-      </div>
+      <button id="btnMenu" class="hdr-menu"><span>☰</span> Menú</button>
     </div>
-    <div style="margin-top:6px; font-size:12px; opacity:0.9;">
-      👤 <span id="nombrePersonaActual">—</span>
-      <button id="btnCambiarPersona" style="background:none; border:none; color:white; text-decoration:underline; font-size:12px; cursor:pointer; padding:0; margin-left:6px;">cambiar</button>
+    <div class="hdr-usuario">
+      <span class="avatar" id="avatarPersona">?</span>
+      <span id="nombrePersonaActual">—</span>
+      <button id="btnCambiarPersona">cambiar</button>
     </div>
   </header>
 
-
   <div class="container">
 
-    <div class="card" id="pasoSucursal">
+    <div class="pantalla" id="pasoSucursal">
+      <div class="resumen-home" id="resumenHome"></div>
       <div class="tabs-modo">
-        <button class="tab-modo activo" id="tabModoPendientes">Pendientes</button>
-        <button class="tab-modo faltantes" id="tabModoFaltantes">🔴 Faltantes</button>
+        <button class="tab-modo activo" id="tabModoPendientes">Pendientes <span class="tab-cuenta" id="cuentaPendientes">0</span></button>
+        <button class="tab-modo faltantes" id="tabModoFaltantes">🔴 Faltantes <span class="tab-cuenta" id="cuentaFaltantes">0</span></button>
       </div>
       <div id="listaSucursales"><div class="cargando">Cargando sucursales con pedidos pendientes...</div></div>
-      <button class="btn btn-secondary" id="btnRefrescarSucursales">🔄 Refrescar</button>
+      <button class="btn btn-secondary" id="btnRefrescarSucursales">🔄 Actualizar lista</button>
     </div>
 
-    <div id="pasoArmar" style="display:none;">
-      <div class="card">
-        <div class="barra-sucursal">
-          <span class="nombre" id="nombreSucursalActiva"></span>
-          <button id="btnCambiarSucursal">Cambiar sucursal</button>
-        </div>
-        <button class="btn btn-secondary" id="btnVerArmadoArriba" style="margin-top:2px;">✅ Ver lo que ya armé</button>
+    <div class="pantalla" id="pasoMenu" style="display:none;">
+      <div class="menu-seccion">
+        <div class="menu-seccion-titulo">Consultas</div>
+        <button class="menu-tile" id="btnVerStockGlobal">
+          <span class="ico">📦</span>
+          <span class="cuerpo"><b>Ver stock</b><small>Buscá cualquier producto y mirá cuántas unidades hay y en qué posición.</small></span>
+          <span class="flecha">›</span>
+        </button>
+        <button class="menu-tile" id="btnVerAdmin">
+          <span class="ico">🧾</span>
+          <span class="cuerpo"><b>Armado sin procesar</b><small>Todo lo que ya se armó en cualquier sucursal y todavía no se procesó. Se puede corregir.</small></span>
+          <span class="flecha">›</span>
+        </button>
+      </div>
 
-        <button class="btn btn-primary" id="btnEscanear" style="margin-top:14px;">📷 Escanear código de barras</button>
+      <div class="menu-seccion" id="menuSeccionGestion" style="display:none;">
+        <div class="menu-seccion-titulo">Gestión de pedidos</div>
+        <button class="menu-tile" id="btnHabilitarPendientes">
+          <span class="ico">📥</span>
+          <span class="cuerpo"><b>Habilitar pendientes</b><small>Liberar para armar los pedidos que estaban esperando que llegue el proveedor.</small></span>
+          <span class="flecha">›</span>
+        </button>
+        <button class="menu-tile extra" id="btnPedidoExtra">
+          <span class="ico">⭐</span>
+          <span class="cuerpo"><b>Pedido fuera de planificación</b><small>Agregar un producto para armar que no está en el consolidado (casos excepcionales).</small></span>
+          <span class="flecha">›</span>
+        </button>
+        <button class="menu-tile peligro" id="btnBorrarSinArmar">
+          <span class="ico">🗑</span>
+          <span class="cuerpo"><b>Borrar pedidos sin armar</b><small>Limpia todo lo que nadie armó todavía. No toca lo que ya se armó.</small></span>
+          <span class="flecha">›</span>
+        </button>
+      </div>
+
+      <div class="menu-seccion" id="menuSeccionControl" style="display:none;">
+        <div class="menu-seccion-titulo">Control</div>
+        <button class="menu-tile control" id="btnAuditoria">
+          <span class="ico">🔎</span>
+          <span class="cuerpo"><b>Auditoría de sin stock</b><small>Revisar los productos que se marcaron sin stock y confirmar si realmente no había.</small></span>
+          <span class="flecha">›</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="pantalla" id="pasoArmar" style="display:none;">
+      <div class="card">
+        <div class="card-titulo"><strong>Buscar el producto</strong></div>
+        <button class="btn btn-primary" id="btnEscanear" style="margin-top:0;">📷 Escanear código de barras</button>
         <div id="reader" style="display:none; margin-top: 12px;"></div>
         <button class="btn btn-secondary" id="btnCancelarScan" style="display:none;">Cancelar escaneo</button>
 
@@ -179,9 +281,9 @@
       </div>
 
       <div class="card">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-          <strong>Pendientes de armar</strong>
-          <span class="contador" id="contadorPendientes"></span>
+        <div class="card-titulo">
+          <strong>Pendientes de armar <span class="contador" id="contadorPendientes"></span></strong>
+          <button class="btn-chico" id="btnVerArmadoArriba">✅ Ya armado</button>
         </div>
         <select id="filtroProveedorArmador" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:10px; font-size:14px; margin-bottom:10px; display:none;">
           <option value="">Todos los proveedores</option>
@@ -189,28 +291,19 @@
         <div id="listaPendientes"><div class="cargando">Cargando...</div></div>
       </div>
 
-      <button class="btn btn-secondary" id="btnVerArmado">✅ Ver lo que ya armé</button>
     </div>
 
-    <div id="pasoAuditoria" style="display:none;">
+    <div class="pantalla" id="pasoAuditoria" style="display:none;">
       <div class="card">
-        <div class="barra-sucursal">
-          <span class="nombre">🔎 Auditoría de sin stock</span>
-          <button id="btnCerrarAuditoria">← Volver</button>
-        </div>
-        <p style="font-size:12px; color:var(--muted); margin:8px 0 6px;">Productos que se marcaron "Sin stock" y se cancelaron en todas las sucursales. Verificá en el depósito, elegí qué pasó y, si hay, cargá cuántas unidades.</p>
+        <div class="aviso">Productos que se marcaron "Sin stock" y se cancelaron en todas las sucursales. Verificá en el depósito, elegí qué pasó y, si hay, cargá cuántas unidades.</div>
         <div id="audContadorPendientes" style="font-size:12px; font-weight:700; margin-bottom:10px;"></div>
         <div id="audPendientesContenido"><div class="cargando">Cargando...</div></div>
       </div>
     </div>
 
-    <div id="pasoHabilitar" style="display:none;">
+    <div class="pantalla" id="pasoHabilitar" style="display:none;">
       <div class="card">
-        <div class="barra-sucursal">
-          <span class="nombre">📥 Habilitar Pendientes</span>
-          <button id="btnCerrarHabilitar">← Volver</button>
-        </div>
-        <p style="font-size:12px; color:var(--muted); margin:8px 0 12px;">Pedidos de CONSOLIDADO (estado PENDIENTE) que todavía no se liberaron para armar. Elegí el proveedor que llegó y decidí cuánto de cada sucursal habilitar.</p>
+        <div class="aviso">Pedidos de CONSOLIDADO (estado PENDIENTE) que todavía no se liberaron para armar. Elegí el proveedor que llegó y decidí cuánto de cada sucursal habilitar.</div>
 
         <select id="selectProveedorHabilitar" style="width:100%; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:15px; margin-bottom:10px;">
           <option value="">Cargando proveedores con pendientes...</option>
@@ -220,6 +313,53 @@
           style="width:100%; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:15px; margin-bottom:14px; display:none;">
 
         <div id="habilitarPendientesContenido"><div class="empty-state">Elegí un proveedor para ver sus pendientes.</div></div>
+      </div>
+    </div>
+
+
+    <div class="pantalla" id="pasoExtra" style="display:none;">
+      <div class="card">
+        <div class="aviso extra">⭐ Para casos excepcionales. Se arma y se procesa como cualquier pedido, pero en el historial queda marcado como <b>"fuera de planificación"</b>, con quién lo agregó y por qué.</div>
+
+        <div class="field">
+          <label>1. ¿Para qué sucursal?</label>
+          <select id="extraSucursal"><option value="">Cargando sucursales...</option></select>
+          <input type="text" id="extraSucursalOtra" placeholder="Nombre de la sucursal" style="display:none; margin-top:8px;">
+        </div>
+
+        <div class="field">
+          <label>2. ¿Qué producto?</label>
+          <div id="extraBuscarBox">
+            <input type="text" id="extraBuscar" placeholder="Código o nombre del producto" autocomplete="off">
+            <div style="font-size:12px; color:var(--muted); margin-top:5px;">Podés buscar por código de barras, código interno o por el principio del nombre (ej: "yerba").</div>
+            <div id="extraResultados" style="margin-top:8px;"></div>
+          </div>
+          <div class="prod-elegido" id="extraProductoElegido" style="display:none;">
+            <div class="pe-cuerpo"><div class="pe-nombre" id="extraProdNombre"></div><div class="pe-det" id="extraProdDetalle"></div></div>
+            <button class="btn-chico" id="extraCambiarProducto">Cambiar</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>3. ¿Cuántas unidades?</label>
+          <div class="qty-row">
+            <button class="qty-btn" id="extraMenos">−</button>
+            <input type="number" id="extraCantidad" value="1" min="1" inputmode="numeric">
+            <button class="qty-btn" id="extraMas">+</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>4. Motivo (opcional)</label>
+          <input type="text" id="extraMotivo" placeholder="Ej: pedido urgente de gerencia" autocomplete="off">
+        </div>
+
+        <button class="btn btn-primary" id="btnExtraGuardar" style="margin-top:4px;">➕ Agregar para armar</button>
+      </div>
+
+      <div class="card">
+        <div class="card-titulo"><strong>Fuera de planificación, todavía sin procesar</strong></div>
+        <div id="extraPendientesLista"><div class="cargando">Cargando...</div></div>
       </div>
     </div>
 
@@ -314,6 +454,67 @@
     const DURACION_SESION_MS = 4 * 60 * 60 * 1000; // 4 horas
     const DNI_AUTORIZADOS_HABILITAR = new Set(['43458682', '43985774']);
 
+    // ---------------- NAVEGACIÓN ENTRE PANTALLAS ----------------
+    // UNA sola pantalla visible a la vez. Antes cada pantalla se abría y se
+    // cerraba por su cuenta (mostrando/ocultando a mano las demás), y como los
+    // botones del encabezado estaban siempre a mano, era fácil terminar con dos
+    // pantallas apiladas. Ahora todo pasa por irA_(), que oculta todas y
+    // muestra una sola.
+    const PANTALLAS = {
+      home:      { el: 'pasoSucursal', padre: null },
+      armar:     { el: 'pasoArmar', padre: 'home' },
+      menu:      { el: 'pasoMenu', padre: 'home' },
+      habilitar: { el: 'pasoHabilitar', padre: 'menu', requiereAuth: true },
+      auditoria: { el: 'pasoAuditoria', padre: 'menu', requiereAuth: true },
+      extra:     { el: 'pasoExtra', padre: 'menu', requiereAuth: true }
+    };
+    let pantallaActual = 'home';
+
+    function esAutorizadoGestion_() {
+      return !!(personaActual && DNI_AUTORIZADOS_HABILITAR.has(personaActual.documento));
+    }
+
+    function textosEncabezado_() {
+      switch (pantallaActual) {
+        case 'armar': return [(modoActivo === 'faltante' ? '🔴 ' : '') + (sucursalActiva || ''), modoActivo === 'faltante' ? 'Armando FALTANTES' : 'Armando pedidos'];
+        case 'menu': return ['Menú', 'Elegí qué querés hacer'];
+        case 'habilitar': return ['Habilitar pendientes', 'Liberar lo que esperaba al proveedor'];
+        case 'auditoria': return ['Auditoría de sin stock', 'Verificá lo que se marcó sin stock'];
+        case 'extra': return ['Pedido fuera de planificación', 'Un producto que no está en el consolidado'];
+        default: return ['📋 Armador de Pedidos', 'Elegí la sucursal para armar'];
+      }
+    }
+
+    function actualizarEncabezado_() {
+      const [titulo, sub] = textosEncabezado_();
+      document.getElementById('tituloPantalla').textContent = titulo;
+      document.getElementById('subtitulo').textContent = sub;
+      document.getElementById('btnVolverHeader').style.display = PANTALLAS[pantallaActual].padre ? 'block' : 'none';
+      document.getElementById('btnMenu').style.display = pantallaActual === 'home' ? 'flex' : 'none';
+    }
+
+    function irA_(nombre) {
+      if (!PANTALLAS[nombre]) return;
+      if (PANTALLAS[nombre].requiereAuth && !esAutorizadoGestion_()) { mostrarToast('No estás autorizado para esto', true); nombre = 'home'; }
+      const anterior = pantallaActual;
+      Object.keys(PANTALLAS).forEach(k => { document.getElementById(PANTALLAS[k].el).style.display = 'none'; });
+      document.getElementById(PANTALLAS[nombre].el).style.display = 'block';
+      pantallaActual = nombre;
+      actualizarEncabezado_();
+      window.scrollTo(0, 0);
+      // Las pantallas de gestión pueden haber cambiado pedidos: al volver al inicio se refresca la lista.
+      if (nombre === 'home' && ['habilitar', 'auditoria', 'extra'].includes(anterior)) cargarSucursales();
+    }
+
+    function volverDePantalla_() {
+      if (pantallaActual === 'armar') { volverAElegirSucursal(); return; }
+      const padre = PANTALLAS[pantallaActual] && PANTALLAS[pantallaActual].padre;
+      if (padre) irA_(padre);
+    }
+
+    document.getElementById('btnVolverHeader').addEventListener('click', volverDePantalla_);
+    document.getElementById('btnMenu').addEventListener('click', () => irA_('menu'));
+
     document.getElementById('btnConfirmarLogin').addEventListener('click', intentarLogin);
     document.getElementById('inputDocumentoLogin').addEventListener('keydown', e => { if (e.key === 'Enter') intentarLogin(); });
     document.getElementById('btnCambiarPersona').addEventListener('click', cerrarSesionPersona);
@@ -389,11 +590,14 @@
     }
 
     function mostrarPersonaEnHeader() {
-      document.getElementById('nombrePersonaActual').textContent = personaActual ? personaActual.nombre : '—';
-      const autorizado = personaActual && DNI_AUTORIZADOS_HABILITAR.has(personaActual.documento);
-      document.getElementById('btnHabilitarPendientes').style.display = autorizado ? 'inline-block' : 'none';
-      document.getElementById('btnBorrarSinArmar').style.display = autorizado ? 'inline-block' : 'none';
-      document.getElementById('btnAuditoria').style.display = autorizado ? 'inline-block' : 'none';
+      const nombre = personaActual ? personaActual.nombre : '—';
+      document.getElementById('nombrePersonaActual').textContent = nombre;
+      document.getElementById('avatarPersona').textContent = (nombre.trim()[0] || '?').toUpperCase();
+      const autorizado = esAutorizadoGestion_();
+      document.getElementById('menuSeccionGestion').style.display = autorizado ? '' : 'none';
+      document.getElementById('menuSeccionControl').style.display = autorizado ? '' : 'none';
+      // Si cambió la persona y la pantalla actual es de gestión, se vuelve al inicio
+      if (!autorizado && PANTALLAS[pantallaActual] && PANTALLAS[pantallaActual].requiereAuth) irA_('home');
     }
 
     let appYaArrancada = false;
@@ -433,7 +637,6 @@
     // ---------------- PASO 1: SUCURSALES ----------------
     document.getElementById('btnRefrescarSucursales').addEventListener('click', cargarSucursales);
     document.getElementById('filtroProveedorArmador').addEventListener('change', renderizarPendientes);
-    document.getElementById('btnCambiarSucursal').addEventListener('click', volverAElegirSucursal);
     document.getElementById('tabModoPendientes').addEventListener('click', () => cambiarModo('pendiente'));
     document.getElementById('tabModoFaltantes').addEventListener('click', () => cambiarModo('faltante'));
 
@@ -483,12 +686,21 @@
 
     function renderizarSucursalesDesdeCache() {
       const conteo = {};
+      let totalPendientes = 0, totalFaltantes = 0;
+      todosPendientesRaw.forEach(d => { if (esFaltante_(d)) totalFaltantes++; else totalPendientes++; });
       todosPendientesRaw
         .filter(d => modoActivo === 'faltante' ? esFaltante_(d) : !esFaltante_(d))
         .forEach(d => {
           const sucursal = d.sucursal || '(sin sucursal)';
           conteo[sucursal] = (conteo[sucursal] || 0) + 1;
         });
+      document.getElementById('cuentaPendientes').textContent = totalPendientes;
+      document.getElementById('cuentaFaltantes').textContent = totalFaltantes;
+      const nSuc = Object.keys(conteo).length;
+      const nProd = modoActivo === 'faltante' ? totalFaltantes : totalPendientes;
+      document.getElementById('resumenHome').textContent = nSuc
+        ? `${nProd} producto${nProd === 1 ? '' : 's'} para armar en ${nSuc} sucursal${nSuc === 1 ? '' : 'es'}. Elegí una para empezar.`
+        : '';
       renderizarSucursales(Object.keys(conteo).map(s => ({ sucursal: s, pendientes: conteo[s] })));
     }
 
@@ -501,19 +713,20 @@
       const colorBadge = modoActivo === 'faltante' ? 'background:#dc2626;' : '';
       cont.innerHTML = datos.map(d => `
         <button class="sucursal-btn" onclick="window.__elegirSucursal('${d.sucursal.replace(/'/g, "\\'")}')">
-          ${escapeHtml(d.sucursal)}
+          <span class="suc-ico">🏬</span>
+          <span class="suc-cuerpo">
+            <span class="suc-nombre">${escapeHtml(d.sucursal)}</span>
+            <span class="suc-sub">${d.pendientes} producto${d.pendientes === 1 ? '' : 's'} para armar</span>
+          </span>
           <span class="badge" style="${colorBadge}">${d.pendientes}</span>
+          <span class="flecha">›</span>
         </button>
       `).join('');
     }
 
     window.__elegirSucursal = function(sucursal) {
       sucursalActiva = sucursal;
-      const prefijo = modoActivo === 'faltante' ? '🔴 FALTANTES — ' : '';
-      document.getElementById('nombreSucursalActiva').textContent = prefijo + sucursal;
-      document.getElementById('subtitulo').textContent = (modoActivo === 'faltante' ? 'Armando FALTANTES para: ' : 'Armando para: ') + sucursal;
-      document.getElementById('pasoSucursal').style.display = 'none';
-      document.getElementById('pasoArmar').style.display = 'block';
+      irA_('armar');
       document.getElementById('filtroProveedorArmador').value = '';
       cargarPendientes();
     };
@@ -521,9 +734,7 @@
     function volverAElegirSucursal() {
       sucursalActiva = null;
       pendientes = [];
-      document.getElementById('subtitulo').textContent = 'Elegí la sucursal para armar';
-      document.getElementById('pasoArmar').style.display = 'none';
-      document.getElementById('pasoSucursal').style.display = 'block';
+      irA_('home');
       cargarSucursales();
     }
 
@@ -625,7 +836,7 @@
           <div class="posicion-tag">${escapeHtml(p.posicion || '—')}</div>
           <div class="info">
             <div class="nombre">${escapeHtml(p.producto)}</div>
-            <div class="detalle">${escapeHtml(p.codigo || '')} ${renderStockPill(stockVirtual[p.codigo], p.codigo)} ${avisoReparto}</div>
+            <div class="detalle">${escapeHtml(p.codigo || '')} ${renderStockPill(stockVirtual[p.codigo], p.codigo)} ${avisoReparto} ${p.fueraDePlanificacion ? '<span class="tag-extra">⭐ Fuera de planificación</span>' : ''}</div>
           </div>
           <div class="cant">x${cantidadEfectiva_(p)}</div>
         </div>
@@ -865,7 +1076,7 @@
       document.getElementById('pPosicion').textContent = itemSeleccionado.posicion || 'Sin posición';
       document.getElementById('pNombre').textContent = itemSeleccionado.producto;
       document.getElementById('pCodigo').textContent = itemSeleccionado.codigo || '';
-      document.getElementById('pPedido').textContent = `Pedido: ${cantidadEfectiva_(itemSeleccionado)} unidad(es)`;
+      document.getElementById('pPedido').innerHTML = `Pedido: ${cantidadEfectiva_(itemSeleccionado)} unidad(es)` + (itemSeleccionado.fueraDePlanificacion ? ' <span class="tag-extra">⭐ Fuera de planificación</span>' : '');
       document.getElementById('pStockVirtual').innerHTML = 'Stock disponible: ' + renderStockPill(stockVirtual[itemSeleccionado.codigo], itemSeleccionado.codigo);
       renderReparto(itemSeleccionado.codigo);
       cargarTodasLasPosiciones(itemSeleccionado.codigo);
@@ -1402,7 +1613,6 @@
     // Vista del auditor: es CIEGA a propósito. No muestra quién marcó el sin
     // stock — eso lo analiza después quien controla desde el panel de tiempos.
     document.getElementById('btnAuditoria').addEventListener('click', abrirAuditoria_);
-    document.getElementById('btnCerrarAuditoria').addEventListener('click', cerrarAuditoria_);
     document.getElementById('audPendientesContenido').addEventListener('click', (e) => {
       const btnV = e.target.closest('.btn-veredicto');
       if (btnV) { elegirVeredicto_(btnV.dataset.id, btnV.dataset.veredicto); return; }
@@ -1429,17 +1639,9 @@
 
     function abrirAuditoria_() {
       if (!auditorAutorizado_()) { mostrarToast('No estás autorizado para esto', true); return; }
-      document.getElementById('pasoSucursal').style.display = 'none';
-      document.getElementById('pasoArmar').style.display = 'none';
-      document.getElementById('pasoHabilitar').style.display = 'none';
-      document.getElementById('pasoAuditoria').style.display = 'block';
+      irA_('auditoria');
       audForm = null;
       cargarAuditoriasPendientes_();
-    }
-
-    function cerrarAuditoria_() {
-      document.getElementById('pasoAuditoria').style.display = 'none';
-      document.getElementById('pasoSucursal').style.display = 'block';
     }
 
     async function cargarAuditoriasPendientes_() {
@@ -1730,24 +1932,234 @@
       }
     }
 
+    // ---------------- PEDIDO FUERA DE PLANIFICACIÓN (solo 2 DNI autorizados) ----------------
+    // Para ocasiones excepcionales: agrega un producto para armar que NO está en
+    // CONSOLIDADO. Se arma y se procesa como cualquier otro pedido, pero queda
+    // marcado (fueraDePlanificacion:true) y con quién lo agregó y por qué, para
+    // que el historial lo muestre en columnas aparte.
+    const LS_SUCURSALES = 'armador_sucursales_conocidas';
+    let extraProducto = null;        // producto elegido
+    let extraResultadosCache = [];   // resultados de la última búsqueda
+    let extraBusquedaSeq = 0;        // descarta respuestas de búsquedas viejas
+    let extraTimer = null;
+
+    document.getElementById('btnPedidoExtra').addEventListener('click', abrirPedidoExtra_);
+    document.getElementById('extraSucursal').addEventListener('change', () => {
+      document.getElementById('extraSucursalOtra').style.display = document.getElementById('extraSucursal').value === '__otra__' ? 'block' : 'none';
+    });
+    document.getElementById('extraBuscar').addEventListener('input', () => {
+      clearTimeout(extraTimer);
+      const t = document.getElementById('extraBuscar').value.trim();
+      if (!t) { document.getElementById('extraResultados').innerHTML = ''; return; }
+      extraTimer = setTimeout(() => buscarProductoExtra_(t), 300);
+    });
+    document.getElementById('extraResultados').addEventListener('click', (e) => {
+      const btn = e.target.closest('.resultado-prod');
+      if (btn) elegirProductoExtra_(extraResultadosCache[Number(btn.dataset.i)]);
+    });
+    document.getElementById('extraCambiarProducto').addEventListener('click', () => {
+      extraProducto = null;
+      document.getElementById('extraProductoElegido').style.display = 'none';
+      document.getElementById('extraBuscarBox').style.display = 'block';
+      document.getElementById('extraBuscar').focus();
+    });
+    document.getElementById('extraMenos').addEventListener('click', () => {
+      const i = document.getElementById('extraCantidad'); i.value = Math.max(1, (parseInt(i.value, 10) || 1) - 1);
+    });
+    document.getElementById('extraMas').addEventListener('click', () => {
+      const i = document.getElementById('extraCantidad'); i.value = (parseInt(i.value, 10) || 0) + 1;
+    });
+    document.getElementById('btnExtraGuardar').addEventListener('click', guardarPedidoExtra_);
+    document.getElementById('extraPendientesLista').addEventListener('click', (e) => {
+      const btn = e.target.closest('.btn-extra-quitar');
+      if (btn) quitarPedidoExtra_(btn.dataset.id);
+    });
+
+    function abrirPedidoExtra_() {
+      if (!esAutorizadoGestion_()) { mostrarToast('No estás autorizado para esto', true); return; }
+      irA_('extra');
+      cargarSucursalesExtra_();
+      cargarExtrasPendientes_();
+    }
+
+    // Sucursales conocidas = las de los pedidos pendientes + las que ya se usaron en
+    // este dispositivo; si falta alguna, se puede escribir ("Otra sucursal").
+    async function cargarSucursalesExtra_() {
+      const set = new Set();
+      try { JSON.parse(localStorage.getItem(LS_SUCURSALES) || '[]').forEach(s => { if (s) set.add(s); }); } catch (e) { /* sin storage */ }
+      todosPendientesRaw.forEach(p => { if (p.sucursal) set.add(String(p.sucursal).trim()); });
+      try {
+        const snap = await getDocs(query(pedidosCol, where('procesado', '==', false)));
+        snap.forEach(d => { const s = d.data().sucursal; if (s) set.add(String(s).trim()); });
+      } catch (e) { /* si falla, quedan las que ya teníamos */ }
+      try { localStorage.setItem(LS_SUCURSALES, JSON.stringify([...set])); } catch (e) { /* sin storage */ }
+
+      const lista = [...set].sort((a, b) => a.localeCompare(b, 'es'));
+      const sel = document.getElementById('extraSucursal');
+      const actual = sel.value;
+      sel.innerHTML = '<option value="">Elegí la sucursal...</option>'
+        + lista.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')
+        + '<option value="__otra__">➕ Otra sucursal (escribir)</option>';
+      if (lista.includes(actual) || actual === '__otra__') sel.value = actual;
+    }
+
+    async function buscarProductoExtra_(texto) {
+      const cont = document.getElementById('extraResultados');
+      const seq = ++extraBusquedaSeq;
+      const soloDigitos = /^\d+$/.test(texto);
+      if (!soloDigitos && texto.length < 3) { cont.innerHTML = '<div class="empty-state">Escribí al menos 3 letras.</div>'; return; }
+      cont.innerHTML = '<div class="cargando">Buscando...</div>';
+      try {
+        const encontrados = new Map();
+        if (soloDigitos) {
+          // Código de barras (es el ID del documento) o código interno (campo, si ya se sincronizó)
+          const porId = await getDoc(doc(db, 'productos', texto));
+          if (porId.exists()) encontrados.set(porId.id, { codigo: porId.id, ...porId.data() });
+          const porInterno = await getDocs(query(collection(db, 'productos'), where('codigoInterno', '==', texto), limit(5)));
+          porInterno.forEach(d => encontrados.set(d.id, { codigo: d.id, ...d.data() }));
+        } else {
+          const baja = texto.toLowerCase();
+          const snap = await getDocs(query(collection(db, 'productos'),
+            where('productoLower', '>=', baja), where('productoLower', '<=', baja + '\uf8ff'), limit(10)));
+          snap.forEach(d => encontrados.set(d.id, { codigo: d.id, ...d.data() }));
+        }
+        if (seq !== extraBusquedaSeq) return; // ya hay una búsqueda más nueva
+        extraResultadosCache = [...encontrados.values()];
+        if (!extraResultadosCache.length) { cont.innerHTML = '<div class="empty-state">No encontré ningún producto con eso.</div>'; return; }
+        cont.innerHTML = extraResultadosCache.map((p, i) => `
+          <button class="resultado-prod" data-i="${i}">
+            <span class="rp-nombre">${escapeHtml(p.producto || '(sin nombre)')}</span>
+            <span class="rp-det">${escapeHtml(p.codigo)}${p.proveedor ? ' · ' + escapeHtml(p.proveedor) : ''} · Stock: ${p.stockTotal ?? '—'}</span>
+          </button>`).join('');
+      } catch (err) {
+        if (seq === extraBusquedaSeq) cont.innerHTML = `<div class="empty-state">Error: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function elegirProductoExtra_(prod) {
+      if (!prod) return;
+      extraProducto = prod;
+      document.getElementById('extraProdNombre').textContent = prod.producto || '(sin nombre)';
+      document.getElementById('extraProdDetalle').textContent = `${prod.codigo}${prod.proveedor ? ' · ' + prod.proveedor : ''} · Stock: ${prod.stockTotal ?? '—'}${prod.posicionPrincipal ? ' · Posición: ' + prod.posicionPrincipal : ''}`;
+      document.getElementById('extraProductoElegido').style.display = 'flex';
+      document.getElementById('extraBuscarBox').style.display = 'none';
+      document.getElementById('extraResultados').innerHTML = '';
+      document.getElementById('extraBuscar').value = '';
+      document.getElementById('extraCantidad').focus();
+    }
+
+    async function guardarPedidoExtra_() {
+      if (!esAutorizadoGestion_()) { mostrarToast('No estás autorizado para esto', true); return; }
+      let sucursal = document.getElementById('extraSucursal').value;
+      if (sucursal === '__otra__') sucursal = document.getElementById('extraSucursalOtra').value.trim().toUpperCase();
+      if (!sucursal) { mostrarToast('Elegí la sucursal', true); return; }
+      if (!extraProducto) { mostrarToast('Elegí el producto', true); return; }
+      const cantidad = parseInt(document.getElementById('extraCantidad').value, 10);
+      if (!Number.isInteger(cantidad) || cantidad < 1) { mostrarToast('Poné una cantidad válida (mínimo 1)', true); return; }
+      const motivo = document.getElementById('extraMotivo').value.trim();
+
+      const btn = document.getElementById('btnExtraGuardar');
+      btn.disabled = true;
+      btn.textContent = 'Guardando...';
+      try {
+        const id = `EXTRA_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        await setDoc(doc(db, 'pedidos', id), {
+          fecha: new Date(),
+          codigoInterno: extraProducto.codigoInterno || null,
+          codigo: extraProducto.codigo,
+          producto: extraProducto.producto || null,
+          cantidadPedida: cantidad,
+          cantidadHabilitada: cantidad,
+          sucursal: sucursal,
+          proveedor: extraProducto.proveedor || null,
+          posicion: extraProducto.posicionPrincipal || null,
+          armado: null,
+          diferencia: null,
+          procesado: false,
+          tipo: 'NORMAL',
+          habilitado: true,
+          fueraDePlanificacion: true,
+          agregadoPor: personaActual.nombre,
+          agregadoPorDocumento: personaActual.documento,
+          agregadoEn: serverTimestamp(),
+          motivoExtra: motivo || null
+        });
+
+        try {
+          const conocidas = new Set(JSON.parse(localStorage.getItem(LS_SUCURSALES) || '[]')); conocidas.add(sucursal);
+          localStorage.setItem(LS_SUCURSALES, JSON.stringify([...conocidas]));
+        } catch (e) { /* sin storage */ }
+
+        mostrarToast(`Agregado: ${cantidad} x ${extraProducto.producto || extraProducto.codigo} → ${sucursal}`);
+        extraProducto = null;
+        document.getElementById('extraProductoElegido').style.display = 'none';
+        document.getElementById('extraBuscarBox').style.display = 'block';
+        document.getElementById('extraCantidad').value = '1';
+        document.getElementById('extraMotivo').value = '';
+        cargarSucursalesExtra_();
+        cargarExtrasPendientes_();
+      } catch (err) {
+        mostrarToast('Error: ' + err.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '➕ Agregar para armar';
+      }
+    }
+
+    async function cargarExtrasPendientes_() {
+      const cont = document.getElementById('extraPendientesLista');
+      cont.innerHTML = '<div class="cargando">Cargando...</div>';
+      try {
+        const snap = await getDocs(query(pedidosCol, where('fueraDePlanificacion', '==', true)));
+        const msDe = (ts) => (ts && ts.toMillis ? ts.toMillis() : 0);
+        const filas = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(p => p.procesado === false)
+          .sort((a, b) => msDe(b.agregadoEn) - msDe(a.agregadoEn));
+        if (!filas.length) { cont.innerHTML = '<div class="empty-state">No hay pedidos fuera de planificación pendientes.</div>'; return; }
+        cont.innerHTML = filas.map(p => {
+          const sinArmar = p.armado === null || p.armado === undefined;
+          const estado = sinArmar ? 'Sin armar' : `Armado: ${p.armado}`;
+          const hora = p.agregadoEn && p.agregadoEn.toDate ? p.agregadoEn.toDate().toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+          return `
+            <div class="extra-item">
+              <div class="ei-cuerpo">
+                <div class="ei-nombre">${escapeHtml(p.producto || p.codigo || '')}</div>
+                <div class="ei-det">${escapeHtml(p.sucursal || '?')} · x${p.cantidadPedida} · ${estado}</div>
+                <div class="ei-det">Lo agregó ${escapeHtml(p.agregadoPor || '?')}${hora ? ' · ' + hora : ''}${p.motivoExtra ? ' · ' + escapeHtml(p.motivoExtra) : ''}</div>
+              </div>
+              ${sinArmar ? `<button class="btn-chico btn-peligro btn-extra-quitar" data-id="${escapeHtml(p.id)}">Quitar</button>` : ''}
+            </div>`;
+        }).join('');
+      } catch (err) {
+        cont.innerHTML = `<div class="empty-state">Error: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    async function quitarPedidoExtra_(id) {
+      if (!confirm('¿Quitar este pedido? Todavía no se armó, así que simplemente desaparece.')) return;
+      try {
+        const snap = await getDoc(doc(db, 'pedidos', id));
+        if (snap.exists() && snap.data().armado !== null && snap.data().armado !== undefined) {
+          mostrarToast('Ya lo armaron: no se puede quitar', true);
+        } else {
+          await deleteDoc(doc(db, 'pedidos', id));
+          mostrarToast('Pedido quitado');
+        }
+        cargarExtrasPendientes_();
+      } catch (err) {
+        mostrarToast('Error: ' + err.message, true);
+      }
+    }
+
     // ---------------- HABILITAR PENDIENTES (solo 2 DNI autorizados) ----------------
     document.getElementById('btnHabilitarPendientes').addEventListener('click', abrirHabilitarPendientes);
-    document.getElementById('btnCerrarHabilitar').addEventListener('click', cerrarHabilitarPendientes);
     document.getElementById('selectProveedorHabilitar').addEventListener('change', () => renderizarHabilitarPendientes_());
     document.getElementById('buscarProductoHabilitar').addEventListener('input', () => renderizarHabilitarPendientes_());
 
     let todosPendientesSinHabilitar = []; // TODOS los proveedores, cargado una sola vez por apertura
 
     function abrirHabilitarPendientes() {
-      document.getElementById('pasoSucursal').style.display = 'none';
-      document.getElementById('pasoArmar').style.display = 'none';
-      document.getElementById('pasoHabilitar').style.display = 'block';
+      irA_('habilitar');
       cargarTodosLosPendientesSinHabilitar_();
-    }
-
-    function cerrarHabilitarPendientes() {
-      document.getElementById('pasoHabilitar').style.display = 'none';
-      document.getElementById('pasoSucursal').style.display = 'block';
     }
 
     // ---------------- BORRAR PEDIDOS SIN ARMAR (solo 2 DNI autorizados) ----------------
@@ -1783,8 +2195,8 @@
 
         mostrarToast(`✔ Borrados ${ids.length} pedido(s) sin armar`);
         // Refrescar lo que esté visible en pantalla, si corresponde
-        if (document.getElementById('pasoSucursal').style.display !== 'none') cargarSucursales();
-        if (document.getElementById('pasoHabilitar').style.display !== 'none') cargarTodosLosPendientesSinHabilitar_();
+        if (pantallaActual === 'home') cargarSucursales();
+        if (pantallaActual === 'habilitar') cargarTodosLosPendientesSinHabilitar_();
       } catch (err) {
         mostrarToast('Error borrando: ' + err.message, true);
       } finally {
@@ -1918,7 +2330,6 @@
     }
 
     // ---------------- VER ARMADO ----------------
-    document.getElementById('btnVerArmado').addEventListener('click', abrirArmado);
     document.getElementById('btnVerArmadoArriba').addEventListener('click', abrirArmado);
 
     let armadosCargados = [];
