@@ -7,141 +7,256 @@
   <style>
     :root {
       --primary: #2563eb; --primary-dark: #1d4ed8; --primary-soft: #eff6ff;
-      --green: #16a34a; --green-soft: #f0fdf4; --orange: #ea580c; --orange-soft: #fff7ed; --red: #dc2626; --red-soft: #fef2f2;
-      --bg: #f1f5f9; --card: #ffffff; --text: #0f172a; --muted: #64748b; --border: #e2e8f0;
-      --shadow: 0 1px 2px rgba(15,23,42,0.05), 0 6px 18px rgba(15,23,42,0.06);
+      --green: #16a34a; --green-dark: #15803d; --green-soft: #f0fdf4; --orange: #ea580c; --orange-soft: #fff7ed; --red: #dc2626; --red-soft: #fef2f2;
+      --bg: #eef2f7; --card: #ffffff; --text: #0b1220; --muted: #475569; --border: #d8e0ea;
+      --radius: 18px; --radius-sm: 14px;
+      --shadow: 0 1px 2px rgba(15,23,42,0.06), 0 8px 24px rgba(15,23,42,0.08);
+      --shadow-hover: 0 4px 10px rgba(15,23,42,0.10), 0 16px 34px rgba(15,23,42,0.14);
+      --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    button { outline: none; font-family: inherit; }
+    html { font-size: 16px; }
+    button { outline: none; font-family: inherit; transition: transform 0.12s var(--ease), box-shadow 0.2s, filter 0.2s, background 0.2s; }
+    button:active:not(:disabled) { transform: scale(0.97); }
     input, select { min-width: 0; font-family: inherit; }
-    input:focus, select:focus { outline: none; border-color: var(--primary) !important; box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
-    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); padding-bottom: 40px; }
+    input:focus, select:focus { outline: none; border-color: var(--primary) !important; box-shadow: 0 0 0 4px rgba(37,99,235,0.16); }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 16px; line-height: 1.45; -webkit-font-smoothing: antialiased; background: var(--bg); color: var(--text); padding-bottom: 48px; }
+
+    /* ---------- Movimiento ---------- */
+    @keyframes entrarAdelante { from { opacity: 0; transform: translateX(34px); } to { opacity: 1; transform: none; } }
+    @keyframes entrarAtras { from { opacity: 0; transform: translateX(-34px); } to { opacity: 1; transform: none; } }
+    @keyframes aparecer { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+    @keyframes fundir { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes subirHoja { from { opacity: 0; transform: translateY(44px) scale(0.97); } to { opacity: 1; transform: none; } }
+    @keyframes bajarMenu { from { opacity: 0; transform: translateY(-8px) scale(0.97); } to { opacity: 1; transform: none; } }
+    .pantalla.anim-adelante { animation: entrarAdelante 0.3s var(--ease) both; }
+    .pantalla.anim-atras { animation: entrarAtras 0.3s var(--ease) both; }
+    .menu-tile, .sucursal-btn, .stat, .resultado-prod, .menu-saludo { animation: aparecer 0.42s var(--ease) both; }
+    .sucursal-btn:nth-of-type(2), .stat:nth-of-type(2) { animation-delay: 50ms; }
+    .sucursal-btn:nth-of-type(3), .stat:nth-of-type(3) { animation-delay: 100ms; }
+    .sucursal-btn:nth-of-type(4) { animation-delay: 150ms; }
+    .sucursal-btn:nth-of-type(5) { animation-delay: 200ms; }
+    .sucursal-btn:nth-of-type(n+6) { animation-delay: 250ms; }
+    /* el menú entra como una sola cascada: cada sección arranca un poco después de la anterior */
+    .menu-tile { animation-delay: calc(var(--sec, 0ms) + var(--n, 0ms)); }
+    .menu-tile:nth-of-type(2) { --n: 45ms; } .menu-tile:nth-of-type(3) { --n: 90ms; }
+    .menu-seccion:nth-of-type(2) { --sec: 70ms; } .menu-seccion:nth-of-type(3) { --sec: 190ms; } .menu-seccion:nth-of-type(4) { --sec: 330ms; }
+    .modal-overlay.show { animation: fundir 0.22s ease both; }
+    .modal-overlay.show .modal { animation: subirHoja 0.32s var(--ease) both; }
+    .menu-usuario { animation: bajarMenu 0.2s var(--ease) both; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-delay: 0ms !important; transition-duration: 0.01ms !important; }
+    }
 
     /* ---------- Encabezado ---------- */
-    header { background: linear-gradient(135deg, #1e40af 0%, #2563eb 60%, #3b82f6 100%); color: white; padding: 10px 16px; position: sticky; top: 0; z-index: 20; box-shadow: 0 4px 16px rgba(30,64,175,0.25); }
-    .hdr-fila { max-width: 760px; margin: 0 auto; display: flex; align-items: center; gap: 10px; min-height: 44px; }
-    .hdr-volver { display: none; flex-shrink: 0; width: 40px; height: 40px; border: none; border-radius: 12px; background: rgba(255,255,255,0.18); color: white; font-size: 22px; font-weight: 700; cursor: pointer; }
+    header { background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 62%, #3b82f6 100%); color: white; padding: 10px 0; position: sticky; top: 0; z-index: 20; box-shadow: 0 4px 18px rgba(30,64,175,0.3); }
+    .hdr-fila { max-width: 760px; margin: 0 auto; padding: 0 18px; display: flex; align-items: center; gap: 12px; min-height: 48px; transition: max-width 0.3s var(--ease); }
+    .hdr-volver { display: none; flex-shrink: 0; width: 44px; height: 44px; border: none; border-radius: 50%; background: rgba(255,255,255,0.2); color: white; font-size: 24px; font-weight: 700; cursor: pointer; }
     .hdr-titulo { flex: 1; min-width: 0; }
-    .hdr-titulo h1 { margin: 0; font-size: 18px; font-weight: 700; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-    .hdr-titulo p { margin: 2px 0 0; font-size: 12.5px; opacity: 0.88; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .hdr-menu { flex-shrink: 0; display: flex; align-items: center; gap: 6px; border: none; border-radius: 12px; background: white; color: var(--primary-dark); padding: 10px 14px; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.12); }
+    .hdr-titulo h1 { margin: 0; font-size: 20px; font-weight: 800; line-height: 1.15; letter-spacing: -0.01em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .hdr-titulo p { margin: 2px 0 0; font-size: 13.5px; opacity: 0.92; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .hdr-menu { flex-shrink: 0; display: flex; align-items: center; gap: 8px; border: none; border-radius: 999px; background: white; color: var(--primary-dark); padding: 11px 18px; font-size: 15.5px; font-weight: 800; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
     .hdr-usuario-wrap { position: relative; flex-shrink: 0; }
-    .hdr-avatar { width: 40px; height: 40px; padding: 0; border-radius: 50%; border: 2px solid rgba(255,255,255,0.55); background: rgba(255,255,255,0.2); color: white; font-size: 16px; font-weight: 800; cursor: pointer; display: grid; place-items: center; }
-    .menu-usuario { position: absolute; right: 0; top: 50px; width: 250px; background: white; color: var(--text); border-radius: 14px; box-shadow: 0 12px 32px rgba(15,23,42,0.28); padding: 14px; z-index: 30; }
-    .mu-nombre { font-size: 15px; font-weight: 800; }
-    .mu-rol { font-size: 12px; color: var(--muted); margin: 2px 0 12px; }
-    .mu-cambiar { width: 100%; padding: 11px; border: none; border-radius: 10px; background: #f1f5f9; color: var(--text); font-size: 14px; font-weight: 700; cursor: pointer; }
-    .mu-cambiar:active { background: #e2e8f0; }
+    .hdr-avatar { width: 44px; height: 44px; padding: 0; border-radius: 50%; border: 2px solid rgba(255,255,255,0.6); background: rgba(255,255,255,0.22); color: white; font-size: 18px; font-weight: 800; cursor: pointer; display: grid; place-items: center; }
+    .menu-usuario { position: absolute; right: 0; top: 56px; width: 270px; background: white; color: var(--text); border-radius: var(--radius); box-shadow: 0 14px 36px rgba(15,23,42,0.3); padding: 16px; z-index: 30; }
+    .mu-nombre { font-size: 17px; font-weight: 800; }
+    .mu-rol { font-size: 14px; color: var(--muted); margin: 2px 0 14px; }
+    .mu-cambiar { width: 100%; padding: 13px; border: none; border-radius: 999px; background: #eef2f7; color: var(--text); font-size: 15.5px; font-weight: 700; cursor: pointer; }
+    .mu-cambiar:active { background: #dde4ee; }
+    @media (max-width: 360px) { .hdr-titulo h1 { font-size: 17px; } .hdr-menu { padding: 10px 13px; } }
+    @media (hover: hover) { .hdr-menu:hover, .hdr-volver:hover { filter: brightness(1.08); } }
 
-    @media (max-width: 360px) { .hdr-titulo h1 { font-size: 16px; } .hdr-menu { padding: 9px 11px; } }
-    .container { max-width: 760px; margin: 0 auto; padding: 16px; }
+    .container { max-width: 760px; margin: 0 auto; padding: 18px; transition: max-width 0.3s var(--ease); }
+    body[data-pantalla="stock"] .container, body[data-pantalla="stock"] .hdr-fila,
+    body[data-pantalla="admin"] .container, body[data-pantalla="admin"] .hdr-fila { max-width: 1120px; }
 
-    /* ---------- Tarjetas y botones ---------- */
-    .card { background: var(--card); border-radius: 16px; padding: 16px; margin-bottom: 14px; box-shadow: var(--shadow); border: 1px solid rgba(226,232,240,0.8); }
-    .card-titulo { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
-    .card-titulo strong { font-size: 15px; }
-    .btn { display: block; width: 100%; padding: 14px; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 10px; }
+    /* ---------- Tarjetas, botones, chips ---------- */
+    .card { background: var(--card); border-radius: var(--radius); padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow); border: 1px solid rgba(216,224,234,0.7); }
+    .card-titulo { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .card-titulo strong { font-size: 17.5px; }
+    .btn { display: block; width: 100%; padding: 15px; border: none; border-radius: 16px; font-size: 17px; font-weight: 700; cursor: pointer; margin-top: 12px; }
     .btn-primary { background: var(--primary); color: white; }
-    .btn-secondary { background: #e8edf5; color: var(--text); }
+    .btn-secondary { background: #e3e9f2; color: var(--text); }
     .btn-success { background: var(--green); color: white; }
-    .btn:disabled { opacity: 0.5; }
-    .btn-chico { background: var(--primary-soft); color: var(--primary-dark); border: none; border-radius: 10px; padding: 8px 12px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+    .btn:disabled { opacity: 0.5; cursor: default; }
+    @media (hover: hover) { .btn:hover:not(:disabled) { filter: brightness(1.07); box-shadow: var(--shadow-hover); } }
+    .btn-chico { background: var(--primary-soft); color: var(--primary-dark); border: none; border-radius: 999px; padding: 10px 18px; font-size: 15px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+    @media (hover: hover) { .btn-chico:hover { filter: brightness(0.96); } }
     .btn-peligro { background: var(--red-soft); color: var(--red); }
-    .aviso { background: var(--primary-soft); border: 1px solid #bfdbfe; color: #1e3a8a; border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.45; margin-bottom: 14px; }
+    .aviso { background: var(--primary-soft); border: 1px solid #bfdbfe; color: #1e3a8a; border-radius: var(--radius-sm); padding: 12px 14px; font-size: 14.5px; line-height: 1.5; margin-bottom: 16px; }
     .aviso.extra { background: #fffbeb; border-color: #fde68a; color: #78350f; }
+    .empty-state { color: var(--muted); font-size: 16px; text-align: center; padding: 28px 0; }
+    .cargando { color: var(--muted); font-size: 15px; text-align: center; padding: 20px 0; }
+    .contador { font-size: 14.5px; color: var(--muted); font-weight: 500; }
 
     /* ---------- Inicio: pestañas y sucursales ---------- */
-    .resumen-home { font-size: 13px; color: var(--muted); margin: 0 2px 10px; }
-    .tabs-modo { display: flex; gap: 6px; background: #e3e9f2; padding: 5px; border-radius: 14px; margin-bottom: 14px; }
-    .tab-modo { flex: 1; padding: 11px 8px; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; background: transparent; color: var(--muted); }
-    .tab-modo.activo { background: white; color: var(--primary-dark); box-shadow: 0 1px 4px rgba(15,23,42,0.12); }
+    .resumen-home { font-size: 15px; color: var(--muted); margin: 0 2px 12px; }
+    .tabs-modo { display: flex; gap: 6px; background: #dfe6f0; padding: 5px; border-radius: 999px; margin-bottom: 16px; }
+    .tab-modo { flex: 1; padding: 13px 10px; border: none; border-radius: 999px; font-size: 16px; font-weight: 800; cursor: pointer; background: transparent; color: var(--muted); }
+    .tab-modo.activo { background: white; color: var(--primary-dark); box-shadow: 0 2px 8px rgba(15,23,42,0.14); }
     .tab-modo.faltantes.activo { color: var(--red); }
-    .tab-cuenta { display: inline-block; min-width: 22px; padding: 1px 7px; margin-left: 6px; border-radius: 20px; background: #d4dcea; color: var(--muted); font-size: 12px; font-weight: 800; }
+    .tab-cuenta { display: inline-block; min-width: 24px; padding: 1px 9px; margin-left: 6px; border-radius: 999px; background: #c9d3e2; color: var(--muted); font-size: 14px; font-weight: 800; }
     .tab-modo.activo .tab-cuenta { background: var(--primary); color: white; }
     .tab-modo.faltantes.activo .tab-cuenta { background: var(--red); }
-    .sucursal-btn { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 14px; background: white; cursor: pointer; text-align: left; box-shadow: var(--shadow); }
-    .sucursal-btn:active { transform: scale(0.99); background: #f8fafc; }
-    .suc-ico { flex-shrink: 0; width: 42px; height: 42px; border-radius: 12px; background: var(--primary-soft); display: grid; place-items: center; font-size: 20px; }
+    .sucursal-btn { display: flex; align-items: center; gap: 14px; width: 100%; padding: 16px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: white; cursor: pointer; text-align: left; box-shadow: var(--shadow); }
+    @media (hover: hover) { .sucursal-btn:hover, .menu-tile:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); } }
+    .sucursal-btn:active { background: #f8fafc; }
+    .suc-ico { flex-shrink: 0; width: 48px; height: 48px; border-radius: 14px; background: var(--primary-soft); display: grid; place-items: center; font-size: 23px; }
     .suc-cuerpo { flex: 1; min-width: 0; }
-    .suc-nombre { display: block; font-size: 16px; font-weight: 700; color: var(--text); }
-    .suc-sub { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
-    .sucursal-btn .badge { background: var(--primary); color: white; border-radius: 20px; padding: 4px 11px; font-size: 13px; font-weight: 800; }
-    .sucursal-btn .flecha { color: #94a3b8; font-size: 22px; }
+    .suc-nombre { display: block; font-size: 18px; font-weight: 800; color: var(--text); }
+    .suc-sub { display: block; font-size: 14.5px; color: var(--muted); margin-top: 2px; }
+    .sucursal-btn .badge { background: var(--primary); color: white; border-radius: 999px; padding: 6px 14px; font-size: 16px; font-weight: 800; }
+    .sucursal-btn .flecha { color: #94a3b8; font-size: 26px; }
 
     /* ---------- Menú ---------- */
-    .menu-seccion { margin-bottom: 16px; }
-    .menu-seccion-titulo { font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 0 4px 8px; }
-    .menu-tile { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 14px; background: white; cursor: pointer; text-align: left; box-shadow: var(--shadow); }
-    .menu-tile:active { transform: scale(0.99); background: #f8fafc; }
-    .menu-tile .ico { flex-shrink: 0; width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; font-size: 21px; background: var(--primary-soft); }
+    .menu-seccion { margin-bottom: 18px; }
+    .menu-seccion-titulo { font-size: 13px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin: 0 6px 10px; }
+    .menu-tile { display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px; margin-bottom: 10px; border: 1px solid var(--border); border-radius: var(--radius); background: white; cursor: pointer; text-align: left; box-shadow: var(--shadow); }
+    .menu-tile:active { background: #f8fafc; }
+    .menu-tile .ico { flex-shrink: 0; width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; font-size: 24px; background: var(--primary-soft); }
     .menu-tile .cuerpo { flex: 1; min-width: 0; }
-    .menu-tile .cuerpo b { display: block; font-size: 15px; color: var(--text); }
-    .menu-tile .cuerpo small { display: block; margin-top: 1px; font-size: 12.5px; color: var(--muted); line-height: 1.3; }
-    .tile-badge { background: var(--red); color: white; border-radius: 20px; padding: 2px 9px; font-size: 12px; font-weight: 800; }
-    .menu-saludo { background: linear-gradient(135deg, #eff6ff, #e0e7ff); border: 1px solid #c7d2fe; border-radius: 16px; padding: 14px 16px; margin-bottom: 16px; }
-    .ms-hola { font-size: 17px; color: var(--text); }
-    .ms-resumen { font-size: 13px; color: #475569; margin-top: 3px; line-height: 1.4; }
-    .menu-tile .flecha { color: #94a3b8; font-size: 22px; }
+    .menu-tile .cuerpo b { display: block; font-size: 17px; color: var(--text); }
+    .menu-tile .cuerpo small { display: block; margin-top: 2px; font-size: 14px; color: var(--muted); line-height: 1.35; }
+    .tile-badge { background: var(--red); color: white; border-radius: 999px; padding: 3px 11px; font-size: 14px; font-weight: 800; }
+    .menu-saludo { background: linear-gradient(135deg, #eff6ff, #e0e7ff); border: 1px solid #c7d2fe; border-radius: var(--radius); padding: 16px 18px; margin-bottom: 18px; }
+    .ms-hola { font-size: 20px; color: var(--text); }
+    .ms-resumen { font-size: 15px; color: #334155; margin-top: 4px; line-height: 1.4; }
+    .menu-tile .flecha { color: #94a3b8; font-size: 26px; }
     .menu-tile.extra .ico { background: #fef9c3; }
     .menu-tile.control .ico { background: #ede9fe; }
     .menu-tile.peligro .ico { background: var(--red-soft); }
     .menu-tile.peligro .cuerpo b { color: var(--red); }
 
     /* ---------- Armado ---------- */
-    #reader { width: 100%; border-radius: 12px; overflow: hidden; }
+    #reader { width: 100%; border-radius: var(--radius-sm); overflow: hidden; }
     .producto-box { display: none; }
-    .producto-box.show { display: block; }
-    .producto-posicion { display: inline-block; background: var(--primary-soft); color: var(--primary-dark); border: 1px solid #bfdbfe; border-radius: 10px; padding: 6px 14px; font-size: 22px; font-weight: 800; letter-spacing: 0.5px; margin-bottom: 6px; }
-    .producto-nombre { font-size: 19px; font-weight: 700; margin-bottom: 2px; }
-    .producto-codigo { font-size: 13px; color: var(--muted); font-family: monospace; margin-bottom: 10px; }
-    .producto-pedido { font-size: 14px; color: var(--muted); margin-bottom: 14px; }
-    .field { margin-bottom: 14px; }
-    .field label { display: block; font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 5px; }
-    .field input, .field select { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 12px; font-size: 16px; background: white; }
-    .field input:focus, .field select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.15); outline: none; }
-    .qty-row { display: flex; align-items: center; gap: 8px; }
-    .qty-row input { text-align: center; font-size: 20px; font-weight: 700; }
-    .qty-btn { width: 48px; height: 48px; flex-shrink: 0; border-radius: 12px; border: none; background: var(--primary); color: white; font-size: 22px; font-weight: 700; cursor: pointer; }
-    .item-pendiente { display: flex; align-items: center; gap: 12px; padding: 12px 4px; border-bottom: 1px solid var(--border); cursor: pointer; }
+    .producto-box.show { display: block; animation: aparecer 0.3s var(--ease) both; }
+    .producto-posicion { display: inline-block; background: var(--primary-soft); color: var(--primary-dark); border: 2px solid #bfdbfe; border-radius: 14px; padding: 6px 18px; font-size: 28px; font-weight: 800; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .producto-nombre { font-size: 23px; font-weight: 800; line-height: 1.2; margin-bottom: 4px; }
+    .producto-codigo { font-size: 14.5px; color: var(--muted); font-family: ui-monospace, monospace; margin-bottom: 12px; }
+    .producto-pedido { font-size: 16.5px; color: var(--muted); margin-bottom: 14px; }
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-size: 14.5px; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+    .field input, .field select { width: 100%; padding: 14px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-size: 17px; background: white; }
+    .qty-row { display: flex; align-items: center; gap: 10px; }
+    .qty-row input { text-align: center; font-size: 24px; font-weight: 800; }
+    .qty-btn { width: 54px; height: 54px; flex-shrink: 0; border-radius: 50%; border: none; background: var(--primary); color: white; font-size: 26px; font-weight: 700; cursor: pointer; }
+    .item-pendiente { display: flex; align-items: center; gap: 14px; padding: 14px 6px; border-bottom: 1px solid var(--border); cursor: pointer; border-radius: var(--radius-sm); }
     .item-pendiente:last-child { border-bottom: none; }
-    .item-pendiente:active { background: #f8fafc; }
-    .item-pendiente .posicion-tag { background: var(--primary-soft); color: var(--primary-dark); border-radius: 10px; padding: 8px 10px; font-size: 14px; font-weight: 800; font-family: ui-monospace, monospace; min-width: 58px; text-align: center; white-space: nowrap; }
+    .item-pendiente:active { background: #f1f5f9; }
+    @media (hover: hover) { .item-pendiente:hover { background: #f5f8fc; } }
+    .item-pendiente .posicion-tag { background: var(--primary-soft); color: var(--primary-dark); border-radius: 12px; padding: 10px 12px; font-size: 17px; font-weight: 800; font-family: ui-monospace, monospace; min-width: 70px; text-align: center; white-space: nowrap; }
     .item-pendiente .info { flex: 1; min-width: 0; }
-    .item-pendiente .info .nombre { font-size: 14.5px; font-weight: 600; }
-    .item-pendiente .info .detalle { font-size: 12px; color: var(--muted); margin-top: 2px; }
-    .item-pendiente .cant { background: #f1f5f9; border-radius: 10px; padding: 6px 10px; font-weight: 800; color: var(--text); font-size: 15px; white-space: nowrap; }
-    .barra-proveedor { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--green-soft); border: 1px solid #bbf7d0; border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; }
-    .barra-proveedor .bp-info { flex: 1; min-width: 180px; }
-    .barra-proveedor .bp-info b { display: block; font-size: 15px; }
-    .barra-proveedor .bp-info span { font-size: 12.5px; color: var(--muted); }
-    .barra-proveedor .btn { width: auto; margin-top: 0; padding: 12px 16px; font-size: 15px; }
-    .tag-extra { display: inline-block; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; border-radius: 20px; padding: 1px 8px; font-size: 11px; font-weight: 700; white-space: nowrap; }
-    .empty-state { color: var(--muted); font-size: 14px; text-align: center; padding: 22px 0; }
-    .cargando { color: var(--muted); font-size: 13px; text-align: center; padding: 16px 0; }
-    .contador { font-size: 13px; color: var(--muted); font-weight: 400; }
+    .item-pendiente .info .nombre { font-size: 17px; font-weight: 700; line-height: 1.25; }
+    .item-pendiente .info .detalle { font-size: 14px; color: var(--muted); margin-top: 3px; }
+    .item-pendiente .cant { background: #e8eef6; border-radius: 12px; padding: 8px 14px; font-weight: 800; color: var(--text); font-size: 19px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .tag-extra { display: inline-block; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; border-radius: 999px; padding: 2px 10px; font-size: 13px; font-weight: 700; white-space: nowrap; }
 
-    /* ---------- Pedido fuera de planificación ---------- */
-    .resultado-prod { display: block; width: 100%; text-align: left; padding: 11px 12px; margin-bottom: 6px; border: 1px solid var(--border); border-radius: 12px; background: white; cursor: pointer; }
+    /* ---------- Habilitar y pedido fuera de planificación ---------- */
+    .barra-proveedor { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--green-soft); border: 1px solid #bbf7d0; border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px; }
+    .barra-proveedor .bp-info { flex: 1; min-width: 190px; }
+    .barra-proveedor .bp-info b { display: block; font-size: 18px; }
+    .barra-proveedor .bp-info span { font-size: 14.5px; color: var(--muted); }
+    .barra-proveedor .btn { width: auto; margin-top: 0; padding: 13px 20px; font-size: 16px; }
+    .resultado-prod { display: block; width: 100%; text-align: left; padding: 13px 14px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: white; cursor: pointer; }
     .resultado-prod:active { background: #f8fafc; }
-    .rp-nombre { display: block; font-size: 14.5px; font-weight: 700; }
-    .rp-det { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
-    .prod-elegido { display: flex; align-items: center; gap: 10px; background: var(--green-soft); border: 1px solid #bbf7d0; border-radius: 12px; padding: 10px 12px; }
+    .rp-nombre { display: block; font-size: 16.5px; font-weight: 700; }
+    .rp-det { display: block; font-size: 14px; color: var(--muted); margin-top: 2px; }
+    .prod-elegido { display: flex; align-items: center; gap: 12px; background: var(--green-soft); border: 1px solid #bbf7d0; border-radius: var(--radius-sm); padding: 12px 14px; }
     .prod-elegido .pe-cuerpo { flex: 1; min-width: 0; }
-    .prod-elegido .pe-nombre { font-size: 15px; font-weight: 700; }
-    .prod-elegido .pe-det { font-size: 12px; color: var(--muted); margin-top: 2px; }
-    .extra-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .prod-elegido .pe-nombre { font-size: 17px; font-weight: 700; }
+    .prod-elegido .pe-det { font-size: 14px; color: var(--muted); margin-top: 2px; }
+    .extra-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
     .extra-item:last-child { border-bottom: none; }
     .extra-item .ei-cuerpo { flex: 1; min-width: 0; }
-    .extra-item .ei-nombre { font-size: 14px; font-weight: 700; }
-    .extra-item .ei-det { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .extra-item .ei-nombre { font-size: 16px; font-weight: 700; }
+    .extra-item .ei-det { font-size: 14px; color: var(--muted); margin-top: 2px; }
 
-    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--green); color: white; padding: 12px 20px; border-radius: 10px; font-size: 14px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.2); opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 100; max-width: 92vw; text-align: center; }
-    .toast.show { opacity: 1; }
+    /* ---------- Pantallas de datos (Stock, Armado sin procesar) ---------- */
+    .tabs-seccion { display: flex; gap: 8px; margin: -4px -6px 10px; padding: 4px 6px 12px; overflow-x: auto; }
+    .tab-sec { flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 12px 20px; border: 2px solid var(--border); border-radius: 999px; background: white; font-size: 16px; font-weight: 800; color: var(--muted); cursor: pointer; }
+    .tab-sec.activo { border-color: var(--primary); background: var(--primary); color: white; box-shadow: 0 4px 14px rgba(37,99,235,0.35); }
+    .tab-sec:disabled { opacity: 0.6; cursor: default; }
+    .pronto-tag { font-size: 11.5px; font-weight: 800; background: #fef3c7; color: #92400e; border-radius: 999px; padding: 2px 8px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+    .stat { text-align: left; border: 2px solid var(--border); border-radius: var(--radius); background: white; padding: 14px 16px; cursor: pointer; box-shadow: var(--shadow); }
+    .stat .st-num { display: block; font-size: 30px; font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; }
+    .stat .st-txt { display: block; font-size: 14.5px; font-weight: 700; color: var(--muted); margin-top: 4px; }
+    .stat.activo { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(37,99,235,0.14), var(--shadow); }
+    .stat.verde .st-num { color: var(--green-dark); }
+    .stat.gris .st-num { color: #64748b; }
+    .stat.fijo { cursor: default; }
+    .filtros { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+    .buscador { position: relative; flex: 1; min-width: 240px; }
+    .buscador::before { content: '🔎'; position: absolute; left: 18px; top: 50%; transform: translateY(-50%); font-size: 18px; pointer-events: none; }
+    .buscador input { width: 100%; padding: 15px 18px 15px 48px; border: 2px solid var(--border); border-radius: 999px; font-size: 17px; background: white; }
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    .chip { border: 2px solid var(--border); background: white; border-radius: 999px; padding: 9px 16px; font-size: 15px; font-weight: 700; color: var(--text); cursor: pointer; }
+    .chip .n { color: var(--muted); font-weight: 600; margin-left: 4px; }
+    .chip.activo { background: var(--primary); border-color: var(--primary); color: white; }
+    .chip.activo .n { color: #dbeafe; }
+    .lista-datos { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); border: 1px solid rgba(216,224,234,0.8); overflow: clip; }
+    .fila-stock { display: grid; grid-template-columns: minmax(0, 1fr) 120px 180px; align-items: center; gap: 14px; padding: 14px 20px; border-top: 1px solid var(--border); }
+    .fila-stock:first-child { border-top: none; }
+    .fila-stock.cabecera:first-child, .fila-arm.cabecera:first-child { border-radius: var(--radius) var(--radius) 0 0; }
+    .fila-stock.cabecera, .fila-arm.cabecera { position: sticky; top: var(--alto-header, 66px); z-index: 5; background: #f4f7fb; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding-top: 12px; padding-bottom: 12px; }
+    @media (hover: hover) { .fila-stock:not(.cabecera):hover, .fila-arm:not(.cabecera):hover { background: #f7faff; } }
+    .fs-nombre { font-size: 17px; font-weight: 700; line-height: 1.25; }
+    .fs-codigo { font-size: 14px; color: var(--muted); font-family: ui-monospace, monospace; margin-top: 2px; }
+    .fila-stock.sin-stock .fs-nombre { color: #5b6b82; font-weight: 600; }
+    .chip-stock { display: inline-block; min-width: 64px; text-align: center; padding: 6px 16px; border-radius: 999px; font-size: 19px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .chip-stock.ok { background: #dcfce7; color: #166534; }
+    .chip-stock.cero { background: #eef2f7; color: #64748b; }
+    .chip-pos { display: inline-block; font-family: ui-monospace, monospace; font-weight: 800; font-size: 16px; background: var(--primary-soft); color: var(--primary-dark); padding: 6px 14px; border-radius: 12px; }
+    .pie-lista { text-align: center; color: var(--muted); font-size: 14.5px; margin: 14px 0 4px; }
+
+    .fila-arm { display: grid; grid-template-columns: 170px minmax(0, 1fr) 90px 110px 170px 48px; align-items: center; gap: 14px; padding: 14px 20px; border-top: 1px solid var(--border); }
+    .fila-arm:first-child { border-top: none; }
+    .fa-suc { font-size: 16px; font-weight: 800; }
+    .fa-prod .nombre { font-size: 17px; font-weight: 700; line-height: 1.25; }
+    .fa-prod .codigo { font-size: 14px; color: var(--muted); font-family: ui-monospace, monospace; margin-top: 2px; }
+    .fa-num { font-size: 19px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .fa-num small { display: none; font-size: 12.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .fa-num.ok { color: var(--green-dark); }
+    .fa-num.dif { color: var(--orange); }
+    .fa-num.cero { color: var(--red); }
+    .fa-dif { display: block; width: fit-content; margin-top: 4px; font-size: 13px; font-weight: 700; background: var(--orange-soft); color: #9a3412; border-radius: 999px; padding: 2px 10px; }
+    .fa-quien { font-size: 14.5px; line-height: 1.3; }
+    .fa-quien .edito { color: var(--muted); font-size: 13px; }
+    .btn-icono { width: 44px; height: 44px; border-radius: 50%; border: none; background: var(--primary-soft); font-size: 18px; cursor: pointer; }
+    .fila-arm.editando { display: block; background: #fbfdff; }
+    .edicion-inline { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+    .edicion-inline input { flex: 1; min-width: 120px; padding: 13px; border: 2px solid var(--border); border-radius: var(--radius-sm); font-size: 20px; font-weight: 800; }
+    @media (max-width: 760px) {
+      .stats { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+      .stat { padding: 12px 12px; } .stat .st-num { font-size: 24px; } .stat .st-txt { font-size: 13px; }
+      .fila-stock { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "prod stock" "prod pos"; gap: 6px 12px; padding: 14px 16px; }
+      .fs-stock, .fs-pos { justify-self: end; }
+      .fila-stock.cabecera, .fila-arm.cabecera { display: none; }
+      .fs-prod { grid-area: prod; } .fs-stock { grid-area: stock; } .fs-pos { grid-area: pos; } .fs-pos:empty { display: none; }
+      .fila-arm { grid-template-columns: 1fr 1fr; grid-template-areas: "suc suc" "prod prod" "pedido armado" "quien edit"; gap: 8px 12px; padding: 14px 16px; }
+      .fa-num small { display: block; }
+      .fa-suc { grid-area: suc; } .fa-prod { grid-area: prod; } .fa-pedido { grid-area: pedido; } .fa-armado { grid-area: armado; } .fa-quien { grid-area: quien; } .fa-edit { grid-area: edit; justify-self: end; }
+    }
+
+    /* ---------- Avisos, ventanas y letra más clara en el HTML que genera el JS ---------- */
+    [style*="font-size:10px"], [style*="font-size: 10px"], [style*="font-size:11px"], [style*="font-size: 11px"] { font-size: 13px !important; }
+    [style*="font-size:12px"], [style*="font-size: 12px"] { font-size: 14px !important; }
+    [style*="font-size:13px"], [style*="font-size: 13px"] { font-size: 15px !important; }
+    [style*="font-size:14px"], [style*="font-size: 14px"] { font-size: 16px !important; }
+    .toast { position: fixed; bottom: 26px; left: 50%; transform: translate(-50%, 24px); background: var(--green); color: white; padding: 14px 24px; border-radius: 999px; font-size: 16px; font-weight: 700; box-shadow: 0 8px 24px rgba(0,0,0,0.25); opacity: 0; pointer-events: none; transition: opacity 0.25s, transform 0.3s var(--ease); z-index: 300; max-width: 92vw; text-align: center; }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
     .toast.error { background: #dc2626; }
-    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.5); z-index: 50; align-items: flex-end; }
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.55); backdrop-filter: blur(2px); z-index: 50; align-items: flex-end; }
     .modal-overlay.show { display: flex; }
-    .modal { background: white; width: 100%; max-width: 760px; margin: 0 auto; max-height: 82vh; overflow-y: auto; border-radius: 20px 20px 0 0; padding: 20px; }
-    .modal h2 { margin-top: 0; font-size: 17px; }
+    .modal { background: white; width: 100%; max-width: 820px; margin: 0 auto; max-height: 88vh; overflow-y: auto; border-radius: 24px 24px 0 0; padding: 22px; }
+    .modal.con-cab { padding-top: 0; }
+    .modal h2 { margin-top: 0; font-size: 19px; }
+    .modal-cab { position: sticky; top: 0; z-index: 3; display: flex; justify-content: space-between; align-items: center; gap: 12px; background: white; padding: 18px 0 12px; margin-bottom: 12px; border-bottom: 1px solid var(--border); }
+    .modal-cab h2 { margin: 0; font-size: 20px; font-weight: 800; }
+    .modal-x { flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%; border: none; background: #eef2f7; font-size: 20px; font-weight: 700; color: var(--text); cursor: pointer; }
+    @media (hover: hover) { .modal-x:hover { background: #dde4ee; } }
+    @media (min-width: 900px) { .modal-overlay { align-items: center; } .modal { border-radius: 24px; max-height: 84vh; } }
   </style>
 </head>
 <body>
@@ -198,7 +313,7 @@
         <div class="menu-seccion-titulo">Consultas</div>
         <button class="menu-tile" id="btnVerStockGlobal">
           <span class="ico">📦</span>
-          <span class="cuerpo"><b>Ver stock</b><small>Buscá un producto y mirá cuánto hay y dónde.</small></span>
+          <span class="cuerpo"><b>Ver stock</b><small>Todos los productos, con lo que tiene stock primero.</small></span>
           <span class="flecha">›</span>
         </button>
         <button class="menu-tile" id="btnVerAdmin">
@@ -340,6 +455,45 @@
     </div>
 
 
+    <div class="pantalla" id="pasoStock" style="display:none;">
+      <div class="tabs-seccion">
+        <button class="tab-sec activo">📦 Stock</button>
+        <button class="tab-sec" disabled>🧮 Conteo <span class="pronto-tag">pronto</span></button>
+        <button class="tab-sec" disabled>🔍 Auditoría de stock <span class="pronto-tag">pronto</span></button>
+      </div>
+
+      <div class="stats" id="chipsStock">
+        <button class="stat activo" data-filtro="todos"><span class="st-num" id="stNumTodos">–</span><span class="st-txt">Productos</span></button>
+        <button class="stat verde" data-filtro="con"><span class="st-num" id="stNumCon">–</span><span class="st-txt">Con stock</span></button>
+        <button class="stat gris" data-filtro="sin"><span class="st-num" id="stNumSin">–</span><span class="st-txt">Sin stock</span></button>
+      </div>
+
+      <div class="filtros">
+        <div class="buscador"><input type="text" id="buscarEnStockGlobal" placeholder="Buscar por código o nombre..." autocomplete="off"></div>
+        <button class="btn-chico" id="btnActualizarStock">🔄 Actualizar</button>
+        <button class="btn-chico" id="btnDescargarStockCSV">⬇ Descargar CSV</button>
+      </div>
+      <div class="contador" id="stockActualizado" style="margin:0 6px 12px;"></div>
+
+      <div id="stockGlobalContenido"><div class="cargando">Cargando stock...</div></div>
+    </div>
+
+    <div class="pantalla" id="pasoAdmin" style="display:none;">
+      <div class="stats">
+        <div class="stat fijo"><span class="st-num" id="admNumFilas">–</span><span class="st-txt">Armados sin procesar</span></div>
+        <div class="stat fijo verde"><span class="st-num" id="admNumUnidades">–</span><span class="st-txt">Unidades armadas</span></div>
+        <div class="stat fijo"><span class="st-num" id="admNumSuc">–</span><span class="st-txt">Sucursales</span></div>
+      </div>
+
+      <div class="filtros">
+        <div class="buscador"><input type="text" id="buscarEnAdmin" placeholder="Buscar por producto o código..." autocomplete="off"></div>
+        <button class="btn-chico" id="btnActualizarAdmin">🔄 Actualizar</button>
+      </div>
+      <div class="chips" id="chipsSucursalAdmin"></div>
+
+      <div id="adminContenido"><div class="cargando">Cargando...</div></div>
+    </div>
+
     <div class="pantalla" id="pasoExtra" style="display:none;">
       <div class="card">
         <div class="aviso extra">⭐ Para casos excepcionales. Se arma y se procesa como cualquier pedido, pero en el historial queda marcado como <b>"fuera de planificación"</b>, con quién lo agregó y por qué.</div>
@@ -389,33 +543,14 @@
   </div>
 
   <div class="modal-overlay" id="modalArmado">
-    <div class="modal">
-      <h2>Ya armado</h2>
+    <div class="modal con-cab">
+      <div class="modal-cab">
+        <h2>✅ Ya armado</h2>
+        <button class="modal-x" onclick="cerrarModal('modalArmado')" aria-label="Cerrar">✕</button>
+      </div>
       <input type="text" id="buscarEnArmado" placeholder="Buscar por código o nombre..."
-        style="width:100%; padding:10px; border:1px solid var(--border); border-radius:10px; font-size:14px; margin-bottom:10px;">
+        style="width:100%; padding:13px 18px; border:2px solid var(--border); border-radius:999px; font-size:16px; margin-bottom:14px;">
       <div id="armadoContenido"><div class="cargando">Cargando...</div></div>
-      <button class="btn btn-secondary" onclick="cerrarModal('modalArmado')">Cerrar</button>
-    </div>
-  </div>
-
-  <div class="modal-overlay" id="modalStockGlobal">
-    <div class="modal">
-      <h2>📦 Stock (todos los productos)</h2>
-      <input type="text" id="buscarEnStockGlobal" placeholder="Buscar por código o nombre..."
-        style="width:100%; padding:10px; border:1px solid var(--border); border-radius:10px; font-size:14px; margin-bottom:10px;">
-      <div id="stockGlobalContenido"><div class="cargando">Cargando...</div></div>
-      <button class="btn btn-secondary" id="btnDescargarStockCSV">⬇ Descargar CSV</button>
-      <button class="btn btn-secondary" onclick="cerrarModal('modalStockGlobal')">Cerrar</button>
-    </div>
-  </div>
-
-  <div class="modal-overlay" id="modalAdmin">
-    <div class="modal">
-      <h2>🔧 Armado pendiente de procesar (todas las sucursales)</h2>
-      <input type="text" id="buscarEnAdmin" placeholder="Buscar por código, nombre o sucursal..."
-        style="width:100%; padding:10px; border:1px solid var(--border); border-radius:10px; font-size:14px; margin-bottom:10px;">
-      <div id="adminContenido"><div class="cargando">Cargando...</div></div>
-      <button class="btn btn-secondary" onclick="cerrarModal('modalAdmin')">Cerrar</button>
     </div>
   </div>
 
@@ -489,10 +624,14 @@
       home:      { el: 'pasoSucursal', padre: null },
       armar:     { el: 'pasoArmar', padre: 'home' },
       menu:      { el: 'pasoMenu', padre: 'home' },
+      stock:     { el: 'pasoStock', padre: 'menu' },
+      admin:     { el: 'pasoAdmin', padre: 'menu' },
       habilitar: { el: 'pasoHabilitar', padre: 'menu', requiere: 'gestion' },
       auditoria: { el: 'pasoAuditoria', padre: 'menu', requiere: 'auditor' },
       extra:     { el: 'pasoExtra', padre: 'menu', requiere: 'gestion' }
     };
+    // Profundidad de cada pantalla: sirve para animar hacia adelante (entra por la derecha) o hacia atrás (por la izquierda)
+    const PROFUNDIDAD = { home: 0, menu: 1, armar: 1, stock: 2, admin: 2, habilitar: 2, auditoria: 2, extra: 2 };
     let pantallaActual = 'home';
     let listaInicioDesactualizada = false; // se enciende al pasar por una pantalla que pudo cambiar pedidos
 
@@ -514,6 +653,8 @@
       switch (pantallaActual) {
         case 'armar': return [(modoActivo === 'faltante' ? '🔴 ' : '') + (sucursalActiva || ''), modoActivo === 'faltante' ? 'Armando FALTANTES' : 'Armando pedidos'];
         case 'menu': return ['Menú', 'Elegí qué querés hacer'];
+        case 'stock': return ['Stock', 'Todos los productos, con lo que tiene stock primero'];
+        case 'admin': return ['Armado sin procesar', 'Lo armado que todavía no se procesó'];
         case 'habilitar': return ['Habilitar pendientes', 'Liberar lo que esperaba al proveedor'];
         case 'auditoria': return ['Auditoría de sin stock', 'Verificá lo que se marcó sin stock'];
         case 'extra': return ['Pedido fuera de planificación', 'Un producto que no está en el consolidado'];
@@ -527,14 +668,26 @@
       document.getElementById('subtitulo').textContent = sub;
       document.getElementById('btnVolverHeader').style.display = PANTALLAS[pantallaActual].padre ? 'block' : 'none';
       document.getElementById('btnMenu').style.display = pantallaActual === 'home' ? 'flex' : 'none';
+      medirEncabezado_();
     }
+
+    // Las cabeceras de tabla que se quedan fijas al bajar se ubican justo debajo del encabezado, sea cual sea su altura
+    function medirEncabezado_() {
+      requestAnimationFrame(() => document.documentElement.style.setProperty('--alto-header', document.querySelector('header').offsetHeight + 'px'));
+    }
+    window.addEventListener('resize', medirEncabezado_);
 
     function irA_(nombre) {
       if (!PANTALLAS[nombre]) return;
       if (!puedeEntrar_(nombre)) { mostrarToast('No estás autorizado para esto', true); nombre = 'home'; }
       const anterior = pantallaActual;
       Object.keys(PANTALLAS).forEach(k => { document.getElementById(PANTALLAS[k].el).style.display = 'none'; });
-      document.getElementById(PANTALLAS[nombre].el).style.display = 'block';
+      const elNuevo = document.getElementById(PANTALLAS[nombre].el);
+      elNuevo.style.display = 'block';
+      elNuevo.classList.remove('anim-adelante', 'anim-atras');
+      void elNuevo.offsetWidth; // reinicia la animación aunque se vuelva a entrar a la misma pantalla
+      elNuevo.classList.add(PROFUNDIDAD[nombre] >= PROFUNDIDAD[anterior] ? 'anim-adelante' : 'anim-atras');
+      document.body.dataset.pantalla = nombre; // las pantallas de datos usan todo el ancho en compu
       pantallaActual = nombre;
       actualizarEncabezado_();
       if (nombre === 'menu') actualizarMenu_();
@@ -1443,23 +1596,42 @@
       return candidatos.map(d => resumenPedidoParaAuditoria_(d.id, d.data()));
     }
 
-    // ---------------- VER STOCK GLOBAL (+ descarga CSV) ----------------
+    // ---------------- STOCK (pantalla propia) ----------------
+    // Pensada para crecer: arriba hay pestañas, y "Conteo" y "Auditoría de stock" van a vivir en esta misma pantalla.
+    const STOCK_PAGINA = 150;                 // filas que se dibujan por vez (son miles de productos)
+    const STOCK_VIGENCIA_MS = 3 * 60 * 1000;  // si se abrió hace poco no se vuelve a leer toda la colección
+    let stockGlobalCargado = [];
+    let stockCargadoEn = 0;
+    let stockFiltro = 'todos';
+    let stockMostrados = STOCK_PAGINA;
+
     document.getElementById('btnVerStockGlobal').addEventListener('click', abrirStockGlobal);
     document.getElementById('btnDescargarStockCSV').addEventListener('click', descargarStockCSV);
-    let stockGlobalCargado = [];
-
-    document.getElementById('buscarEnStockGlobal').addEventListener('input', () => {
-      const texto = document.getElementById('buscarEnStockGlobal').value.trim().toLowerCase();
-      const filtrados = !texto ? stockGlobalCargado : stockGlobalCargado.filter(d =>
-        (d.codigo || '').toLowerCase().includes(texto) || (d.producto || '').toLowerCase().includes(texto)
-      );
-      renderizarStockGlobal(filtrados);
+    document.getElementById('btnActualizarStock').addEventListener('click', () => cargarStockGlobal_(true));
+    document.getElementById('buscarEnStockGlobal').addEventListener('input', () => { stockMostrados = STOCK_PAGINA; renderizarStockGlobal(); });
+    document.getElementById('chipsStock').addEventListener('click', (e) => {
+      const b = e.target.closest('.stat');
+      if (!b || !b.dataset.filtro) return;
+      stockFiltro = b.dataset.filtro;
+      stockMostrados = STOCK_PAGINA;
+      renderizarStockGlobal();
+    });
+    document.getElementById('stockGlobalContenido').addEventListener('click', (e) => {
+      if (e.target.closest('.btn-mas-stock')) { stockMostrados += STOCK_PAGINA; renderizarStockGlobal(); }
     });
 
-    async function abrirStockGlobal() {
-      document.getElementById('modalStockGlobal').classList.add('show');
+    function abrirStockGlobal() {
+      irA_('stock');
+      stockFiltro = 'todos';
+      stockMostrados = STOCK_PAGINA;
       document.getElementById('buscarEnStockGlobal').value = '';
-      document.getElementById('stockGlobalContenido').innerHTML = '<div class="cargando">Cargando stock (puede tardar unos segundos)...</div>';
+      const reciente = stockGlobalCargado.length && (Date.now() - stockCargadoEn) < STOCK_VIGENCIA_MS;
+      if (reciente) renderizarStockGlobal(); else cargarStockGlobal_(false);
+    }
+
+    async function cargarStockGlobal_(forzado) {
+      const cont = document.getElementById('stockGlobalContenido');
+      cont.innerHTML = '<div class="cargando">Cargando stock (puede tardar unos segundos)...</div>';
       try {
         const snap = await getDocs(collection(db, 'productos'));
         stockGlobalCargado = [];
@@ -1468,31 +1640,54 @@
           stockGlobalCargado.push({
             codigo: d.id,
             producto: data.producto || '',
-            stockTotal: data.stockTotal ?? 0,
+            stockTotal: Number(data.stockTotal) || 0,
             posicionPrincipal: data.posicionPrincipal || ''
           });
         });
-        stockGlobalCargado.sort((a, b) => (a.producto || '').localeCompare(b.producto || '', 'es'));
-        renderizarStockGlobal(stockGlobalCargado);
+        // Lo que tiene stock va arriba de todo; dentro de cada grupo, por nombre
+        stockGlobalCargado.sort((a, b) =>
+          ((a.stockTotal > 0 ? 0 : 1) - (b.stockTotal > 0 ? 0 : 1)) || (a.producto || '').localeCompare(b.producto || '', 'es'));
+        stockCargadoEn = Date.now();
+        renderizarStockGlobal();
+        if (forzado) mostrarToast('Stock actualizado ✓');
       } catch (err) {
-        document.getElementById('stockGlobalContenido').innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
+        cont.innerHTML = `<div class="empty-state">Error: ${escapeHtml(err.message)}</div>`;
       }
     }
 
-    function renderizarStockGlobal(datos) {
+    function renderizarStockGlobal() {
       const cont = document.getElementById('stockGlobalContenido');
-      if (!datos.length) { cont.innerHTML = '<div class="empty-state">Sin resultados</div>'; return; }
-      let html = '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
-      html += '<tr><th style="text-align:left; padding:6px 4px; color:var(--muted);">Código</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Producto</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Stock</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Posición</th></tr>';
-      datos.forEach(d => {
-        html += `<tr>
-          <td style="padding:6px 4px; border-top:1px solid var(--border); font-family:monospace;">${escapeHtml(d.codigo)}</td>
-          <td style="padding:6px 4px; border-top:1px solid var(--border);">${escapeHtml(d.producto)}</td>
-          <td style="padding:6px 4px; border-top:1px solid var(--border); font-weight:700;">${d.stockTotal}</td>
-          <td style="padding:6px 4px; border-top:1px solid var(--border);">${escapeHtml(d.posicionPrincipal)}</td>
-        </tr>`;
+      const total = stockGlobalCargado.length;
+      const conStock = stockGlobalCargado.filter(d => d.stockTotal > 0).length;
+      document.getElementById('stNumTodos').textContent = total.toLocaleString('es-AR');
+      document.getElementById('stNumCon').textContent = conStock.toLocaleString('es-AR');
+      document.getElementById('stNumSin').textContent = (total - conStock).toLocaleString('es-AR');
+      document.querySelectorAll('#chipsStock .stat').forEach(b => b.classList.toggle('activo', b.dataset.filtro === stockFiltro));
+      document.getElementById('stockActualizado').textContent = stockCargadoEn
+        ? `Actualizado a las ${new Date(stockCargadoEn).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}` : '';
+
+      let lista = stockGlobalCargado;
+      if (stockFiltro === 'con') lista = lista.filter(d => d.stockTotal > 0);
+      else if (stockFiltro === 'sin') lista = lista.filter(d => !(d.stockTotal > 0));
+      const texto = document.getElementById('buscarEnStockGlobal').value.trim().toLowerCase();
+      if (texto) lista = lista.filter(d => (d.codigo || '').toLowerCase().includes(texto) || (d.producto || '').toLowerCase().includes(texto));
+
+      if (!lista.length) { cont.innerHTML = '<div class="empty-state">Sin resultados</div>'; return; }
+
+      const visibles = lista.slice(0, stockMostrados);
+      let html = '<div class="lista-datos"><div class="fila-stock cabecera"><div>Producto</div><div>Stock</div><div>Posición</div></div>';
+      visibles.forEach(d => {
+        const hay = d.stockTotal > 0;
+        html += `<div class="fila-stock ${hay ? '' : 'sin-stock'}">
+          <div class="fs-prod"><div class="fs-nombre">${escapeHtml(d.producto || '(sin nombre)')}</div><div class="fs-codigo">${escapeHtml(d.codigo)}</div></div>
+          <div class="fs-stock"><span class="chip-stock ${hay ? 'ok' : 'cero'}">${d.stockTotal}</span></div>
+          <div class="fs-pos">${d.posicionPrincipal ? `<span class="chip-pos">${escapeHtml(d.posicionPrincipal)}</span>` : ''}</div>
+        </div>`;
       });
-      html += '</table>';
+      html += '</div>';
+      const restantes = lista.length - visibles.length;
+      html += `<div class="pie-lista">Mostrando ${visibles.length.toLocaleString('es-AR')} de ${lista.length.toLocaleString('es-AR')}</div>`;
+      if (restantes > 0) html += `<button class="btn btn-secondary btn-mas-stock">Mostrar ${Math.min(STOCK_PAGINA, restantes)} más</button>`;
       cont.innerHTML = html;
     }
 
@@ -1516,88 +1711,122 @@
       URL.revokeObjectURL(url);
     }
 
-    // ---------------- ADMINISTRADOR: todo lo armado sin procesar, de todas las sucursales ----------------
-    document.getElementById('btnVerAdmin').addEventListener('click', abrirAdmin);
+    // ---------------- ARMADO SIN PROCESAR (pantalla propia, con filtros) ----------------
     let adminCargado = [];
+    let adminFiltroSucursal = ''; // '' = todas las sucursales
 
-    document.getElementById('buscarEnAdmin').addEventListener('input', () => {
-      const texto = document.getElementById('buscarEnAdmin').value.trim().toLowerCase();
-      const filtrados = !texto ? adminCargado : adminCargado.filter(d =>
-        (d.codigo || '').toLowerCase().includes(texto) ||
-        (d.producto || '').toLowerCase().includes(texto) ||
-        (d.sucursal || '').toLowerCase().includes(texto)
-      );
-      renderizarAdmin(filtrados);
+    document.getElementById('btnVerAdmin').addEventListener('click', abrirAdmin);
+    document.getElementById('btnActualizarAdmin').addEventListener('click', () => cargarAdmin_(true));
+    document.getElementById('buscarEnAdmin').addEventListener('input', renderizarAdmin);
+    document.getElementById('chipsSucursalAdmin').addEventListener('click', (e) => {
+      const b = e.target.closest('.chip');
+      if (!b) return;
+      adminFiltroSucursal = b.dataset.sucursal;
+      renderizarAdmin();
+    });
+    document.getElementById('adminContenido').addEventListener('click', (e) => {
+      const ed = e.target.closest('.btn-admin-editar');
+      if (ed) { editarAdminInline_(ed.dataset.id); return; }
+      const gu = e.target.closest('.btn-admin-guardar');
+      if (gu) { guardarEdicionAdmin_(gu.dataset.id); return; }
+      if (e.target.closest('.btn-admin-cancelar')) renderizarAdmin();
     });
 
-    async function abrirAdmin() {
-      document.getElementById('modalAdmin').classList.add('show');
+    function abrirAdmin() {
+      irA_('admin');
+      adminFiltroSucursal = '';
       document.getElementById('buscarEnAdmin').value = '';
+      cargarAdmin_(false);
+    }
+
+    async function cargarAdmin_(forzado) {
       document.getElementById('adminContenido').innerHTML = '<div class="cargando">Cargando...</div>';
       try {
-        // Solo lo armado (o con diferencia) que todavía no se procesó, sin
-        // filtrar por sucursal — esta es la diferencia con "Ver armado".
-        const q = query(pedidosCol, where('procesado', '==', false));
-        const snap = await getDocs(q);
+        // Solo lo armado (o con diferencia) que todavía no se procesó, de TODAS las sucursales
+        const snap = await getDocs(query(pedidosCol, where('procesado', '==', false)));
         const datos = [];
         snap.forEach(d => {
           const data = d.data();
           if (data.armado === null && !data.diferencia) return; // todavía sin armar, no interesa acá
           datos.push({ id: d.id, ...data });
         });
-        datos.sort((a, b) => (a.sucursal || '').localeCompare(b.sucursal || '', 'es'));
+        datos.sort((a, b) => (a.sucursal || '').localeCompare(b.sucursal || '', 'es') || (a.producto || '').localeCompare(b.producto || '', 'es'));
         adminCargado = datos;
-        renderizarAdmin(datos);
+        if (adminFiltroSucursal && !datos.some(d => (d.sucursal || '(sin sucursal)') === adminFiltroSucursal)) adminFiltroSucursal = '';
+        renderizarAdmin();
+        if (forzado) mostrarToast('Actualizado ✓');
       } catch (err) {
-        document.getElementById('adminContenido').innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
+        document.getElementById('adminContenido').innerHTML = `<div class="empty-state">Error: ${escapeHtml(err.message)}</div>`;
       }
     }
 
-    function renderizarAdmin(datos) {
-      const cont = document.getElementById('adminContenido');
-      if (!datos.length) { cont.innerHTML = '<div class="empty-state">Nada armado pendiente de procesar</div>'; return; }
-      let html = '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
-      html += '<tr><th style="text-align:left; padding:6px 4px; color:var(--muted);">Sucursal</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Código</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Producto</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Pedido</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Armado</th><th style="text-align:left; padding:6px 4px; color:var(--muted);">Quién</th><th></th></tr>';
-      datos.forEach(d => {
-        const tagFaltante = d.tipo === 'FALTANTE' ? ' <span style="color:#dc2626; font-weight:700;" title="Faltante">🔴</span>' : '';
-        const quien = (d.armadoPor ? escapeHtml(d.armadoPor) : '<span style="color:var(--muted);">—</span>')
-          + (d.editadoPor ? `<br><span style="color:var(--muted); font-size:11px;">editó: ${escapeHtml(d.editadoPor)}</span>` : '');
-        html += `<tr id="fila-admin-${d.id}">
-          <td style="padding:6px 4px; border-top:1px solid var(--border);">${escapeHtml(d.sucursal || '')}${tagFaltante}</td>
-          <td style="padding:6px 4px; border-top:1px solid var(--border);">${escapeHtml(d.codigo || '')}</td>
-          <td style="padding:6px 4px; border-top:1px solid var(--border);">${escapeHtml(d.producto)}</td>
-          <td style="padding:6px 4px; border-top:1px solid var(--border);">${cantidadEfectiva_(d)}${cantidadEfectiva_(d) !== d.cantidadPedida ? `<div style="color:var(--muted); font-size:11px;">pedido: ${d.cantidadPedida}</div>` : ''}</td>
-          <td style="padding:6px 4px; border-top:1px solid var(--border); font-weight:700;">${d.armado ?? 0}${d.diferencia ? '<br><span style="font-weight:400; color:var(--muted); font-size:11px;">' + escapeHtml(d.diferencia) + '</span>' : ''}</td>
-          <td style="padding:6px 4px; border-top:1px solid var(--border); font-size:12px;">${quien}</td>
-          <td style="padding:6px 4px; border-top:1px solid var(--border);"><button onclick="window.__editarAdminInline('${d.id}')" style="background:none; border:none; font-size:15px; cursor:pointer;">✏️</button></td>
-        </tr>`;
+    // Filtra por búsqueda (código, producto o sucursal) y, salvo que se pida lo contrario, por la sucursal elegida
+    function filtrarAdmin_(ignorarSucursal) {
+      const texto = document.getElementById('buscarEnAdmin').value.trim().toLowerCase();
+      return adminCargado.filter(d => {
+        const suc = d.sucursal || '(sin sucursal)';
+        if (!ignorarSucursal && adminFiltroSucursal && suc !== adminFiltroSucursal) return false;
+        return !texto || (d.codigo || '').toLowerCase().includes(texto) || (d.producto || '').toLowerCase().includes(texto) || suc.toLowerCase().includes(texto);
       });
-      html += '</table>';
-      cont.innerHTML = html;
     }
 
-    window.__editarAdminInline = function(id) {
-      const d = adminCargado.find(x => x.id === id);
-      if (!d) return;
-      const fila = document.getElementById('fila-admin-' + id);
-      fila.innerHTML = `
-        <td colspan="7" style="padding:8px 4px; border-top:1px solid var(--border);">
-          <div style="font-weight:600; margin-bottom:6px;">${escapeHtml(d.producto)} <span style="color:var(--muted); font-weight:400;">(${escapeHtml(d.codigo || '')} — ${escapeHtml(d.sucursal || '')})</span></div>
-          <div style="display:flex; gap:8px;">
-            <input type="number" id="editAdmin-${id}" value="${d.armado ?? 0}" min="0"
-              style="flex:1; padding:8px; border:1px solid var(--border); border-radius:8px;">
-            <button onclick="window.__guardarEdicionAdmin('${id}')"
-              style="padding:8px 14px; border:none; border-radius:8px; background:var(--green); color:white; font-weight:600;">Guardar</button>
-            <button onclick="renderizarAdmin(adminCargado)"
-              style="padding:8px 14px; border:none; border-radius:8px; background:#e5e7eb;">Cancelar</button>
-          </div>
-        </td>
-      `;
-    };
+    function renderizarAdmin() {
+      const cont = document.getElementById('adminContenido');
+      const porTexto = filtrarAdmin_(true);   // sirve para contar cuántos hay en cada sucursal con la búsqueda actual
+      const lista = filtrarAdmin_(false);
 
-    window.__guardarEdicionAdmin = async function(id) {
-      const input = document.getElementById('editAdmin-' + id);
-      const nuevaCantidad = parseInt(input.value, 10);
+      const conteo = {};
+      porTexto.forEach(d => { const s = d.sucursal || '(sin sucursal)'; conteo[s] = (conteo[s] || 0) + 1; });
+      const sucursales = [...new Set(adminCargado.map(d => d.sucursal || '(sin sucursal)'))].sort((a, b) => a.localeCompare(b, 'es'));
+      document.getElementById('chipsSucursalAdmin').innerHTML =
+        `<button class="chip ${adminFiltroSucursal === '' ? 'activo' : ''}" data-sucursal="">Todas <span class="n">${porTexto.length}</span></button>` +
+        sucursales.map(s => `<button class="chip ${adminFiltroSucursal === s ? 'activo' : ''}" data-sucursal="${escapeHtml(s)}">${escapeHtml(s)} <span class="n">${conteo[s] || 0}</span></button>`).join('');
+
+      document.getElementById('admNumFilas').textContent = lista.length.toLocaleString('es-AR');
+      document.getElementById('admNumUnidades').textContent = lista.reduce((a, d) => a + (Number(d.armado) || 0), 0).toLocaleString('es-AR');
+      document.getElementById('admNumSuc').textContent = new Set(lista.map(d => d.sucursal || '(sin sucursal)')).size;
+
+      if (!lista.length) {
+        cont.innerHTML = `<div class="empty-state">${adminCargado.length ? 'Nada coincide con ese filtro' : 'Nada armado pendiente de procesar'}</div>`;
+        return;
+      }
+      cont.innerHTML = '<div class="lista-datos"><div class="fila-arm cabecera"><div>Sucursal</div><div>Producto</div><div>Pedido</div><div>Armado</div><div>Quién armó</div><div></div></div>'
+        + lista.map(filaAdminHtml_).join('') + '</div>';
+    }
+
+    function filaAdminHtml_(d) {
+      const pedido = cantidadEfectiva_(d);
+      const armado = d.armado ?? 0;
+      const clase = armado === pedido ? 'ok' : (armado === 0 ? 'cero' : 'dif');
+      const etiquetas = (d.tipo === 'FALTANTE' ? ' <span title="Faltante">🔴</span>' : '') + (d.fueraDePlanificacion ? ' <span class="tag-extra">⭐ Extra</span>' : '');
+      const pidio = pedido !== d.cantidadPedida ? `<div class="fa-dif" style="background:#eef2f7; color:#475569;">pidió ${d.cantidadPedida}</div>` : '';
+      return `<div class="fila-arm" id="fila-admin-${escapeHtml(d.id)}">
+        <div class="fa-suc">${escapeHtml(d.sucursal || '(sin sucursal)')}${etiquetas}</div>
+        <div class="fa-prod"><div class="nombre">${escapeHtml(d.producto || '')}</div><div class="codigo">${escapeHtml(d.codigo || '')}</div></div>
+        <div class="fa-num fa-pedido"><small>Pedido</small>${pedido}${pidio}</div>
+        <div class="fa-num fa-armado ${clase}"><small>Armado</small>${armado}${d.diferencia ? `<div class="fa-dif">${escapeHtml(d.diferencia)}</div>` : ''}</div>
+        <div class="fa-quien">${d.armadoPor ? escapeHtml(d.armadoPor) : '<span style="color:var(--muted);">—</span>'}${d.editadoPor ? `<div class="edito">editó: ${escapeHtml(d.editadoPor)}</div>` : ''}</div>
+        <div class="fa-edit"><button class="btn-icono btn-admin-editar" data-id="${escapeHtml(d.id)}" title="Corregir la cantidad armada">✏️</button></div>
+      </div>`;
+    }
+
+    function editarAdminInline_(id) {
+      const d = adminCargado.find(x => x.id === id);
+      const fila = document.getElementById('fila-admin-' + id);
+      if (!d || !fila) return;
+      fila.classList.add('editando');
+      fila.innerHTML = `
+        <div class="fa-prod"><div class="nombre">${escapeHtml(d.producto || '')}</div><div class="codigo">${escapeHtml(d.codigo || '')} · ${escapeHtml(d.sucursal || '')}</div></div>
+        <div class="edicion-inline">
+          <input type="number" id="editAdmin-${escapeHtml(id)}" value="${d.armado ?? 0}" min="0" inputmode="numeric">
+          <button class="btn-chico btn-admin-cancelar">Cancelar</button>
+          <button class="btn btn-success btn-admin-guardar" data-id="${escapeHtml(id)}" style="width:auto; margin-top:0; padding:12px 24px;">Guardar</button>
+        </div>`;
+      document.getElementById('editAdmin-' + id).focus();
+    }
+
+    async function guardarEdicionAdmin_(id) {
+      const nuevaCantidad = parseInt(document.getElementById('editAdmin-' + id).value, 10);
       if (isNaN(nuevaCantidad) || nuevaCantidad < 0) { mostrarToast("Cantidad inválida", true); return; }
       try {
         const d = adminCargado.find(x => x.id === id);
@@ -1613,11 +1842,11 @@
         d.armado = nuevaCantidad;
         if (nuevaCantidad === cantidadEfectiva_(d)) d.diferencia = null;
         if (personaActual) d.editadoPor = personaActual.nombre;
-        renderizarAdmin(adminCargado);
+        renderizarAdmin();
       } catch (err) {
         mostrarToast("Error: " + err.message, true);
       }
-    };
+    }
 
     // ---------------- AUDITORÍA DE "SIN STOCK" (solo 2 DNI autorizados) ----------------
     // Contexto: cuando alguien marca "Sin stock", ese producto se cancela en
@@ -2586,6 +2815,15 @@
     };
 
     window.cerrarModal = function(id) { document.getElementById(id).classList.remove('show'); };
+    // Las ventanas (menos la de identificación) se cierran tocando afuera o con Escape, sin tener que bajar hasta el final
+    document.querySelectorAll('.modal-overlay').forEach(ov => {
+      if (ov.id === 'loginOverlay') return;
+      ov.addEventListener('click', (e) => { if (e.target === ov) window.cerrarModal(ov.id); });
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      document.querySelectorAll('.modal-overlay.show').forEach(ov => { if (ov.id !== 'loginOverlay') window.cerrarModal(ov.id); });
+    });
 
     function escapeHtml(str) { return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s])); }
     function mostrarToast(msg, esError) {
