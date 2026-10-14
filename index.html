@@ -18,17 +18,22 @@
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); padding-bottom: 40px; }
 
     /* ---------- Encabezado ---------- */
-    header { background: linear-gradient(135deg, #1e40af 0%, #2563eb 60%, #3b82f6 100%); color: white; padding: 12px 16px; position: sticky; top: 0; z-index: 10; box-shadow: 0 4px 16px rgba(30,64,175,0.25); }
-    .hdr-fila { max-width: 760px; margin: 0 auto; display: flex; align-items: center; gap: 10px; }
+    header { background: linear-gradient(135deg, #1e40af 0%, #2563eb 60%, #3b82f6 100%); color: white; padding: 10px 16px; position: sticky; top: 0; z-index: 20; box-shadow: 0 4px 16px rgba(30,64,175,0.25); }
+    .hdr-fila { max-width: 760px; margin: 0 auto; display: flex; align-items: center; gap: 10px; min-height: 44px; }
     .hdr-volver { display: none; flex-shrink: 0; width: 40px; height: 40px; border: none; border-radius: 12px; background: rgba(255,255,255,0.18); color: white; font-size: 22px; font-weight: 700; cursor: pointer; }
     .hdr-titulo { flex: 1; min-width: 0; }
-    .hdr-titulo h1 { margin: 0; font-size: 19px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .hdr-titulo p { margin: 1px 0 0; font-size: 12.5px; opacity: 0.88; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .hdr-titulo h1 { margin: 0; font-size: 18px; font-weight: 700; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .hdr-titulo p { margin: 2px 0 0; font-size: 12.5px; opacity: 0.88; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .hdr-menu { flex-shrink: 0; display: flex; align-items: center; gap: 6px; border: none; border-radius: 12px; background: white; color: var(--primary-dark); padding: 10px 14px; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.12); }
-    .hdr-usuario { max-width: 760px; margin: 9px auto 0; display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
-    .avatar { width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,0.25); display: inline-grid; place-items: center; font-size: 11px; font-weight: 700; }
-    .hdr-usuario button { background: none; border: none; color: white; text-decoration: underline; font-size: 12px; cursor: pointer; padding: 0; margin-left: 2px; opacity: 0.9; }
+    .hdr-usuario-wrap { position: relative; flex-shrink: 0; }
+    .hdr-avatar { width: 40px; height: 40px; padding: 0; border-radius: 50%; border: 2px solid rgba(255,255,255,0.55); background: rgba(255,255,255,0.2); color: white; font-size: 16px; font-weight: 800; cursor: pointer; display: grid; place-items: center; }
+    .menu-usuario { position: absolute; right: 0; top: 50px; width: 250px; background: white; color: var(--text); border-radius: 14px; box-shadow: 0 12px 32px rgba(15,23,42,0.28); padding: 14px; z-index: 30; }
+    .mu-nombre { font-size: 15px; font-weight: 800; }
+    .mu-rol { font-size: 12px; color: var(--muted); margin: 2px 0 12px; }
+    .mu-cambiar { width: 100%; padding: 11px; border: none; border-radius: 10px; background: #f1f5f9; color: var(--text); font-size: 14px; font-weight: 700; cursor: pointer; }
+    .mu-cambiar:active { background: #e2e8f0; }
 
+    @media (max-width: 360px) { .hdr-titulo h1 { font-size: 16px; } .hdr-menu { padding: 9px 11px; } }
     .container { max-width: 760px; margin: 0 auto; padding: 16px; }
 
     /* ---------- Tarjetas y botones ---------- */
@@ -64,14 +69,18 @@
     .sucursal-btn .flecha { color: #94a3b8; font-size: 22px; }
 
     /* ---------- Menú ---------- */
-    .menu-seccion { margin-bottom: 20px; }
+    .menu-seccion { margin-bottom: 16px; }
     .menu-seccion-titulo { font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 0 4px 8px; }
-    .menu-tile { display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 14px; background: white; cursor: pointer; text-align: left; box-shadow: var(--shadow); }
+    .menu-tile { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 14px; background: white; cursor: pointer; text-align: left; box-shadow: var(--shadow); }
     .menu-tile:active { transform: scale(0.99); background: #f8fafc; }
-    .menu-tile .ico { flex-shrink: 0; width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center; font-size: 22px; background: var(--primary-soft); }
+    .menu-tile .ico { flex-shrink: 0; width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; font-size: 21px; background: var(--primary-soft); }
     .menu-tile .cuerpo { flex: 1; min-width: 0; }
-    .menu-tile .cuerpo b { display: block; font-size: 15.5px; color: var(--text); }
-    .menu-tile .cuerpo small { display: block; margin-top: 2px; font-size: 12.5px; color: var(--muted); line-height: 1.35; }
+    .menu-tile .cuerpo b { display: block; font-size: 15px; color: var(--text); }
+    .menu-tile .cuerpo small { display: block; margin-top: 1px; font-size: 12.5px; color: var(--muted); line-height: 1.3; }
+    .tile-badge { background: var(--red); color: white; border-radius: 20px; padding: 2px 9px; font-size: 12px; font-weight: 800; }
+    .menu-saludo { background: linear-gradient(135deg, #eff6ff, #e0e7ff); border: 1px solid #c7d2fe; border-radius: 16px; padding: 14px 16px; margin-bottom: 16px; }
+    .ms-hola { font-size: 17px; color: var(--text); }
+    .ms-resumen { font-size: 13px; color: #475569; margin-top: 3px; line-height: 1.4; }
     .menu-tile .flecha { color: #94a3b8; font-size: 22px; }
     .menu-tile.extra .ico { background: #fef9c3; }
     .menu-tile.control .ico { background: #ede9fe; }
@@ -101,6 +110,11 @@
     .item-pendiente .info .nombre { font-size: 14.5px; font-weight: 600; }
     .item-pendiente .info .detalle { font-size: 12px; color: var(--muted); margin-top: 2px; }
     .item-pendiente .cant { background: #f1f5f9; border-radius: 10px; padding: 6px 10px; font-weight: 800; color: var(--text); font-size: 15px; white-space: nowrap; }
+    .barra-proveedor { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--green-soft); border: 1px solid #bbf7d0; border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; }
+    .barra-proveedor .bp-info { flex: 1; min-width: 180px; }
+    .barra-proveedor .bp-info b { display: block; font-size: 15px; }
+    .barra-proveedor .bp-info span { font-size: 12.5px; color: var(--muted); }
+    .barra-proveedor .btn { width: auto; margin-top: 0; padding: 12px 16px; font-size: 15px; }
     .tag-extra { display: inline-block; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; border-radius: 20px; padding: 1px 8px; font-size: 11px; font-weight: 700; white-space: nowrap; }
     .empty-state { color: var(--muted); font-size: 14px; text-align: center; padding: 22px 0; }
     .cargando { color: var(--muted); font-size: 13px; text-align: center; padding: 16px 0; }
@@ -151,11 +165,14 @@
         <p id="subtitulo">Elegí la sucursal para armar</p>
       </div>
       <button id="btnMenu" class="hdr-menu"><span>☰</span> Menú</button>
-    </div>
-    <div class="hdr-usuario">
-      <span class="avatar" id="avatarPersona">?</span>
-      <span id="nombrePersonaActual">—</span>
-      <button id="btnCambiarPersona">cambiar</button>
+      <div class="hdr-usuario-wrap">
+        <button id="btnUsuario" class="hdr-avatar" aria-label="Mi usuario" aria-haspopup="true"><span id="avatarPersona">?</span></button>
+        <div id="menuUsuario" class="menu-usuario" style="display:none;">
+          <div class="mu-nombre" id="nombrePersonaActual">—</div>
+          <div class="mu-rol" id="rolPersona"></div>
+          <button id="btnCambiarPersona" class="mu-cambiar">🔄 Cambiar de persona</button>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -172,16 +189,21 @@
     </div>
 
     <div class="pantalla" id="pasoMenu" style="display:none;">
+      <div class="menu-saludo">
+        <div class="ms-hola" id="menuHola">Hola 👋</div>
+        <div class="ms-resumen" id="menuResumen"></div>
+      </div>
+
       <div class="menu-seccion">
         <div class="menu-seccion-titulo">Consultas</div>
         <button class="menu-tile" id="btnVerStockGlobal">
           <span class="ico">📦</span>
-          <span class="cuerpo"><b>Ver stock</b><small>Buscá cualquier producto y mirá cuántas unidades hay y en qué posición.</small></span>
+          <span class="cuerpo"><b>Ver stock</b><small>Buscá un producto y mirá cuánto hay y dónde.</small></span>
           <span class="flecha">›</span>
         </button>
         <button class="menu-tile" id="btnVerAdmin">
           <span class="ico">🧾</span>
-          <span class="cuerpo"><b>Armado sin procesar</b><small>Todo lo que ya se armó en cualquier sucursal y todavía no se procesó. Se puede corregir.</small></span>
+          <span class="cuerpo"><b>Armado sin procesar</b><small>Lo armado que todavía no se procesó. Se puede corregir.</small></span>
           <span class="flecha">›</span>
         </button>
       </div>
@@ -190,17 +212,17 @@
         <div class="menu-seccion-titulo">Gestión de pedidos</div>
         <button class="menu-tile" id="btnHabilitarPendientes">
           <span class="ico">📥</span>
-          <span class="cuerpo"><b>Habilitar pendientes</b><small>Liberar para armar los pedidos que estaban esperando que llegue el proveedor.</small></span>
+          <span class="cuerpo"><b>Habilitar pendientes</b><small>Liberar para armar lo que esperaba al proveedor.</small></span>
           <span class="flecha">›</span>
         </button>
         <button class="menu-tile extra" id="btnPedidoExtra">
           <span class="ico">⭐</span>
-          <span class="cuerpo"><b>Pedido fuera de planificación</b><small>Agregar un producto para armar que no está en el consolidado (casos excepcionales).</small></span>
+          <span class="cuerpo"><b>Pedido fuera de planificación</b><small>Un producto que no está en el consolidado.</small></span>
           <span class="flecha">›</span>
         </button>
         <button class="menu-tile peligro" id="btnBorrarSinArmar">
           <span class="ico">🗑</span>
-          <span class="cuerpo"><b>Borrar pedidos sin armar</b><small>Limpia todo lo que nadie armó todavía. No toca lo que ya se armó.</small></span>
+          <span class="cuerpo"><b>Borrar pedidos sin armar</b><small>Limpia lo que nadie armó. No toca lo armado.</small></span>
           <span class="flecha">›</span>
         </button>
       </div>
@@ -209,7 +231,8 @@
         <div class="menu-seccion-titulo">Control</div>
         <button class="menu-tile control" id="btnAuditoria">
           <span class="ico">🔎</span>
-          <span class="cuerpo"><b>Auditoría de sin stock</b><small>Revisar los productos que se marcaron sin stock y confirmar si realmente no había.</small></span>
+          <span class="cuerpo"><b>Auditoría de sin stock</b><small>Confirmá si realmente no había stock.</small></span>
+          <span class="tile-badge" id="badgeAuditoria" style="display:none;"></span>
           <span class="flecha">›</span>
         </button>
       </div>
@@ -303,7 +326,7 @@
 
     <div class="pantalla" id="pasoHabilitar" style="display:none;">
       <div class="card">
-        <div class="aviso">Pedidos de CONSOLIDADO (estado PENDIENTE) que todavía no se liberaron para armar. Elegí el proveedor que llegó y decidí cuánto de cada sucursal habilitar.</div>
+        <div class="aviso">Pedidos de CONSOLIDADO (estado PENDIENTE) que todavía no se liberaron para armar. Elegí un proveedor y habilitá producto por producto (podés ajustar cuánto de cada sucursal) o el proveedor entero de una vez.</div>
 
         <select id="selectProveedorHabilitar" style="width:100%; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:15px; margin-bottom:10px;">
           <option value="">Cargando proveedores con pendientes...</option>
@@ -471,6 +494,7 @@
       extra:     { el: 'pasoExtra', padre: 'menu', requiere: 'gestion' }
     };
     let pantallaActual = 'home';
+    let listaInicioDesactualizada = false; // se enciende al pasar por una pantalla que pudo cambiar pedidos
 
     function esAutorizadoGestion_() {
       return !!(personaActual && DNI_AUTORIZADOS_HABILITAR.has(personaActual.documento));
@@ -513,9 +537,12 @@
       document.getElementById(PANTALLAS[nombre].el).style.display = 'block';
       pantallaActual = nombre;
       actualizarEncabezado_();
+      if (nombre === 'menu') actualizarMenu_();
       window.scrollTo(0, 0);
-      // Las pantallas de gestión pueden haber cambiado pedidos: al volver al inicio se refresca la lista.
-      if (nombre === 'home' && ['habilitar', 'auditoria', 'extra'].includes(anterior)) cargarSucursales();
+      // Las pantallas de gestión pueden haber cambiado pedidos. Como se vuelve al inicio pasando por el menú,
+      // no alcanza con mirar la pantalla anterior: se deja una marca y se refresca al llegar al inicio.
+      if (['habilitar', 'auditoria', 'extra'].includes(anterior)) listaInicioDesactualizada = true;
+      if (nombre === 'home' && listaInicioDesactualizada) { listaInicioDesactualizada = false; cargarSucursales(); }
     }
 
     function volverDePantalla_() {
@@ -525,6 +552,43 @@
     }
 
     document.getElementById('btnVolverHeader').addEventListener('click', volverDePantalla_);
+
+    // Mini-menú del usuario (avatar): nombre, rol y "Cambiar de persona"
+    const menuUsuarioEl_ = () => document.getElementById('menuUsuario');
+    document.getElementById('btnUsuario').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const m = menuUsuarioEl_();
+      m.style.display = m.style.display === 'none' ? 'block' : 'none';
+    });
+    document.addEventListener('click', (e) => {
+      const m = menuUsuarioEl_();
+      if (m.style.display !== 'none' && !m.contains(e.target)) m.style.display = 'none';
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') menuUsuarioEl_().style.display = 'none'; });
+    document.getElementById('btnCambiarPersona').addEventListener('click', () => { menuUsuarioEl_().style.display = 'none'; });
+
+    // Al abrir el Menú: saludo, resumen de lo pendiente y (para auditores) cuántos hay por auditar
+    function actualizarMenu_() {
+      const nombre = personaActual ? personaActual.nombre.split(' ')[0] : '';
+      document.getElementById('menuHola').innerHTML = `Hola, <b>${escapeHtml(nombre)}</b> 👋`;
+      let pend = 0, falt = 0;
+      todosPendientesRaw.forEach(d => { if (esFaltante_(d)) falt++; else pend++; });
+      document.getElementById('menuResumen').textContent = (pend + falt)
+        ? `Hay ${pend} producto${pend === 1 ? '' : 's'} pendiente${pend === 1 ? '' : 's'} de armar y ${falt} faltante${falt === 1 ? '' : 's'}.`
+        : 'No hay pedidos pendientes de armar ahora mismo.';
+      if (esAuditor_()) actualizarInsigniaAuditoria_();
+    }
+
+    async function actualizarInsigniaAuditoria_() {
+      const b = document.getElementById('badgeAuditoria');
+      try {
+        const snap = await getDocs(query(collection(db, 'auditoriaSinStock'), where('estado', '==', 'pendiente')));
+        // el auditor no ve (ni cuenta) lo que marcó él mismo
+        const n = snap.docs.filter(d => d.data().marcadoPorDocumento !== personaActual.documento).length;
+        b.textContent = n;
+        b.style.display = n ? 'inline-block' : 'none';
+      } catch (err) { b.style.display = 'none'; }
+    }
     document.getElementById('btnMenu').addEventListener('click', () => irA_('menu'));
 
     document.getElementById('btnConfirmarLogin').addEventListener('click', intentarLogin);
@@ -605,6 +669,7 @@
       const nombre = personaActual ? personaActual.nombre : '—';
       document.getElementById('nombrePersonaActual').textContent = nombre;
       document.getElementById('avatarPersona').textContent = (nombre.trim()[0] || '?').toUpperCase();
+      document.getElementById('rolPersona').textContent = esAutorizadoGestion_() ? 'Administrador' : (esAuditor_() ? 'Auditor' : 'Armador');
       const autorizado = esAutorizadoGestion_();
       document.getElementById('menuSeccionGestion').style.display = autorizado ? '' : 'none';
       document.getElementById('menuSeccionControl').style.display = esAuditor_() ? '' : 'none';
@@ -2171,6 +2236,7 @@
     document.getElementById('buscarProductoHabilitar').addEventListener('input', () => renderizarHabilitarPendientes_());
 
     let todosPendientesSinHabilitar = []; // TODOS los proveedores, cargado una sola vez por apertura
+    const SIN_PROVEEDOR_HABILITAR = '(sin proveedor asociado)';
 
     function abrirHabilitarPendientes() {
       if (!esAutorizadoGestion_()) { mostrarToast('No estás autorizado para esto', true); return; }
@@ -2271,15 +2337,29 @@
       }
       buscador.style.display = 'block';
 
-      let filas = todosPendientesSinHabilitar.filter(p => (p.proveedor || '(sin proveedor asociado)') === proveedor);
+      const filasProveedor = todosPendientesSinHabilitar.filter(p => (p.proveedor || SIN_PROVEEDOR_HABILITAR) === proveedor);
+      let filas = filasProveedor;
 
       const texto = buscador.value.trim().toLowerCase();
       if (texto) {
         filas = filas.filter(p => (p.producto || '').toLowerCase().includes(texto) || (p.codigo || '').toLowerCase().includes(texto));
       }
 
+      // Barra con el botón de "proveedor entero": cuenta TODO lo del proveedor, se vea o no por la búsqueda
+      let barraProveedor;
+      if (proveedor === SIN_PROVEEDOR_HABILITAR) {
+        barraProveedor = '<div class="aviso extra">Estos pedidos no tienen proveedor asociado, así que no se pueden habilitar todos juntos. Habilitalos producto por producto.</div>';
+      } else {
+        const nProd = new Set(filasProveedor.map(f => f.codigo)).size;
+        const nUn = filasProveedor.reduce((a, f) => a + (Number(f.cantidadPedida) || 0), 0);
+        barraProveedor = `<div class="barra-proveedor">
+          <div class="bp-info"><b>${escapeHtml(proveedor)}</b><span>${nProd} producto${nProd === 1 ? '' : 's'} · ${filasProveedor.length} pedido${filasProveedor.length === 1 ? '' : 's'} · ${nUn} unidades</span></div>
+          <button class="btn btn-success btn-habilitar-proveedor">✔ Habilitar todo el proveedor</button>
+        </div>`;
+      }
+
       if (!filas.length) {
-        cont.innerHTML = '<div class="empty-state">🎉 No hay pendientes de este proveedor (o ninguno coincide con la búsqueda)</div>';
+        cont.innerHTML = barraProveedor + '<div class="empty-state">🎉 No hay pendientes de este proveedor (o ninguno coincide con la búsqueda)</div>';
         return;
       }
 
@@ -2291,7 +2371,7 @@
       });
       const grupos = Object.values(porCodigo).sort((a, b) => (a.producto || '').localeCompare(b.producto || '', 'es'));
 
-      let html = '';
+      let html = barraProveedor;
       grupos.forEach(grupo => {
         const totalPedido = grupo.filas.reduce((acc, f) => acc + (f.cantidadPedida || 0), 0);
         html += `<div class="grupo-habilitar" data-codigo="${escapeHtml(grupo.codigo || '')}" style="border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:14px;">
@@ -2314,6 +2394,8 @@
     // "Habilitar este producto" (evita tener que armar onclick con texto
     // escapado a mano, que es justo lo que se rompió la primera vez).
     document.getElementById('habilitarPendientesContenido').addEventListener('click', async (e) => {
+      const btnProveedor = e.target.closest('.btn-habilitar-proveedor');
+      if (btnProveedor) { await habilitarProveedorCompleto_(btnProveedor); return; }
       const btn = e.target.closest('.btn-habilitar-grupo');
       if (!btn) return;
       const grupoDiv = btn.closest('.grupo-habilitar');
@@ -2343,7 +2425,67 @@
 
       mostrarToast(`✔ Habilitado en ${habilitados} sucursal(es)`);
       todosPendientesSinHabilitar = todosPendientesSinHabilitar.filter(f => !idsHabilitados.has(f.id));
+      refrescarSelectHabilitar_();
       renderizarHabilitarPendientes_();
+    }
+
+    // Vuelve a armar el desplegable de proveedores (con sus contadores) a partir de lo que queda
+    // en memoria, sin volver a leer Firestore, y conserva el proveedor elegido si todavía tiene pendientes.
+    function refrescarSelectHabilitar_() {
+      const select = document.getElementById('selectProveedorHabilitar');
+      const elegido = select.value;
+      const conteo = {};
+      todosPendientesSinHabilitar.forEach(p => { const prov = p.proveedor || SIN_PROVEEDOR_HABILITAR; conteo[prov] = (conteo[prov] || 0) + 1; });
+      const provs = Object.keys(conteo).sort((a, b) => a.localeCompare(b, 'es'));
+      select.innerHTML = provs.length
+        ? '<option value="">— Elegir proveedor —</option>' + provs.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)} (${conteo[p]})</option>`).join('')
+        : '<option value="">No hay ningún proveedor con pendientes</option>';
+      select.value = provs.includes(elegido) ? elegido : '';
+    }
+
+    // Habilita TODOS los pedidos pendientes de un proveedor de una vez. Para cada pedido usa la cantidad
+    // que esté en pantalla (si ajustaste alguna, se respeta; en 0 = no se habilita) y, si no se ve por la
+    // búsqueda, la cantidad pedida. Se escribe de a 400 por tanda.
+    async function habilitarProveedorCompleto_(btn) {
+      if (!esAutorizadoGestion_()) { mostrarToast('No estás autorizado para esto', true); return; }
+      const proveedor = document.getElementById('selectProveedorHabilitar').value;
+      if (!proveedor || proveedor === SIN_PROVEEDOR_HABILITAR) return;
+
+      const filas = todosPendientesSinHabilitar.filter(p => p.proveedor === proveedor);
+      const enPantalla = {};
+      document.querySelectorAll('#habilitarPendientesContenido .input-habilitar').forEach(i => { enPantalla[i.dataset.id] = i.value; });
+      const aHabilitar = [];
+      filas.forEach(f => {
+        const cant = Object.prototype.hasOwnProperty.call(enPantalla, f.id) ? parseInt(enPantalla[f.id], 10) : (Number(f.cantidadPedida) || 0);
+        if (Number.isInteger(cant) && cant > 0) aHabilitar.push({ f, cant });
+      });
+      if (!aHabilitar.length) { mostrarToast('No hay nada para habilitar (todas las cantidades están en 0)', true); return; }
+
+      const unidades = aHabilitar.reduce((a, x) => a + x.cant, 0);
+      const productos = new Set(aHabilitar.map(x => x.f.codigo)).size;
+      const sinHabilitar = filas.length - aHabilitar.length;
+      const aviso = sinHabilitar ? `\n(${sinHabilitar} pedido(s) con cantidad 0 quedan sin habilitar.)` : '';
+      if (!confirm(`¿Habilitar TODO ${proveedor}?\n\n${aHabilitar.length} pedido(s) de ${productos} producto(s), ${unidades} unidad(es) en total.${aviso}\n\nSe respetan las cantidades que hayas ajustado en pantalla.`)) return;
+
+      btn.disabled = true;
+      btn.textContent = 'Habilitando...';
+      const hechos = new Set();
+      try {
+        for (let i = 0; i < aHabilitar.length; i += 400) {
+          const tramo = aHabilitar.slice(i, i + 400);
+          const batch = writeBatch(db);
+          tramo.forEach(({ f, cant }) => batch.update(doc(db, 'pedidos', f.id), { habilitado: true, cantidadHabilitada: cant }));
+          await batch.commit();
+          tramo.forEach(({ f }) => hechos.add(f.id));
+        }
+        mostrarToast(`✔ ${proveedor}: habilitados ${hechos.size} pedido(s)`);
+      } catch (err) {
+        mostrarToast(`Error: se habilitaron ${hechos.size} de ${aHabilitar.length}. ${err.message}`, true);
+      } finally {
+        todosPendientesSinHabilitar = todosPendientesSinHabilitar.filter(f => !hechos.has(f.id));
+        refrescarSelectHabilitar_();
+        renderizarHabilitarPendientes_();
+      }
     }
 
     // ---------------- VER ARMADO ----------------
