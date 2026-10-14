@@ -190,6 +190,7 @@
     .buscador { position: relative; flex: 1; min-width: 240px; }
     .buscador::before { content: '🔎'; position: absolute; left: 18px; top: 50%; transform: translateY(-50%); font-size: 18px; pointer-events: none; }
     .buscador input { width: 100%; padding: 15px 18px 15px 48px; border: 2px solid var(--border); border-radius: 999px; font-size: 17px; background: white; }
+    .select-redondo { width: 100%; padding: 14px 20px; border: 2px solid var(--border); border-radius: 999px; font-size: 16.5px; font-weight: 600; background: white; margin-bottom: 14px; cursor: pointer; }
     .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
     .chip { border: 2px solid var(--border); background: white; border-radius: 999px; padding: 9px 16px; font-size: 15px; font-weight: 700; color: var(--text); cursor: pointer; }
     .chip .n { color: var(--muted); font-weight: 600; margin-left: 4px; }
@@ -434,6 +435,7 @@
     <div class="pantalla" id="pasoAuditoria" style="display:none;">
       <div class="card">
         <div class="aviso">Productos que se marcaron "Sin stock" y se cancelaron en todas las sucursales. Verificá en el depósito, elegí qué pasó y, si hay, cargá cuántas unidades.</div>
+        <select id="audFiltroProveedor" class="select-redondo" style="display:none;" aria-label="Filtrar por proveedor"></select>
         <div id="audContadorPendientes" style="font-size:12px; font-weight:700; margin-bottom:10px;"></div>
         <div id="audPendientesContenido"><div class="cargando">Cargando...</div></div>
       </div>
@@ -1930,7 +1932,14 @@
 
     let auditoriasPendientes = [];
     let audForm = null; // { id, veredicto } mientras se está cargando la cantidad
+    let audFiltroProveedor = ''; // '' = todos los proveedores; '__sin__' = los que no tienen proveedor
     let auditandoAhora = false;
+
+    document.getElementById('audFiltroProveedor').addEventListener('change', (e) => {
+      audFiltroProveedor = e.target.value;
+      audForm = null; // si había un formulario abierto, se cierra: puede quedar fuera del filtro
+      renderizarAuditoriasPendientes_();
+    });
 
     function auditorAutorizado_() {
       return esAuditor_();
@@ -1947,6 +1956,7 @@
       if (!auditorAutorizado_()) { mostrarToast('No estás autorizado para esto', true); return; }
       irA_('auditoria');
       audForm = null;
+      audFiltroProveedor = '';
       cargarAuditoriasPendientes_();
     }
 
@@ -1968,8 +1978,23 @@
 
     function renderizarAuditoriasPendientes_() {
       const cont = document.getElementById('audPendientesContenido');
+
+      // Filtro por proveedor: el desplegable muestra cuántos pendientes hay de cada uno
+      const SIN_PROV = '__sin__';
+      const claveProv = a => a.proveedor || SIN_PROV;
+      const conteoProv = {};
+      auditoriasPendientes.forEach(a => { conteoProv[claveProv(a)] = (conteoProv[claveProv(a)] || 0) + 1; });
+      if (audFiltroProveedor && !conteoProv[audFiltroProveedor]) audFiltroProveedor = ''; // al auditar el último de un proveedor, vuelve a "todos"
+      const clavesProv = Object.keys(conteoProv).sort((a, b) => ((a === SIN_PROV) - (b === SIN_PROV)) || a.localeCompare(b, 'es'));
+      const selProv = document.getElementById('audFiltroProveedor');
+      selProv.innerHTML = `<option value="">Todos los proveedores (${auditoriasPendientes.length})</option>`
+        + clavesProv.map(k => `<option value="${escapeHtml(k)}">${k === SIN_PROV ? '(sin proveedor)' : escapeHtml(k)} (${conteoProv[k]})</option>`).join('');
+      selProv.value = audFiltroProveedor;
+      selProv.style.display = clavesProv.length > 1 ? 'block' : 'none'; // con un solo proveedor no hay nada que filtrar
+      const visibles = audFiltroProveedor ? auditoriasPendientes.filter(a => claveProv(a) === audFiltroProveedor) : auditoriasPendientes;
+
       document.getElementById('audContadorPendientes').textContent = auditoriasPendientes.length
-        ? `${auditoriasPendientes.length} por auditar (los más viejos primero)` : '';
+        ? (audFiltroProveedor ? `${visibles.length} de ${auditoriasPendientes.length} por auditar` : `${auditoriasPendientes.length} por auditar (los más viejos primero)`) : '';
 
       if (!auditoriasPendientes.length) {
         cont.innerHTML = '<div class="empty-state">No hay nada para auditar ahora mismo.</div>';
@@ -1977,7 +2002,7 @@
       }
 
       const estiloInput = 'width:100%; padding:10px; border:1px solid var(--border); border-radius:10px; font-size:15px; margin:4px 0 8px;';
-      cont.innerHTML = auditoriasPendientes.map(a => {
+      cont.innerHTML = visibles.map(a => {
         const pedidos = a.pedidos || [];
         const detalleSucursales = pedidos.map(p => `${escapeHtml(p.sucursal || '?')}: <b>${p.cantidadPedida}</b>`).join(' · ');
         const formAbierto = audForm && audForm.id === a.id;
