@@ -453,6 +453,8 @@
     // ---------------- IDENTIFICACIÓN POR DOCUMENTO ----------------
     const DURACION_SESION_MS = 4 * 60 * 60 * 1000; // 4 horas
     const DNI_AUTORIZADOS_HABILITAR = new Set(['43458682', '43985774']);
+    // Pueden auditar: los de gestión + Franco Palomino (que solo audita, no gestiona pedidos)
+    const DNI_AUDITORES = new Set([...DNI_AUTORIZADOS_HABILITAR, '35918123']);
 
     // ---------------- NAVEGACIÓN ENTRE PANTALLAS ----------------
     // UNA sola pantalla visible a la vez. Antes cada pantalla se abría y se
@@ -464,14 +466,24 @@
       home:      { el: 'pasoSucursal', padre: null },
       armar:     { el: 'pasoArmar', padre: 'home' },
       menu:      { el: 'pasoMenu', padre: 'home' },
-      habilitar: { el: 'pasoHabilitar', padre: 'menu', requiereAuth: true },
-      auditoria: { el: 'pasoAuditoria', padre: 'menu', requiereAuth: true },
-      extra:     { el: 'pasoExtra', padre: 'menu', requiereAuth: true }
+      habilitar: { el: 'pasoHabilitar', padre: 'menu', requiere: 'gestion' },
+      auditoria: { el: 'pasoAuditoria', padre: 'menu', requiere: 'auditor' },
+      extra:     { el: 'pasoExtra', padre: 'menu', requiere: 'gestion' }
     };
     let pantallaActual = 'home';
 
     function esAutorizadoGestion_() {
       return !!(personaActual && DNI_AUTORIZADOS_HABILITAR.has(personaActual.documento));
+    }
+
+    function esAuditor_() {
+      return !!(personaActual && DNI_AUDITORES.has(personaActual.documento));
+    }
+
+    function puedeEntrar_(nombre) {
+      const req = PANTALLAS[nombre] && PANTALLAS[nombre].requiere;
+      if (!req) return true;
+      return req === 'gestion' ? esAutorizadoGestion_() : esAuditor_();
     }
 
     function textosEncabezado_() {
@@ -495,7 +507,7 @@
 
     function irA_(nombre) {
       if (!PANTALLAS[nombre]) return;
-      if (PANTALLAS[nombre].requiereAuth && !esAutorizadoGestion_()) { mostrarToast('No estás autorizado para esto', true); nombre = 'home'; }
+      if (!puedeEntrar_(nombre)) { mostrarToast('No estás autorizado para esto', true); nombre = 'home'; }
       const anterior = pantallaActual;
       Object.keys(PANTALLAS).forEach(k => { document.getElementById(PANTALLAS[k].el).style.display = 'none'; });
       document.getElementById(PANTALLAS[nombre].el).style.display = 'block';
@@ -595,9 +607,9 @@
       document.getElementById('avatarPersona').textContent = (nombre.trim()[0] || '?').toUpperCase();
       const autorizado = esAutorizadoGestion_();
       document.getElementById('menuSeccionGestion').style.display = autorizado ? '' : 'none';
-      document.getElementById('menuSeccionControl').style.display = autorizado ? '' : 'none';
+      document.getElementById('menuSeccionControl').style.display = esAuditor_() ? '' : 'none';
       // Si cambió la persona y la pantalla actual es de gestión, se vuelve al inicio
-      if (!autorizado && PANTALLAS[pantallaActual] && PANTALLAS[pantallaActual].requiereAuth) irA_('home');
+      if (!puedeEntrar_(pantallaActual)) irA_('home');
     }
 
     let appYaArrancada = false;
@@ -1627,7 +1639,7 @@
     let auditandoAhora = false;
 
     function auditorAutorizado_() {
-      return !!(personaActual && DNI_AUTORIZADOS_HABILITAR.has(personaActual.documento));
+      return esAuditor_();
     }
 
     function msAud_(ts) { return ts && ts.toMillis ? ts.toMillis() : 0; }
@@ -1650,7 +1662,10 @@
       try {
         // Un solo filtro de igualdad: no hace falta índice compuesto. El orden se hace acá.
         const snap = await getDocs(query(collection(db, 'auditoriaSinStock'), where('estado', '==', 'pendiente')));
-        auditoriasPendientes = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => msAud_(a.marcadoEn) - msAud_(b.marcadoEn));
+        // Un auditor no ve lo que marcó él mismo: no puede auditarse a sí mismo (queda para otro auditor).
+        auditoriasPendientes = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+          .filter(a => a.marcadoPorDocumento !== personaActual.documento)
+          .sort((a, b) => msAud_(a.marcadoEn) - msAud_(b.marcadoEn));
         renderizarAuditoriasPendientes_();
       } catch (err) {
         cont.innerHTML = `<div class="empty-state">Error: ${escapeHtml(err.message)}</div>`;
@@ -2158,6 +2173,7 @@
     let todosPendientesSinHabilitar = []; // TODOS los proveedores, cargado una sola vez por apertura
 
     function abrirHabilitarPendientes() {
+      if (!esAutorizadoGestion_()) { mostrarToast('No estás autorizado para esto', true); return; }
       irA_('habilitar');
       cargarTodosLosPendientesSinHabilitar_();
     }
@@ -2172,6 +2188,7 @@
     document.getElementById('btnBorrarSinArmar').addEventListener('click', borrarPedidosSinArmar_);
 
     async function borrarPedidosSinArmar_() {
+      if (!esAutorizadoGestion_()) { mostrarToast('No estás autorizado para esto', true); return; }
       const btn = document.getElementById('btnBorrarSinArmar');
       btn.disabled = true;
       try {
