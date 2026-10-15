@@ -158,6 +158,16 @@
     .barra-proveedor .bp-info b { display: block; font-size: 18px; }
     .barra-proveedor .bp-info span { font-size: 14.5px; color: var(--muted); }
     .barra-proveedor .btn { width: auto; margin-top: 0; padding: 13px 20px; font-size: 16px; }
+    .ss-grupo { margin-bottom: 22px; }
+    .ss-producto { padding: 16px 18px; margin-bottom: 12px; }
+    .ss-nombre { font-size: 18px; font-weight: 800; line-height: 1.25; }
+    .ss-codigo { font-size: 14px; color: var(--muted); font-family: ui-monospace, monospace; margin-top: 2px; }
+    .ss-meta { font-size: 14px; color: var(--muted); margin: 6px 0 10px; }
+    .ss-fila { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--border); }
+    .ss-suc { flex: 1; min-width: 0; font-size: 16px; font-weight: 700; }
+    .ss-pidio { font-size: 14.5px; color: var(--muted); white-space: nowrap; }
+    .input-ss { width: 92px; padding: 11px; border: 2px solid var(--border); border-radius: var(--radius-sm); font-size: 19px; font-weight: 800; text-align: center; }
+    .menu-tile.sinstock .ico { background: #dcfce7; }
     .resultado-prod { display: block; width: 100%; text-align: left; padding: 13px 14px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: white; cursor: pointer; }
     .resultado-prod:active { background: #f8fafc; }
     .rp-nombre { display: block; font-size: 16.5px; font-weight: 700; }
@@ -331,6 +341,12 @@
           <span class="cuerpo"><b>Habilitar pendientes</b><small>Liberar para armar lo que esperaba al proveedor.</small></span>
           <span class="flecha">›</span>
         </button>
+        <button class="menu-tile sinstock" id="btnHabilitarSinStock">
+          <span class="ico">🔁</span>
+          <span class="cuerpo"><b>Habilitar sin stock</b><small>Volver a armar lo marcado sin stock cuando llegó el proveedor.</small></span>
+          <span class="tile-badge" id="badgeSinStock" style="display:none;"></span>
+          <span class="flecha">›</span>
+        </button>
         <button class="menu-tile extra" id="btnPedidoExtra">
           <span class="ico">⭐</span>
           <span class="cuerpo"><b>Pedido fuera de planificación</b><small>Un producto que no está en el consolidado.</small></span>
@@ -496,6 +512,28 @@
       <div id="adminContenido"><div class="cargando">Cargando...</div></div>
     </div>
 
+    <div class="pantalla" id="pasoSinStock" style="display:none;">
+      <div class="aviso">Productos que se marcaron <b>sin stock</b> y todavía no se procesaron. Si el proveedor ya llegó, habilitalos y vuelven a aparecer para armar. <b>No cuenta como incidencia</b> de quien lo marcó: cuando se armó, de verdad no había.</div>
+
+      <div class="stats">
+        <div class="stat fijo"><span class="st-num" id="ssNumProductos">–</span><span class="st-txt">Productos</span></div>
+        <div class="stat fijo"><span class="st-num" id="ssNumPedidos">–</span><span class="st-txt">Pedidos cancelados</span></div>
+        <div class="stat fijo verde"><span class="st-num" id="ssNumUnidades">–</span><span class="st-txt">Unidades</span></div>
+      </div>
+
+      <div class="filtros">
+        <div class="buscador"><input type="text" id="buscarSinStock" placeholder="Buscar por producto o código..." autocomplete="off"></div>
+        <button class="btn-chico" id="btnActualizarSinStock">🔄 Actualizar</button>
+      </div>
+      <select id="ssFiltroProveedor" class="select-redondo" style="display:none;" aria-label="Filtrar por proveedor"></select>
+      <div class="chips" id="chipsSinStockDia">
+        <button class="chip activo" data-dia="todos">Todos <span class="n" id="ssNTodos">0</span></button>
+        <button class="chip" data-dia="hoy">Marcados hoy <span class="n" id="ssNHoy">0</span></button>
+      </div>
+
+      <div id="sinStockContenido"><div class="cargando">Cargando...</div></div>
+    </div>
+
     <div class="pantalla" id="pasoExtra" style="display:none;">
       <div class="card">
         <div class="aviso extra">⭐ Para casos excepcionales. Se arma y se procesa como cualquier pedido, pero en el historial queda marcado como <b>"fuera de planificación"</b>, con quién lo agregó y por qué.</div>
@@ -629,11 +667,12 @@
       stock:     { el: 'pasoStock', padre: 'menu' },
       admin:     { el: 'pasoAdmin', padre: 'menu' },
       habilitar: { el: 'pasoHabilitar', padre: 'menu', requiere: 'gestion' },
+      sinstock:  { el: 'pasoSinStock', padre: 'menu', requiere: 'gestion' },
       auditoria: { el: 'pasoAuditoria', padre: 'menu', requiere: 'auditor' },
       extra:     { el: 'pasoExtra', padre: 'menu', requiere: 'gestion' }
     };
     // Profundidad de cada pantalla: sirve para animar hacia adelante (entra por la derecha) o hacia atrás (por la izquierda)
-    const PROFUNDIDAD = { home: 0, menu: 1, armar: 1, stock: 2, admin: 2, habilitar: 2, auditoria: 2, extra: 2 };
+    const PROFUNDIDAD = { home: 0, menu: 1, armar: 1, stock: 2, admin: 2, habilitar: 2, sinstock: 2, auditoria: 2, extra: 2 };
     let pantallaActual = 'home';
     let listaInicioDesactualizada = false; // se enciende al pasar por una pantalla que pudo cambiar pedidos
 
@@ -658,6 +697,7 @@
         case 'stock': return ['Stock', 'Todos los productos, con lo que tiene stock primero'];
         case 'admin': return ['Armado sin procesar', 'Lo armado que todavía no se procesó'];
         case 'habilitar': return ['Habilitar pendientes', 'Liberar lo que esperaba al proveedor'];
+        case 'sinstock': return ['Habilitar sin stock', 'Volver a armar lo que llegó después'];
         case 'auditoria': return ['Auditoría de sin stock', 'Verificá lo que se marcó sin stock'];
         case 'extra': return ['Pedido fuera de planificación', 'Un producto que no está en el consolidado'];
         default: return ['📋 Armador de Pedidos', 'Elegí la sucursal para armar'];
@@ -696,7 +736,7 @@
       window.scrollTo(0, 0);
       // Las pantallas de gestión pueden haber cambiado pedidos. Como se vuelve al inicio pasando por el menú,
       // no alcanza con mirar la pantalla anterior: se deja una marca y se refresca al llegar al inicio.
-      if (['habilitar', 'auditoria', 'extra'].includes(anterior)) listaInicioDesactualizada = true;
+      if (['habilitar', 'sinstock', 'auditoria', 'extra'].includes(anterior)) listaInicioDesactualizada = true;
       if (nombre === 'home' && listaInicioDesactualizada) { listaInicioDesactualizada = false; cargarSucursales(); }
     }
 
@@ -732,6 +772,7 @@
         ? `Hay ${pend} producto${pend === 1 ? '' : 's'} pendiente${pend === 1 ? '' : 's'} de armar y ${falt} faltante${falt === 1 ? '' : 's'}.`
         : 'No hay pedidos pendientes de armar ahora mismo.';
       if (esAuditor_()) actualizarInsigniaAuditoria_();
+      if (esAutorizadoGestion_()) actualizarInsigniaSinStock_();
     }
 
     async function actualizarInsigniaAuditoria_() {
@@ -2482,6 +2523,264 @@
       } catch (err) {
         mostrarToast('Error: ' + err.message, true);
       }
+    }
+
+    // ---------------- HABILITAR SIN STOCK (solo gestión) ----------------
+    // Productos que alguien marcó "Sin stock" y que todavía no se procesaron. Si el proveedor llegó después
+    // (por ejemplo, el mismo día), se pueden habilitar de nuevo para que se vuelvan a armar. No es una
+    // incidencia de quien lo marcó: cuando se armó, de verdad no había. Por eso, al habilitar, las auditorías
+    // pendientes de esos pedidos se cierran como "llegó después" (con quién habilitó y qué cantidades).
+    const SIN_PROV_SS = '(sin proveedor asociado)';
+    let ssCargado = [];
+    let ssFiltroProveedor = '';
+    let ssSoloHoy = false;
+    let ssEditadas = {}; // cantidades que se fueron tipeando, para que no se pierdan al filtrar o buscar
+
+    document.getElementById('btnHabilitarSinStock').addEventListener('click', abrirHabilitarSinStock_);
+    document.getElementById('btnActualizarSinStock').addEventListener('click', () => cargarSinStock_(true));
+    document.getElementById('buscarSinStock').addEventListener('input', renderizarSinStock_);
+    document.getElementById('ssFiltroProveedor').addEventListener('change', (e) => { ssFiltroProveedor = e.target.value; renderizarSinStock_(); });
+    document.getElementById('chipsSinStockDia').addEventListener('click', (e) => {
+      const b = e.target.closest('.chip');
+      if (!b) return;
+      ssSoloHoy = b.dataset.dia === 'hoy';
+      renderizarSinStock_();
+    });
+    document.getElementById('sinStockContenido').addEventListener('input', (e) => {
+      if (e.target.classList.contains('input-ss')) ssEditadas[e.target.dataset.id] = e.target.value;
+    });
+    document.getElementById('sinStockContenido').addEventListener('click', (e) => {
+      const bp = e.target.closest('.btn-ss-proveedor');
+      if (bp) { habilitarSinStockSeleccion_(bp, (d) => claveProvSS_(d) === bp.dataset.prov, `TODO ${bp.dataset.prov}`); return; }
+      const bq = e.target.closest('.btn-ss-producto');
+      if (bq) habilitarSinStockSeleccion_(bq, (d) => claveProvSS_(d) === bq.dataset.prov && claveProductoSS_(d) === bq.dataset.clave, bq.dataset.nombre);
+    });
+
+    function claveProvSS_(d) { return d.proveedor || SIN_PROV_SS; }
+    function claveProductoSS_(d) { return d.codigo || d.producto || d.id; }
+    function esDeHoySS_(ts) {
+      if (!ts || !ts.toDate) return false;
+      const f = ts.toDate(), h = new Date();
+      return f.getFullYear() === h.getFullYear() && f.getMonth() === h.getMonth() && f.getDate() === h.getDate();
+    }
+    function etiquetaMarcadoSS_(ts) {
+      if (!ts || !ts.toDate) return '';
+      const f = ts.toDate();
+      const hora = f.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+      return esDeHoySS_(ts) ? `hoy ${hora}` : `${f.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })} ${hora}`;
+    }
+
+    function abrirHabilitarSinStock_() {
+      if (!esAutorizadoGestion_()) { mostrarToast('No estás autorizado para esto', true); return; }
+      irA_('sinstock');
+      ssFiltroProveedor = '';
+      ssSoloHoy = false;
+      ssEditadas = {};
+      document.getElementById('buscarSinStock').value = '';
+      cargarSinStock_(false);
+    }
+
+    async function cargarSinStock_(forzado) {
+      document.getElementById('sinStockContenido').innerHTML = '<div class="cargando">Cargando...</div>';
+      try {
+        // Sin procesar y con armado en 0; de ahí, solo los que quedaron por "Falta de stock" (un armado parcial no cuenta)
+        const snap = await getDocs(query(pedidosCol, where('procesado', '==', false), where('armado', '==', 0)));
+        ssCargado = [];
+        snap.forEach(d => { const data = d.data(); if (data.diferencia === 'Falta de stock') ssCargado.push({ id: d.id, ...data }); });
+        const ms = (ts) => (ts && ts.toMillis ? ts.toMillis() : 0);
+        ssCargado.sort((a, b) => (ms(b.armadoEn) - ms(a.armadoEn)) || (a.producto || '').localeCompare(b.producto || '', 'es'));
+        ssEditadas = {};
+        renderizarSinStock_();
+        if (forzado) mostrarToast('Actualizado ✓');
+      } catch (err) {
+        document.getElementById('sinStockContenido').innerHTML = `<div class="empty-state">Error: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    // Aplica el día elegido, la búsqueda y el proveedor. "base" sirve para contar cuántos hay de cada proveedor.
+    function calcularListaSS_() {
+      const texto = document.getElementById('buscarSinStock').value.trim().toLowerCase();
+      const porDia = ssSoloHoy ? ssCargado.filter(d => esDeHoySS_(d.armadoEn)) : ssCargado;
+      const base = porDia.filter(d => !texto || (d.codigo || '').toLowerCase().includes(texto) || (d.producto || '').toLowerCase().includes(texto));
+      const lista = ssFiltroProveedor ? base.filter(d => claveProvSS_(d) === ssFiltroProveedor) : base;
+      return { base, lista };
+    }
+
+    function renderizarSinStock_() {
+      const cont = document.getElementById('sinStockContenido');
+      document.getElementById('ssNTodos').textContent = ssCargado.length;
+      document.getElementById('ssNHoy').textContent = ssCargado.filter(d => esDeHoySS_(d.armadoEn)).length;
+      document.querySelectorAll('#chipsSinStockDia .chip').forEach(b => b.classList.toggle('activo', (b.dataset.dia === 'hoy') === ssSoloHoy));
+
+      // Desplegable de proveedores (solo si hay más de uno), con cuántos pedidos tiene cada uno
+      let { base } = calcularListaSS_();
+      const conteo = {};
+      base.forEach(d => { conteo[claveProvSS_(d)] = (conteo[claveProvSS_(d)] || 0) + 1; });
+      if (ssFiltroProveedor && !conteo[ssFiltroProveedor]) ssFiltroProveedor = '';
+      const claves = Object.keys(conteo).sort((a, b) => ((a === SIN_PROV_SS) - (b === SIN_PROV_SS)) || a.localeCompare(b, 'es'));
+      const sel = document.getElementById('ssFiltroProveedor');
+      sel.innerHTML = `<option value="">Todos los proveedores (${base.length})</option>` + claves.map(k => `<option value="${escapeHtml(k)}">${escapeHtml(k)} (${conteo[k]})</option>`).join('');
+      sel.value = ssFiltroProveedor;
+      sel.style.display = claves.length > 1 ? 'block' : 'none';
+
+      const { lista } = calcularListaSS_();
+      document.getElementById('ssNumProductos').textContent = new Set(lista.map(claveProductoSS_)).size;
+      document.getElementById('ssNumPedidos').textContent = lista.length;
+      document.getElementById('ssNumUnidades').textContent = lista.reduce((a, d) => a + (cantidadEfectiva_(d) || 0), 0).toLocaleString('es-AR');
+
+      if (!lista.length) {
+        cont.innerHTML = `<div class="empty-state">${ssCargado.length ? 'Nada coincide con ese filtro' : '🎉 No hay nada marcado sin stock pendiente de procesar'}</div>`;
+        return;
+      }
+
+      // proveedor -> producto -> pedidos (uno por sucursal)
+      const porProv = {};
+      lista.forEach(d => {
+        const p = claveProvSS_(d), k = claveProductoSS_(d);
+        if (!porProv[p]) porProv[p] = {};
+        if (!porProv[p][k]) porProv[p][k] = [];
+        porProv[p][k].push(d);
+      });
+      const provs = Object.keys(porProv).sort((a, b) => ((a === SIN_PROV_SS) - (b === SIN_PROV_SS)) || a.localeCompare(b, 'es'));
+      const ms = (ts) => (ts && ts.toMillis ? ts.toMillis() : 0);
+
+      cont.innerHTML = provs.map(prov => {
+        const productos = Object.keys(porProv[prov]).sort((a, b) => (porProv[prov][a][0].producto || '').localeCompare(porProv[prov][b][0].producto || '', 'es'));
+        const filasProv = productos.reduce((acc, k) => acc.concat(porProv[prov][k]), []);
+        const unidades = filasProv.reduce((a, d) => a + (cantidadEfectiva_(d) || 0), 0);
+        const cabecera = prov === SIN_PROV_SS
+          ? `<div class="aviso extra"><b>${escapeHtml(prov)}</b> · habilitalos producto por producto.</div>`
+          : `<div class="barra-proveedor">
+              <div class="bp-info"><b>${escapeHtml(prov)}</b><span>${productos.length} producto${productos.length === 1 ? '' : 's'} · ${filasProv.length} pedido${filasProv.length === 1 ? '' : 's'} · ${unidades} unidades</span></div>
+              <button class="btn btn-success btn-ss-proveedor" data-prov="${escapeHtml(prov)}">✔ Habilitar todo el proveedor</button>
+            </div>`;
+        const bloques = productos.map(k => {
+          const filas = porProv[prov][k];
+          const reciente = filas.slice().sort((a, b) => ms(b.armadoEn) - ms(a.armadoEn))[0];
+          const marca = `Marcado sin stock ${etiquetaMarcadoSS_(reciente.armadoEn)}${reciente.armadoPor ? ' por ' + escapeHtml(reciente.armadoPor) : ''}`;
+          const filasHtml = filas.map(d => {
+            const valor = ssEditadas[d.id] !== undefined ? ssEditadas[d.id] : cantidadEfectiva_(d);
+            return `<div class="ss-fila">
+              <span class="ss-suc">${escapeHtml(d.sucursal || '(sin sucursal)')}</span>
+              <span class="ss-pidio">pidió ${d.cantidadPedida}</span>
+              <input type="number" class="input-ss" data-id="${escapeHtml(d.id)}" min="0" inputmode="numeric" value="${valor}">
+            </div>`;
+          }).join('');
+          return `<div class="card ss-producto">
+            <div class="ss-nombre">${escapeHtml(filas[0].producto || '(sin nombre)')}</div>
+            <div class="ss-codigo">${escapeHtml(filas[0].codigo || '')}</div>
+            <div class="ss-meta">${marca}</div>
+            ${filasHtml}
+            <button class="btn btn-success btn-ss-producto" data-prov="${escapeHtml(prov)}" data-clave="${escapeHtml(k)}" data-nombre="${escapeHtml(filas[0].producto || k)}">✔ Habilitar este producto</button>
+          </div>`;
+        }).join('');
+        return `<div class="ss-grupo">${cabecera}${bloques}</div>`;
+      }).join('');
+    }
+
+    // Reabre los pedidos elegidos (con la cantidad que figura en pantalla; 0 = no se habilita), verifica que
+    // nadie los haya tocado mientras tanto, y cierra las auditorías pendientes de esos pedidos como "llegó después".
+    async function habilitarSinStockSeleccion_(btn, filtro, etiqueta) {
+      if (!esAutorizadoGestion_()) { mostrarToast('No estás autorizado para esto', true); return; }
+      const enPantalla = {};
+      document.querySelectorAll('#sinStockContenido .input-ss').forEach(i => { enPantalla[i.dataset.id] = i.value; });
+      const elegidos = calcularListaSS_().lista.filter(filtro);
+      const aHabilitar = [];
+      elegidos.forEach(d => {
+        const cant = parseInt(enPantalla[d.id], 10);
+        if (Number.isInteger(cant) && cant > 0) aHabilitar.push({ f: d, cant });
+      });
+      if (!aHabilitar.length) { mostrarToast('No hay nada para habilitar (todas las cantidades están en 0)', true); return; }
+
+      const unidades = aHabilitar.reduce((a, x) => a + x.cant, 0);
+      const sinHabilitar = elegidos.length - aHabilitar.length;
+      if (!confirm(`¿Habilitar ${etiqueta}?\\n\\n${aHabilitar.length} pedido(s), ${unidades} unidad(es) en total. Van a volver a aparecer para armar.${sinHabilitar ? `\\n(${sinHabilitar} con cantidad 0 quedan como están.)` : ''}\\n\\nNo cuenta como incidencia de quien lo marcó sin stock.`)) return;
+
+      btn.disabled = true;
+      const textoOriginal = btn.textContent;
+      btn.textContent = 'Habilitando...';
+      const reabiertos = new Map(); // id -> cantidad habilitada
+      let yaNoEstaban = 0, cerradas = 0, errorAuditorias = false;
+      try {
+        // 1) Solo se reabre lo que sigue tal cual lo dejó el "sin stock" (puede haberlo tocado otra persona)
+        const vigentes = [];
+        for (let i = 0; i < aHabilitar.length; i += 20) {
+          const tramo = aHabilitar.slice(i, i + 20);
+          const snaps = await Promise.all(tramo.map(x => getDoc(doc(db, 'pedidos', x.f.id))));
+          snaps.forEach((s, k) => {
+            const d = s.exists() ? s.data() : null;
+            if (d && d.procesado === false && d.armado === 0 && d.diferencia === 'Falta de stock') vigentes.push(tramo[k]); else yaNoEstaban++;
+          });
+        }
+        // 2) Reabrir en tandas, guardando quién lo había marcado y quién lo habilitó
+        for (let i = 0; i < vigentes.length; i += 400) {
+          const tramo = vigentes.slice(i, i + 400);
+          const batch = writeBatch(db);
+          tramo.forEach(({ f, cant }) => batch.update(doc(db, 'pedidos', f.id), {
+            armado: null, diferencia: null, armadoEn: null, armadoPor: null, armadoPorDocumento: null,
+            cantidadHabilitada: cant, habilitado: true,
+            sinStockMarcadoPor: f.armadoPor || null, sinStockMarcadoPorDocumento: f.armadoPorDocumento || null,
+            rehabilitadoSinStock: true, rehabilitadoPor: personaActual.nombre, rehabilitadoPorDocumento: personaActual.documento,
+            rehabilitadoEn: serverTimestamp()
+          }));
+          await batch.commit();
+          tramo.forEach(({ f, cant }) => reabiertos.set(f.id, cant));
+        }
+        // 3) Las auditorías pendientes de esos pedidos ya no tienen nada que verificar: llegó el proveedor
+        if (reabiertos.size) {
+          try { cerradas = await cerrarAuditoriasPorLlegada_(reabiertos); } catch (e) { errorAuditorias = true; console.error('No se pudieron cerrar las auditorías', e); }
+        }
+        const partes = [`✔ Habilitado: ${reabiertos.size} pedido(s)`];
+        if (yaNoEstaban) partes.push(`${yaNoEstaban} ya no estaban sin stock`);
+        if (cerradas) partes.push(`${cerradas} auditoría(s) cerradas`);
+        mostrarToast(partes.join(' · '), errorAuditorias);
+        if (errorAuditorias) mostrarToast('Se habilitó, pero no se pudieron cerrar las auditorías: avisá para revisarlas', true);
+      } catch (err) {
+        mostrarToast(`Error: se habilitaron ${reabiertos.size} de ${aHabilitar.length}. ${err.message}`, true);
+      } finally {
+        ssCargado = ssCargado.filter(d => !reabiertos.has(d.id));
+        reabiertos.forEach((_, id) => { delete ssEditadas[id]; });
+        renderizarSinStock_();
+        if (btn.isConnected) { btn.disabled = false; btn.textContent = textoOriginal; }
+      }
+    }
+
+    async function cerrarAuditoriasPorLlegada_(reabiertos) {
+      const snap = await getDocs(query(collection(db, 'auditoriaSinStock'), where('estado', '==', 'pendiente')));
+      const { updateDoc } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js");
+      let cerradas = 0;
+      for (const d of snap.docs) {
+        const a = d.data();
+        const pedidos = a.pedidos || [];
+        const tocados = pedidos.filter(p => reabiertos.has(p.id));
+        if (!tocados.length) continue;
+        await updateDoc(doc(db, 'auditoriaSinStock', d.id), {
+          estado: 'auditado',
+          veredicto: 'llego_despues',
+          incidencia: false,
+          auditadoPor: personaActual.nombre,
+          auditadoPorDocumento: personaActual.documento,
+          auditadoEn: serverTimestamp(),
+          origenResolucion: 'habilitar_sin_stock',
+          rehabilitados: pedidos.map(p => reabiertos.has(p.id)
+            ? { pedidoId: p.id, sucursal: p.sucursal || null, cantidadPedida: p.cantidadPedida || 0, cantidadHabilitada: reabiertos.get(p.id), accion: 'reabierto' }
+            : { pedidoId: p.id, sucursal: p.sucursal || null, cantidadPedida: p.cantidadPedida || 0, cantidadHabilitada: 0, accion: 'sin_cobertura' }),
+          pedidosReabiertos: tocados.length,
+          faltantesCreados: 0
+        });
+        cerradas++;
+      }
+      return cerradas;
+    }
+
+    async function actualizarInsigniaSinStock_() {
+      const b = document.getElementById('badgeSinStock');
+      try {
+        const snap = await getDocs(query(pedidosCol, where('procesado', '==', false), where('armado', '==', 0)));
+        const n = snap.docs.filter(d => d.data().diferencia === 'Falta de stock').length;
+        b.textContent = n;
+        b.style.display = n ? 'inline-block' : 'none';
+      } catch (err) { b.style.display = 'none'; }
     }
 
     // ---------------- HABILITAR PENDIENTES (solo 2 DNI autorizados) ----------------

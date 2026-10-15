@@ -893,6 +893,7 @@
         const accion = a.veredicto === 'sin_stock_confirmado' ? 'Confirmó que no había stock' : 'Habilitó';
         html += `<div style="margin-top:6px;"><b>${accion}:</b> ${escapeHtml(a.auditadoPor || '?')} (DNI ${escapeHtml(a.auditadoPorDocumento || '—')}) · ${fechaHoraAud_(a.auditadoEn)}</div>`;
         html += `<div><b>Veredicto:</b> ${escapeHtml(VEREDICTOS_AUDITORIA[a.veredicto] || '—')}</div>`;
+        if (a.origenResolucion === 'habilitar_sin_stock') html += '<div><b>Resuelto desde:</b> Habilitar sin stock (el proveedor llegó después, sin pasar por auditoría)</div>';
         if (a.veredicto !== 'sin_stock_confirmado' && a.unidadesHalladas != null) html += `<div><b>Unidades halladas:</b> ${a.unidadesHalladas}</div>`;
         if (a.stockAntes != null) {
           const posiciones = (a.ajusteStock || []).map(c => `${escapeHtml(c.posicion)}: ${c.antes}→${c.despues}`).join(', ');
