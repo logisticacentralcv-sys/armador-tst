@@ -201,6 +201,51 @@
     .buscador { position: relative; flex: 1; min-width: 240px; }
     .buscador::before { content: '🔎'; position: absolute; left: 18px; top: 50%; transform: translateY(-50%); font-size: 18px; pointer-events: none; }
     .buscador input { width: 100%; padding: 15px 18px 15px 48px; border: 2px solid var(--border); border-radius: 999px; font-size: 17px; background: white; }
+    /* ---------- Conteo, Compras y Armar pedido (traídos de la app de Conteo) ---------- */
+    .seg-modo { display: flex; gap: 6px; background: #dfe6f0; padding: 5px; border-radius: 999px; margin-bottom: 16px; }
+    .seg { flex: 1; padding: 13px 10px; border: none; border-radius: 999px; font-size: 16px; font-weight: 800; cursor: pointer; background: transparent; color: var(--muted); }
+    .seg.activo { background: white; color: var(--primary-dark); box-shadow: 0 2px 8px rgba(15,23,42,0.14); }
+    .seg.proveedor.activo { color: #92400e; }
+    #panelConteo { max-width: 760px; margin: 0 auto; }
+    .estado-stock { font-weight: 800; font-size: 16px; white-space: nowrap; }
+    .estado-stock.no-contado { color: var(--muted); font-weight: 600; font-size: 14px; }
+    .estado-stock.sin-stock { color: var(--red); }
+    .estado-stock.con-stock { color: var(--green-dark); }
+    .fila-compras { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 6px; border-bottom: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
+    .fila-compras:last-child { border-bottom: none; }
+    .fila-compras:active { background: #f1f5f9; }
+    .fila-compras .info { flex: 1; min-width: 0; }
+    .fila-compras .nombre { font-weight: 700; font-size: 16.5px; }
+    .fila-compras .detalle { font-size: 14px; color: var(--muted); }
+    .session-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 16px; }
+    .session-item:last-child { border-bottom: none; }
+    .session-item .nombre { font-weight: 700; }
+    .session-item .detalle { color: var(--muted); font-size: 14px; }
+    .session-item .cant { font-weight: 800; color: var(--primary); font-size: 19px; }
+    .stock-badge { display: inline-block; background: var(--primary-soft); color: var(--primary-dark); border: 1px solid #bfdbfe; border-radius: 12px; padding: 8px 14px; font-size: 16px; font-weight: 800; }
+    .stock-badge.sin-stock { background: #eef2f7; color: var(--muted); border-color: var(--border); }
+    .stock-detalle { font-size: 14px; color: var(--muted); margin-top: 6px; }
+    .sugerencia-item { padding: 12px 14px; cursor: pointer; border-bottom: 1px solid var(--border); font-size: 16px; }
+    .sugerencia-item:last-child { border-bottom: none; }
+    .sugerencia-item:active { background: #f1f5f9; }
+    .sugerencia-item .sug-nombre { font-weight: 700; }
+    .sugerencia-item .sug-codigo { color: var(--muted); font-size: 14px; font-family: ui-monospace, monospace; }
+    .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 15; display: flex; justify-content: center; padding: 12px 16px; background: rgba(255,255,255,0.96); backdrop-filter: blur(6px); border-top: 1px solid var(--border); }
+    .bottom-bar .btn { max-width: 760px; margin-top: 0; }
+    #pasoPedidoProv { padding-bottom: 76px; }
+    body[data-pantalla="stock"][data-stocktab="conteo"] .container, body[data-pantalla="stock"][data-stocktab="conteo"] .hdr-fila { max-width: 760px; }
+    body[data-pantalla="pedidoprov"] .container, body[data-pantalla="pedidoprov"] .hdr-fila { max-width: 1120px; }
+    .menu-tile.contar .ico { background: #dbeafe; }
+    /* campos del Conteo / Compras / Armar pedido: mismo estilo redondeado y legible que el resto de la app */
+    #cn_inputCodigoManual, #cn_inputPosicion, #cn_inputNombreManual, #cn_selectProveedorActivo, #cn_selectProveedorInline, #cn_buscarProductoInline,
+    #cn_inputCodigoBultoManual, #cn_inputUnidadesPorBultoDirecto, #cn_abUnidadesPorBulto, #cn_inputNuevaPosicion, #cn_inputCantidadPosicion,
+    #cn_selectPosicionAMover, #cn_selectProveedorCompras, #cn_buscarProductoCompras, #cn_selectProveedorPedido, #cn_textareaVentas {
+      border: 2px solid var(--border) !important; border-radius: 14px !important; padding: 13px 14px !important; font-size: 16.5px !important; background: white !important; }
+    #cn_bannerModoProveedor { border-radius: var(--radius); margin-bottom: 16px; padding: 14px 16px !important; border: 1px solid #fde68a; }
+    #cn_bannerModoProveedor select { border-color: #fde68a !important; }
+    #cn_productoBox .qty-row input { text-align: center; }
+    .menu-tile.compras .ico { background: #ffedd5; }
+    .menu-seccion:nth-of-type(5) { --sec: 420ms; } .menu-seccion:nth-of-type(6) { --sec: 520ms; }
     .select-redondo { width: 100%; padding: 14px 20px; border: 2px solid var(--border); border-radius: 999px; font-size: 16.5px; font-weight: 600; background: white; margin-bottom: 14px; cursor: pointer; }
     .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
     .chip { border: 2px solid var(--border); background: white; border-radius: 999px; padding: 9px 16px; font-size: 15px; font-weight: 700; color: var(--text); cursor: pointer; }
@@ -322,6 +367,15 @@
       </div>
 
       <div class="menu-seccion">
+        <div class="menu-seccion-titulo">Depósito</div>
+        <button class="menu-tile contar" id="btnContarStock">
+          <span class="ico">🧮</span>
+          <span class="cuerpo"><b>Contar stock</b><small>Escaneá y sumá lo que hay en cada posición. También ingreso de proveedor.</small></span>
+          <span class="flecha">›</span>
+        </button>
+      </div>
+
+      <div class="menu-seccion">
         <div class="menu-seccion-titulo">Consultas</div>
         <button class="menu-tile" id="btnVerStockGlobal">
           <span class="ico">📦</span>
@@ -356,6 +410,20 @@
         <button class="menu-tile peligro" id="btnBorrarSinArmar">
           <span class="ico">🗑</span>
           <span class="cuerpo"><b>Borrar pedidos sin armar</b><small>Limpia lo que nadie armó. No toca lo armado.</small></span>
+          <span class="flecha">›</span>
+        </button>
+      </div>
+
+      <div class="menu-seccion" id="menuSeccionCompras" style="display:none;">
+        <div class="menu-seccion-titulo">Compras</div>
+        <button class="menu-tile compras" id="btnCompras">
+          <span class="ico">🛒</span>
+          <span class="cuerpo"><b>Compras</b><small>Stock por proveedor, para ver qué falta.</small></span>
+          <span class="flecha">›</span>
+        </button>
+        <button class="menu-tile compras" id="btnArmarPedidoProv">
+          <span class="ico">📝</span>
+          <span class="cuerpo"><b>Armar pedido a proveedor</b><small>Calcular qué pedir y bajar la orden en PDF.</small></span>
           <span class="flecha">›</span>
         </button>
       </div>
@@ -475,12 +543,13 @@
 
 
     <div class="pantalla" id="pasoStock" style="display:none;">
-      <div class="tabs-seccion">
-        <button class="tab-sec activo">📦 Stock</button>
-        <button class="tab-sec" disabled>🧮 Conteo <span class="pronto-tag">pronto</span></button>
+      <div class="tabs-seccion" id="tabsStock">
+        <button class="tab-sec activo" data-tab="stock">📦 Stock</button>
+        <button class="tab-sec" data-tab="conteo">🧮 Conteo</button>
         <button class="tab-sec" disabled>🔍 Auditoría de stock <span class="pronto-tag">pronto</span></button>
       </div>
 
+      <div id="panelStock">
       <div class="stats" id="chipsStock">
         <button class="stat activo" data-filtro="todos"><span class="st-num" id="stNumTodos">–</span><span class="st-txt">Productos</span></button>
         <button class="stat verde" data-filtro="con"><span class="st-num" id="stNumCon">–</span><span class="st-txt">Con stock</span></button>
@@ -495,6 +564,166 @@
       <div class="contador" id="stockActualizado" style="margin:0 6px 12px;"></div>
 
       <div id="stockGlobalContenido"><div class="cargando">Cargando stock...</div></div>
+      </div>
+
+      <div id="panelConteo" style="display:none;">
+        <div id="conteoCargando" class="cargando">Cargando conteo...</div>
+        <div id="conteoContenido" style="display:none;">
+      <div class="seg-modo">
+        <button class="seg activo" id="cn_btnModoContar">🧮 Contar</button>
+        <button class="seg proveedor" id="cn_btnModoProveedor">🚚 Ingreso de proveedor</button>
+      </div>
+      <div id="cn_bannerModoProveedor" style="display:none; background:#fef3c7; color:#92400e; padding:10px 12px; font-size:13px; font-weight:700;">
+    <div style="text-align:center; margin-bottom:8px;">🚚 MODO INGRESO DE PROVEEDOR ACTIVO — se suma directo a la posición principal de cada producto</div>
+    <select id="cn_selectProveedorActivo" style="width:100%; padding:10px; border:1px solid #fde68a; border-radius:8px; font-size:14px; font-weight:600; color:#92400e; background:white;">
+      <option value="">Todos los proveedores (sin filtrar)</option>
+    </select>
+    <div id="cn_contadorProveedorActivo" style="font-size:11px; font-weight:400; margin-top:4px;"></div>
+    <div id="cn_bloqueLeerRemito" style="margin-top:10px;">
+      <input type="file" id="cn_inputFotoRemito" accept="image/*,application/pdf" style="display:none;">
+      <button class="btn btn-primary" id="cn_btnLeerRemito" style="margin-top:0; background:#1d4ed8;" disabled>📷 Leer foto o PDF de remito</button>
+      <div id="cn_hintLeerRemito" style="font-size:11px; color:#92400e; margin-top:4px; text-align:center;">⬆ Elegí un proveedor de la lista de arriba para poder subir la foto</div>
+    </div>
+  </div>
+
+
+    <div class="card">
+      <button class="btn btn-primary" id="cn_btnEscanear">📷 Escanear código de barras</button>
+      <div id="cn_reader" style="display:none; margin-top: 12px;"></div>
+      <button class="btn btn-secondary" id="cn_btnCancelarScan" style="display:none;">Cancelar escaneo</button>
+
+      <div style="display:flex; align-items:center; gap:8px; margin: 14px 0 6px;">
+        <div style="flex:1; height:1px; background:var(--border);"></div>
+        <span style="font-size:12px; color:var(--muted);">o escribí código / nombre</span>
+        <div style="flex:1; height:1px; background:var(--border);"></div>
+      </div>
+      <div style="display:flex; gap:8px; position:relative;">
+        <input type="text" id="cn_inputCodigoManual" placeholder="Código EAN o nombre del producto" autocomplete="off"
+          style="flex:1; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:16px;">
+        <button class="btn btn-secondary" id="cn_btnBuscarManual" style="width:auto; margin-top:0; padding:12px 18px;">Buscar</button>
+        <div id="cn_sugerenciasManual" style="display:none; position:absolute; top:100%; left:0; right:60px; margin-top:4px; background:white; border:1px solid var(--border); border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.12); max-height:260px; overflow-y:auto; z-index:20;"></div>
+      </div>
+      <div style="font-size:11px; color:var(--muted); margin-top:6px;">La búsqueda por nombre encuentra lo que <strong>empieza con</strong> lo que escribís, no lo que lo contiene en el medio.</div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <strong>🔎 Ver / filtrar por proveedor</strong>
+        <button id="cn_btnActualizarProveedorInline" title="Actualizar" style="background:none; border:none; font-size:16px; cursor:pointer;">🔄</button>
+      </div>
+      <select id="cn_selectProveedorInline" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:10px; font-size:14px; margin-bottom:8px;">
+        <option value="">— Elegir proveedor —</option>
+      </select>
+      <input type="text" id="cn_buscarProductoInline" placeholder="🔎 Filtrar por nombre o código..." style="display:none; width:100%; padding:10px; border:1px solid var(--border); border-radius:10px; font-size:14px; margin-bottom:8px;">
+      <div id="cn_contadorProveedorInline" style="font-size:12px; color:var(--muted); margin-bottom:6px;"></div>
+      <div id="cn_listaProveedorInline" style="max-height:340px; overflow-y:auto;"></div>
+    </div>
+
+    <!-- PRODUCTO ENCONTRADO -->
+    <div class="card producto-box" id="cn_productoBox">
+      <div class="producto-codigo" id="cn_pCodigo"></div>
+      <div class="producto-nombre" id="cn_pNombre"></div>
+      <div id="cn_pBultoBadge" style="display:none; margin-bottom:10px;">
+        <span style="background:#fef3c7; color:#92400e; border:1px solid #fde68a; border-radius:8px; padding:5px 10px; font-size:12px; font-weight:700;">
+          📦 Esto es un BULTO — <span id="cn_pUnidadesPorBulto"></span> unidades c/u
+        </span>
+      </div>
+      <div id="cn_pStockActual" style="margin-bottom: 14px;"></div>
+
+      <div class="field" id="cn_nombreManualField" style="display:none;">
+        <label>Nombre del producto (no está en el catálogo)</label>
+        <input type="text" id="cn_inputNombreManual" placeholder="Escribí el nombre">
+      </div>
+
+      <div class="field">
+        <label>Posición (estantería / pasillo / etc.)</label>
+        <input type="text" id="cn_inputPosicion" placeholder="Ej: A-03">
+        <div id="cn_hintPosicionProveedor" style="display:none; font-size:11px; color:#92400e; margin-top:4px;">📍 Es la posición principal ya guardada de este producto. Se puede corregir si hace falta.</div>
+      </div>
+
+      <div class="field">
+        <label id="cn_labelCantidad">Cantidad</label>
+        <div class="qty-row">
+          <button class="qty-btn" id="cn_btnMenos">−</button>
+          <input type="number" id="cn_inputCantidad" value="1" min="1">
+          <button class="qty-btn" id="cn_btnMas">+</button>
+        </div>
+        <div id="cn_equivalenciaBulto" style="display:none; font-size:12px; color:var(--muted); margin-top:4px;"></div>
+      </div>
+
+      <button class="btn btn-success" id="cn_btnConfirmar">✔ Confirmar y guardar</button>
+      <button class="btn btn-secondary" id="cn_btnModoMover" style="display:none;">📍 Modificar posición existente (sin sumar)</button>
+      <button class="btn btn-secondary" id="cn_btnAsociarBulto">📦 Asociar código de bulto a este producto</button>
+      <button class="btn btn-secondary" id="cn_btnDescartar">Descartar</button>
+      <button class="btn btn-secondary" id="cn_btnEliminarProducto" style="display:none; background:#fee2e2; color:#dc2626;">🗑 Eliminar este producto (borra todo su stock)</button>
+
+      <div id="cn_moverPosicionBox" style="display:none; margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
+        <div class="field" id="cn_selectorPosicionField" style="display:none;">
+          <label>¿Cuál posición vas a corregir/mover?</label>
+          <select id="cn_selectPosicionAMover" style="width:100%; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:15px;"></select>
+        </div>
+        <div class="field">
+          <label>Nueva posición</label>
+          <input type="text" id="cn_inputNuevaPosicion" placeholder="Ej: A-03">
+        </div>
+        <div class="field">
+          <label>Cantidad en esa posición</label>
+          <input type="number" id="cn_inputCantidadPosicion" min="0">
+          <div style="font-size:11px; color:var(--muted); margin-top:4px;">0 elimina esa posición. Si movés a una posición que ya tenía stock de este código, se suma ahí.</div>
+        </div>
+        <button class="btn btn-success" id="cn_btnGuardarMovimiento">✔ Guardar movimiento</button>
+        <button class="btn btn-secondary" id="cn_btnCancelarMover">Cancelar</button>
+      </div>
+    </div>
+
+    <!-- ASOCIAR BULTO -->
+    <div class="card" id="cn_asociarBultoBox" style="display:none;">
+      <p style="margin-top:0; font-size:14px;">Asociando bulto a: <strong id="cn_abProducto"></strong></p>
+      <div id="cn_abPaso1">
+        <button class="btn btn-primary" id="cn_btnEscanearBulto">📷 Escanear código de la caja/bulto</button>
+        <div id="cn_readerBulto" style="display:none; margin-top:12px;"></div>
+        <button class="btn btn-secondary" id="cn_btnCancelarScanBulto" style="display:none;">Cancelar escaneo</button>
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <input type="text" id="cn_inputCodigoBultoManual" placeholder="O ingresá el código a mano" inputmode="numeric"
+            style="flex:1; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:16px;">
+          <button class="btn btn-secondary" id="cn_btnUsarCodigoBultoManual" style="width:auto; margin-top:0; padding:12px 18px;">Usar</button>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:8px; margin: 14px 0 6px;">
+          <div style="flex:1; height:1px; background:var(--border);"></div>
+          <span style="font-size:12px; color:var(--muted);">o, si la caja no tiene su propio código</span>
+          <div style="flex:1; height:1px; background:var(--border);"></div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <input type="number" id="cn_inputUnidadesPorBultoDirecto" min="1" placeholder="Unidades por bulto (ej: 10)"
+            style="flex:1; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:16px;">
+          <button class="btn btn-secondary" id="cn_btnGuardarBultoDirecto" style="width:auto; margin-top:0; padding:12px 18px;">Guardar</button>
+        </div>
+      </div>
+      <div id="cn_abPaso2" style="display:none;">
+        <div class="field">
+          <label>Código de la caja escaneado</label>
+          <input type="text" id="cn_abCodigoBulto" disabled style="background:#f3f4f6;">
+        </div>
+        <div class="field">
+          <label>Unidades por bulto (ej: 10)</label>
+          <input type="number" id="cn_abUnidadesPorBulto" min="1" placeholder="10">
+        </div>
+        <button class="btn btn-success" id="cn_btnGuardarBulto">✔ Guardar asociación</button>
+      </div>
+      <button class="btn btn-secondary" id="cn_btnCancelarAsociarBulto">Cancelar</button>
+    </div>
+
+    <!-- LISTA DE LA SESIÓN -->
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <strong id="cn_tituloSesion">Contado en esta sesión</strong>
+        <span id="cn_totalSesion" style="color:var(--muted); font-size:13px;">0 productos</span>
+      </div>
+      <div id="cn_listaSesion"><div class="empty-state">Todavía no escaneaste nada</div></div>
+    </div>
+        </div>
+      </div>
     </div>
 
     <div class="pantalla" id="pasoAdmin" style="display:none;">
@@ -533,6 +762,36 @@
       </div>
 
       <div id="sinStockContenido"><div class="cargando">Cargando...</div></div>
+    </div>
+
+    <div class="pantalla" id="pasoCompras" style="display:none;">
+      <div class="card">
+
+      <select id="cn_selectProveedorCompras" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:10px; font-size:14px; margin-bottom:10px;">
+        <option value="">Todos los proveedores</option>
+      </select>
+      <input type="text" id="cn_buscarProductoCompras" placeholder="🔎 Buscar por producto o código..."
+        style="width:100%; padding:10px; border:1px solid var(--border); border-radius:10px; font-size:14px; margin-bottom:12px;">
+
+      <div id="cn_contadorCompras" style="font-size:12px; color:var(--muted); margin-bottom:8px;"></div>
+      <div id="cn_comprasContenido"><div class="cargando">Cargando productos...</div></div>
+    </div>
+    </div>
+
+    <div class="pantalla" id="pasoPedidoProv" style="display:none;">
+      <div class="card">
+
+      <select id="cn_selectProveedorPedido" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:10px; font-size:14px; margin-bottom:10px;">
+        <option value="">— Elegir proveedor —</option>
+      </select>
+
+      <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">Pegá acá las ventas (copiado de Excel: Código, Cantidad vendida — una fila por producto)</label>
+      <textarea id="cn_textareaVentas" rows="6" placeholder="7790070106209	12&#10;7793147001742	6" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:10px; font-size:13px; font-family:monospace; margin-bottom:10px;"></textarea>
+
+      <button id="cn_btnCalcularPedido" class="btn btn-primary" style="margin-top:0;">Calcular pedido</button>
+
+      <div id="cn_resultadoPedidoContenido" style="margin-top:14px; overflow-x:auto;"></div>
+    </div>
     </div>
 
     <div class="pantalla" id="pasoExtra" style="display:none;">
@@ -583,6 +842,20 @@
 
   </div>
 
+  <div id="cn_barraPedidoPDF" class="bottom-bar" style="display:none;">
+        <button id="cn_btnDescargarPedidoPDF" class="btn btn-success" style="background:#1d4ed8;">📄 Descargar PDF para el proveedor</button>
+      </div>
+
+    <div class="modal-overlay" id="cn_modalRevisionRemito">
+    <div class="modal">
+      <h2>📋 Revisá antes de ingresar</h2>
+      <p style="font-size:12px; color:var(--muted); margin-top:-8px; margin-bottom:12px;">Esto todavía <strong>NO</strong> impactó en el stock. Corregí lo que haga falta (producto y cantidad) y confirmá abajo.</p>
+      <div id="cn_revisionRemitoContenido"></div>
+      <button class="btn btn-success" id="cn_btnAceptarRemito">✔ Aceptar e ingresar</button>
+      <button class="btn btn-secondary" onclick="cerrarModal('cn_modalRevisionRemito')">Cancelar (no ingresar nada)</button>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="modalArmado">
     <div class="modal con-cab">
       <div class="modal-cab">
@@ -600,7 +873,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
     import {
-      getFirestore, doc, getDoc, setDoc, deleteDoc, collection, query, where, orderBy, limit,
+      getFirestore, doc, getDoc, setDoc, deleteDoc, collection, collectionGroup, query, where, orderBy, limit,
       getDocs, runTransaction, writeBatch, serverTimestamp, increment, addDoc
     } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
@@ -654,6 +927,8 @@
     const DNI_AUTORIZADOS_HABILITAR = new Set(['43458682', '43985774']);
     // Pueden auditar: los de gestión + Franco Palomino (que solo audita, no gestiona pedidos)
     const DNI_AUDITORES = new Set([...DNI_AUTORIZADOS_HABILITAR, '35918123']);
+    // Compras y "Armar pedido a proveedor": por ahora los mismos DNI que gestión. Para sumar a alguien de Compras, agregar su DNI acá.
+    const DNI_COMPRAS = new Set([...DNI_AUTORIZADOS_HABILITAR]);
 
     // ---------------- NAVEGACIÓN ENTRE PANTALLAS ----------------
     // UNA sola pantalla visible a la vez. Antes cada pantalla se abría y se
@@ -669,12 +944,17 @@
       admin:     { el: 'pasoAdmin', padre: 'menu' },
       habilitar: { el: 'pasoHabilitar', padre: 'menu', requiere: 'gestion' },
       sinstock:  { el: 'pasoSinStock', padre: 'menu', requiere: 'gestion' },
+      compras:   { el: 'pasoCompras', padre: 'menu', requiere: 'compras' },
+      pedidoprov: { el: 'pasoPedidoProv', padre: 'menu', requiere: 'compras' },
       auditoria: { el: 'pasoAuditoria', padre: 'menu', requiere: 'auditor' },
       extra:     { el: 'pasoExtra', padre: 'menu', requiere: 'gestion' }
     };
     // Profundidad de cada pantalla: sirve para animar hacia adelante (entra por la derecha) o hacia atrás (por la izquierda)
-    const PROFUNDIDAD = { home: 0, menu: 1, armar: 1, stock: 2, admin: 2, habilitar: 2, sinstock: 2, auditoria: 2, extra: 2 };
+    const PROFUNDIDAD = { home: 0, menu: 1, armar: 1, stock: 2, admin: 2, habilitar: 2, sinstock: 2, compras: 2, pedidoprov: 2, auditoria: 2, extra: 2 };
     let pantallaActual = 'home';
+    let stockTabActual = 'stock';       // pestaña de la pantalla Stock: 'stock' o 'conteo'
+    let conteoApi = null;               // módulo conteo.js, una vez cargado
+    let cargaConteoPromesa = null;
     let listaInicioDesactualizada = false; // se enciende al pasar por una pantalla que pudo cambiar pedidos
 
     function esAutorizadoGestion_() {
@@ -688,14 +968,22 @@
     function puedeEntrar_(nombre) {
       const req = PANTALLAS[nombre] && PANTALLAS[nombre].requiere;
       if (!req) return true;
-      return req === 'gestion' ? esAutorizadoGestion_() : esAuditor_();
+      if (req === 'gestion') return esAutorizadoGestion_();
+      if (req === 'compras') return esCompras_();
+      return esAuditor_();
+    }
+
+    function esCompras_() {
+      return !!(personaActual && DNI_COMPRAS.has(personaActual.documento));
     }
 
     function textosEncabezado_() {
       switch (pantallaActual) {
         case 'armar': return [(modoActivo === 'faltante' ? '🔴 ' : '') + (sucursalActiva || ''), modoActivo === 'faltante' ? 'Armando FALTANTES' : 'Armando pedidos'];
         case 'menu': return ['Menú', 'Elegí qué querés hacer'];
-        case 'stock': return ['Stock', 'Todos los productos, con lo que tiene stock primero'];
+        case 'stock': return stockTabActual === 'conteo' ? ['Contar stock', 'Sumá lo que hay en cada posición'] : ['Stock', 'Todos los productos, con lo que tiene stock primero'];
+        case 'compras': return ['Compras', 'Stock por proveedor'];
+        case 'pedidoprov': return ['Armar pedido a proveedor', 'Calcular qué pedir y bajar la orden en PDF'];
         case 'admin': return ['Armado sin procesar', 'Lo armado que todavía no se procesó'];
         case 'habilitar': return ['Habilitar pendientes', 'Liberar lo que esperaba al proveedor'];
         case 'sinstock': return ['Habilitar sin stock', 'Volver a armar lo que llegó después'];
@@ -731,6 +1019,8 @@
       void elNuevo.offsetWidth; // reinicia la animación aunque se vuelva a entrar a la misma pantalla
       elNuevo.classList.add(PROFUNDIDAD[nombre] >= PROFUNDIDAD[anterior] ? 'anim-adelante' : 'anim-atras');
       document.body.dataset.pantalla = nombre; // las pantallas de datos usan todo el ancho en compu
+      if (nombre !== 'stock' && conteoApi) conteoApi.detenerEscaneres(); // no dejar la cámara prendida al irse del conteo
+      const barraPdf = document.getElementById('cn_barraPedidoPDF'); if (barraPdf && nombre !== 'pedidoprov') barraPdf.style.display = 'none';
       pantallaActual = nombre;
       actualizarEncabezado_();
       if (nombre === 'menu') actualizarMenu_();
@@ -870,6 +1160,7 @@
       const autorizado = esAutorizadoGestion_();
       document.getElementById('menuSeccionGestion').style.display = autorizado ? '' : 'none';
       document.getElementById('menuSeccionControl').style.display = esAuditor_() ? '' : 'none';
+      document.getElementById('menuSeccionCompras').style.display = esCompras_() ? '' : 'none';
       // Si cambió la persona y la pantalla actual es de gestión, se vuelve al inicio
       if (!puedeEntrar_(pantallaActual)) irA_('home');
     }
@@ -1640,6 +1931,76 @@
       return candidatos.map(d => resumenPedidoParaAuditoria_(d.id, d.data()));
     }
 
+    // ---------------- CONTEO, COMPRAS Y ARMAR PEDIDO (módulo conteo.js, se carga la primera vez que se usa) ----------------
+    function cargarConteo_() {
+      if (conteoApi) return Promise.resolve(conteoApi);
+      if (!cargaConteoPromesa) {
+        cargaConteoPromesa = import('./conteo.js').then(m => {
+          conteoApi = m.iniciarConteo({
+            db, doc, getDoc, setDoc, deleteDoc, runTransaction, collection, collectionGroup, query, where, orderBy, limit, getDocs, serverTimestamp, increment,
+            escapeHtml, mostrarToast,
+            persona: () => personaActual,
+            esGestion: esAutorizadoGestion_,
+            abrirConteo: () => abrirStockHub_('conteo')
+          });
+          return conteoApi;
+        }).catch(err => { cargaConteoPromesa = null; throw err; });
+      }
+      return cargaConteoPromesa;
+    }
+
+    function aplicarTabStock_(tab) {
+      stockTabActual = tab;
+      document.querySelectorAll('#tabsStock .tab-sec[data-tab]').forEach(b => b.classList.toggle('activo', b.dataset.tab === tab));
+      document.getElementById('panelStock').style.display = tab === 'stock' ? 'block' : 'none';
+      document.getElementById('panelConteo').style.display = tab === 'conteo' ? 'block' : 'none';
+      document.body.dataset.stocktab = tab;
+    }
+
+    async function prepararConteo_() {
+      const carga = document.getElementById('conteoCargando'), contenido = document.getElementById('conteoContenido');
+      try {
+        await cargarConteo_();
+        carga.style.display = 'none';
+        contenido.style.display = 'block';
+      } catch (err) {
+        carga.textContent = 'No se pudo cargar el conteo: ' + err.message;
+        carga.style.display = 'block';
+      }
+    }
+
+    async function abrirStockHub_(tab) {
+      if (tab === 'stock') { abrirStockGlobal(); return; }
+      aplicarTabStock_(tab);
+      irA_('stock');
+      await prepararConteo_();
+    }
+
+    async function cambiarTabStock_(tab) {
+      aplicarTabStock_(tab);
+      actualizarEncabezado_();
+      if (tab === 'conteo') { await prepararConteo_(); return; }
+      if (conteoApi) conteoApi.detenerEscaneres();
+      if (stockGlobalCargado.length) renderizarStockGlobal(); else cargarStockGlobal_(false);
+    }
+
+    document.getElementById('tabsStock').addEventListener('click', (e) => {
+      const b = e.target.closest('.tab-sec');
+      if (!b || b.disabled || !b.dataset.tab || b.dataset.tab === stockTabActual) return;
+      cambiarTabStock_(b.dataset.tab);
+    });
+    document.getElementById('btnContarStock').addEventListener('click', () => abrirStockHub_('conteo'));
+    document.getElementById('btnCompras').addEventListener('click', async () => {
+      if (!esCompras_()) { mostrarToast('No estás autorizado para esto', true); return; }
+      irA_('compras');
+      try { (await cargarConteo_()).abrirCompras(); } catch (err) { mostrarToast('No se pudo cargar: ' + err.message, true); }
+    });
+    document.getElementById('btnArmarPedidoProv').addEventListener('click', async () => {
+      if (!esCompras_()) { mostrarToast('No estás autorizado para esto', true); return; }
+      irA_('pedidoprov');
+      try { (await cargarConteo_()).abrirArmarPedido(); } catch (err) { mostrarToast('No se pudo cargar: ' + err.message, true); }
+    });
+
     // ---------------- STOCK (pantalla propia) ----------------
     // Pensada para crecer: arriba hay pestañas, y "Conteo" y "Auditoría de stock" van a vivir en esta misma pantalla.
     const STOCK_PAGINA = 150;                 // filas que se dibujan por vez (son miles de productos)
@@ -1665,6 +2026,7 @@
     });
 
     function abrirStockGlobal() {
+      aplicarTabStock_('stock');
       irA_('stock');
       stockFiltro = 'todos';
       stockMostrados = STOCK_PAGINA;
