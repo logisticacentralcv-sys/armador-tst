@@ -246,6 +246,27 @@
     #cn_productoBox .qty-row input { text-align: center; }
     .menu-tile.compras .ico { background: #ffedd5; }
     .menu-seccion:nth-of-type(5) { --sec: 420ms; } .menu-seccion:nth-of-type(6) { --sec: 520ms; }
+    /* ---------- Usuarios y permisos ---------- */
+    .campo-titulo { font-size: 14.5px; font-weight: 700; color: var(--muted); margin: 6px 0 8px; }
+    .campo-titulo span { font-weight: 500; }
+    .rol-opt { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; margin-bottom: 10px; border: 2px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; background: white; }
+    .rol-opt input { width: 22px; height: 22px; flex-shrink: 0; margin-top: 2px; accent-color: var(--primary); }
+    .rol-opt b { display: block; font-size: 16.5px; }
+    .rol-opt small { display: block; font-size: 14px; color: var(--muted); line-height: 1.35; margin-top: 1px; }
+    .rol-opt:has(input:checked) { border-color: var(--primary); background: var(--primary-soft); }
+    .usr-fila { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-bottom: 1px solid var(--border); cursor: pointer; }
+    .usr-fila:last-child { border-bottom: none; }
+    .usr-fila.inactivo { opacity: 0.55; }
+    @media (hover: hover) { .usr-fila:hover { background: #f7faff; } }
+    .usr-avatar { flex-shrink: 0; width: 42px; height: 42px; border-radius: 50%; background: var(--primary-soft); color: var(--primary-dark); display: grid; place-items: center; font-weight: 800; font-size: 18px; }
+    .usr-cuerpo { flex: 1; min-width: 0; }
+    .usr-nombre { font-size: 17px; font-weight: 700; }
+    .usr-dni { font-size: 14px; color: var(--muted); }
+    .usr-roles { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; max-width: 55%; }
+    .rol-chip { background: #e0e7ff; color: #3730a3; border-radius: 999px; padding: 4px 12px; font-size: 13.5px; font-weight: 700; white-space: nowrap; }
+    .rol-chip.auditor { background: #ede9fe; color: #5b21b6; }
+    .rol-chip.off { background: #fee2e2; color: #991b1b; }
+    @media (max-width: 640px) { .usr-fila { flex-wrap: wrap; } .usr-roles { max-width: 100%; justify-content: flex-start; margin-left: 56px; } }
     .select-redondo { width: 100%; padding: 14px 20px; border: 2px solid var(--border); border-radius: 999px; font-size: 16.5px; font-weight: 600; background: white; margin-bottom: 14px; cursor: pointer; }
     .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
     .chip { border: 2px solid var(--border); background: white; border-radius: 999px; padding: 9px 16px; font-size: 15px; font-weight: 700; color: var(--text); cursor: pointer; }
@@ -366,7 +387,7 @@
         <div class="ms-resumen" id="menuResumen"></div>
       </div>
 
-      <div class="menu-seccion">
+      <div class="menu-seccion" id="menuSeccionDeposito">
         <div class="menu-seccion-titulo">Depósito</div>
         <button class="menu-tile contar" id="btnContarStock">
           <span class="ico">🧮</span>
@@ -416,6 +437,11 @@
 
       <div class="menu-seccion" id="menuSeccionCompras" style="display:none;">
         <div class="menu-seccion-titulo">Compras</div>
+        <button class="menu-tile compras" id="btnModuloCompras">
+          <span class="ico">📈</span>
+          <span class="cuerpo"><b>Planificación de compras</b><small>Ventas, pronóstico y orden de compra por proveedor.</small></span>
+          <span class="flecha">›</span>
+        </button>
         <button class="menu-tile compras" id="btnCompras">
           <span class="ico">🛒</span>
           <span class="cuerpo"><b>Compras</b><small>Stock por proveedor, para ver qué falta.</small></span>
@@ -424,6 +450,20 @@
         <button class="menu-tile compras" id="btnArmarPedidoProv">
           <span class="ico">📝</span>
           <span class="cuerpo"><b>Armar pedido a proveedor</b><small>Calcular qué pedir y bajar la orden en PDF.</small></span>
+          <span class="flecha">›</span>
+        </button>
+      </div>
+
+      <div class="menu-seccion" id="menuSeccionLogistica" style="display:none;">
+        <div class="menu-seccion-titulo">Logística</div>
+        <button class="menu-tile control" id="btnMetricas">
+          <span class="ico">📊</span>
+          <span class="cuerpo"><b>Métricas y control</b><small>Tiempos, scoring de armadores y control de auditorías.</small></span>
+          <span class="flecha">›</span>
+        </button>
+        <button class="menu-tile control" id="btnUsuarios">
+          <span class="ico">👥</span>
+          <span class="cuerpo"><b>Usuarios y permisos</b><small>Alta de personas, roles y quién puede auditar.</small></span>
           <span class="flecha">›</span>
         </button>
       </div>
@@ -545,7 +585,7 @@
     <div class="pantalla" id="pasoStock" style="display:none;">
       <div class="tabs-seccion" id="tabsStock">
         <button class="tab-sec activo" data-tab="stock">📦 Stock</button>
-        <button class="tab-sec" data-tab="conteo">🧮 Conteo</button>
+        <button class="tab-sec" data-tab="conteo" id="tabConteo">🧮 Conteo</button>
         <button class="tab-sec" disabled>🔍 Auditoría de stock <span class="pronto-tag">pronto</span></button>
       </div>
 
@@ -794,6 +834,15 @@
     </div>
     </div>
 
+    <div class="pantalla" id="pasoUsuarios" style="display:none;">
+      <div class="aviso">Acá se da de alta a las personas, se les asigna <b>uno o más roles</b> y se habilita quién puede auditar. Los cambios se aplican la próxima vez que esa persona abra la app.</div>
+      <div class="filtros">
+        <div class="buscador"><input type="text" id="buscarUsuario" placeholder="Buscar por nombre o DNI..." autocomplete="off"></div>
+        <button class="btn-chico" id="btnNuevoUsuario">➕ Agregar persona</button>
+      </div>
+      <div id="usuariosContenido"><div class="cargando">Cargando...</div></div>
+    </div>
+
     <div class="pantalla" id="pasoExtra" style="display:none;">
       <div class="card">
         <div class="aviso extra">⭐ Para casos excepcionales. Se arma y se procesa como cualquier pedido, pero en el historial queda marcado como <b>"fuera de planificación"</b>, con quién lo agregó y por qué.</div>
@@ -856,6 +905,29 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="modalUsuario">
+    <div class="modal con-cab">
+      <div class="modal-cab">
+        <h2 id="tituloModalUsuario">Persona</h2>
+        <button class="modal-x" onclick="cerrarModal('modalUsuario')" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="field"><label>Documento (DNI)</label><input type="text" id="usrDni" inputmode="numeric" placeholder="Ej: 40123456"></div>
+      <div class="field"><label>Nombre y apellido</label><input type="text" id="usrNombre" placeholder="Nombre completo"></div>
+      <div class="campo-titulo">Roles <span>(puede tener más de uno: ve la suma de los menús)</span></div>
+      <div id="usrRoles">
+        <label class="rol-opt"><input type="checkbox" value="armador"><span><b>Armador</b><small>Arma pedidos, cuenta stock y ve el stock.</small></span></label>
+        <label class="rol-opt"><input type="checkbox" value="compras"><span><b>Compras</b><small>Ve el stock, prepara y <u>aprueba</u> la compra, emite la orden.</small></span></label>
+        <label class="rol-opt"><input type="checkbox" value="planificacion"><span><b>Planificación</b><small>Habilita pendientes, edita y prepara la compra (no la emite). Todo menos métricas.</small></span></label>
+        <label class="rol-opt"><input type="checkbox" value="logistica"><span><b>Logística</b><small>Todo, incluidas las métricas y la administración de usuarios.</small></span></label>
+      </div>
+      <div class="campo-titulo">Extras</div>
+      <label class="rol-opt"><input type="checkbox" id="usrAuditor"><span><b>Puede auditar</b><small>Habilita la auditoría de "sin stock", aunque su rol no la incluya.</small></span></label>
+      <label class="rol-opt"><input type="checkbox" id="usrActivo" checked><span><b>Activo</b><small>Si se desmarca, esa persona no puede ingresar.</small></span></label>
+      <div id="usrError" class="aviso extra" style="display:none;"></div>
+      <button class="btn btn-success" id="btnGuardarUsuario">✔ Guardar</button>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="modalArmado">
     <div class="modal con-cab">
       <div class="modal-cab">
@@ -876,6 +948,7 @@
       getFirestore, doc, getDoc, setDoc, deleteDoc, collection, collectionGroup, query, where, orderBy, limit,
       getDocs, runTransaction, writeBatch, serverTimestamp, increment, addDoc
     } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+    import { NOMBRE_ROL, USUARIOS_INICIALES, calcularPermisos, cargarUsuario } from './permisos.js';
 
     // ⚠️ CONFIGURACIÓN: mismo proyecto de Firebase que app-firestore.html
     const firebaseConfig = {
@@ -891,20 +964,8 @@
     const db = getFirestore(app);
     const pedidosCol = collection(db, 'pedidos');
 
-    // Documento -> nombre. Lista chica y fija, se edita acá directo si
-    // entra o sale alguien del equipo (no hace falta tocar Firestore).
-    const PERSONAS = {
-      "40865366": "Paulo David Mandon",
-      "43985774": "Martin Carmelo Mazzeo",
-      "45779563": "Brandon Jesus Carrizo",
-      "35918123": "Franco Palomino",
-      "41556471": "Julian Hector Casabianca Perdriel",
-      "43458682": "Taiel Isidro Madoery",
-      "31944489": "Diego Terrein",
-      "39763131": "Enzo Ariel Ferrari",
-      "40143672": "Facundo Sebastián Nerli"
-    };
-    let personaActual = null; // {documento, nombre}
+    // Las personas y sus roles viven en la colección "usuarios" (ver permisos.js). Se administran desde Logística > Usuarios.
+    let personaActual = null; // {documento, nombre, roles, auditor, permisos}
 
     let html5QrCode = null;
     let sucursalActiva = null;
@@ -924,11 +985,6 @@
 
     // ---------------- IDENTIFICACIÓN POR DOCUMENTO ----------------
     const DURACION_SESION_MS = 4 * 60 * 60 * 1000; // 4 horas
-    const DNI_AUTORIZADOS_HABILITAR = new Set(['43458682', '43985774']);
-    // Pueden auditar: los de gestión + Franco Palomino (que solo audita, no gestiona pedidos)
-    const DNI_AUDITORES = new Set([...DNI_AUTORIZADOS_HABILITAR, '35918123']);
-    // Compras y "Armar pedido a proveedor": por ahora los mismos DNI que gestión. Para sumar a alguien de Compras, agregar su DNI acá.
-    const DNI_COMPRAS = new Set([...DNI_AUTORIZADOS_HABILITAR]);
 
     // ---------------- NAVEGACIÓN ENTRE PANTALLAS ----------------
     // UNA sola pantalla visible a la vez. Antes cada pantalla se abría y se
@@ -937,45 +993,43 @@
     // pantallas apiladas. Ahora todo pasa por irA_(), que oculta todas y
     // muestra una sola.
     const PANTALLAS = {
-      home:      { el: 'pasoSucursal', padre: null },
-      armar:     { el: 'pasoArmar', padre: 'home' },
+      home:      { el: 'pasoSucursal', padre: null, requiere: 'armar' },
+      armar:     { el: 'pasoArmar', padre: 'home', requiere: 'armar' },
       menu:      { el: 'pasoMenu', padre: 'home' },
-      stock:     { el: 'pasoStock', padre: 'menu' },
-      admin:     { el: 'pasoAdmin', padre: 'menu' },
+      stock:     { el: 'pasoStock', padre: 'menu', requiere: 'ver_stock' },
+      admin:     { el: 'pasoAdmin', padre: 'menu', requiere: 'armar' },
       habilitar: { el: 'pasoHabilitar', padre: 'menu', requiere: 'gestion' },
       sinstock:  { el: 'pasoSinStock', padre: 'menu', requiere: 'gestion' },
       compras:   { el: 'pasoCompras', padre: 'menu', requiere: 'compras' },
       pedidoprov: { el: 'pasoPedidoProv', padre: 'menu', requiere: 'compras' },
+      usuarios:  { el: 'pasoUsuarios', padre: 'menu', requiere: 'usuarios' },
       auditoria: { el: 'pasoAuditoria', padre: 'menu', requiere: 'auditor' },
       extra:     { el: 'pasoExtra', padre: 'menu', requiere: 'gestion' }
     };
     // Profundidad de cada pantalla: sirve para animar hacia adelante (entra por la derecha) o hacia atrás (por la izquierda)
-    const PROFUNDIDAD = { home: 0, menu: 1, armar: 1, stock: 2, admin: 2, habilitar: 2, sinstock: 2, compras: 2, pedidoprov: 2, auditoria: 2, extra: 2 };
+    const PROFUNDIDAD = { home: 0, menu: 1, armar: 1, stock: 2, admin: 2, habilitar: 2, sinstock: 2, compras: 2, pedidoprov: 2, usuarios: 2, auditoria: 2, extra: 2 };
     let pantallaActual = 'home';
     let stockTabActual = 'stock';       // pestaña de la pantalla Stock: 'stock' o 'conteo'
     let conteoApi = null;               // módulo conteo.js, una vez cargado
     let cargaConteoPromesa = null;
     let listaInicioDesactualizada = false; // se enciende al pasar por una pantalla que pudo cambiar pedidos
 
-    function esAutorizadoGestion_() {
-      return !!(personaActual && DNI_AUTORIZADOS_HABILITAR.has(personaActual.documento));
+    // Todo se decide por "capacidades" (armar, contar, planificar, ...). Cada rol suma las suyas (ver permisos.js).
+    function puede_(cap) {
+      return !!(personaActual && personaActual.permisos && personaActual.permisos.has(cap));
     }
+    function esAutorizadoGestion_() { return puede_('planificar'); }   // habilitar pendientes / sin stock, pedido extra, borrar, editar
+    function esAuditor_() { return puede_('auditar'); }
+    function esCompras_() { return puede_('compras_ver'); }
 
-    function esAuditor_() {
-      return !!(personaActual && DNI_AUDITORES.has(personaActual.documento));
-    }
-
+    const CAP_REQUERIDA = { gestion: 'planificar', compras: 'compras_ver', auditor: 'auditar' };
     function puedeEntrar_(nombre) {
       const req = PANTALLAS[nombre] && PANTALLAS[nombre].requiere;
       if (!req) return true;
-      if (req === 'gestion') return esAutorizadoGestion_();
-      if (req === 'compras') return esCompras_();
-      return esAuditor_();
+      return puede_(CAP_REQUERIDA[req] || req);
     }
-
-    function esCompras_() {
-      return !!(personaActual && DNI_COMPRAS.has(personaActual.documento));
-    }
+    // Pantalla de arranque: quien no arma (por ejemplo, solo Compras) empieza directo en el menú.
+    function inicio_() { return puede_('armar') ? 'home' : 'menu'; }
 
     function textosEncabezado_() {
       switch (pantallaActual) {
@@ -983,6 +1037,7 @@
         case 'menu': return ['Menú', 'Elegí qué querés hacer'];
         case 'stock': return stockTabActual === 'conteo' ? ['Contar stock', 'Sumá lo que hay en cada posición'] : ['Stock', 'Todos los productos, con lo que tiene stock primero'];
         case 'compras': return ['Compras', 'Stock por proveedor'];
+        case 'usuarios': return ['Usuarios y permisos', 'Quién entra a la app y qué puede hacer'];
         case 'pedidoprov': return ['Armar pedido a proveedor', 'Calcular qué pedir y bajar la orden en PDF'];
         case 'admin': return ['Armado sin procesar', 'Lo armado que todavía no se procesó'];
         case 'habilitar': return ['Habilitar pendientes', 'Liberar lo que esperaba al proveedor'];
@@ -997,7 +1052,7 @@
       const [titulo, sub] = textosEncabezado_();
       document.getElementById('tituloPantalla').textContent = titulo;
       document.getElementById('subtitulo').textContent = sub;
-      document.getElementById('btnVolverHeader').style.display = PANTALLAS[pantallaActual].padre ? 'grid' : 'none';
+      document.getElementById('btnVolverHeader').style.display = (PANTALLAS[pantallaActual].padre && puedeEntrar_(PANTALLAS[pantallaActual].padre)) ? 'grid' : 'none';
       document.getElementById('btnMenu').style.display = pantallaActual === 'home' ? 'flex' : 'none';
       medirEncabezado_();
     }
@@ -1010,7 +1065,7 @@
 
     function irA_(nombre) {
       if (!PANTALLAS[nombre]) return;
-      if (!puedeEntrar_(nombre)) { mostrarToast('No estás autorizado para esto', true); nombre = 'home'; }
+      if (!puedeEntrar_(nombre)) { if (nombre !== 'home') mostrarToast('No estás autorizado para esto', true); nombre = inicio_(); }
       const anterior = pantallaActual;
       Object.keys(PANTALLAS).forEach(k => { document.getElementById(PANTALLAS[k].el).style.display = 'none'; });
       const elNuevo = document.getElementById(PANTALLAS[nombre].el);
@@ -1059,7 +1114,7 @@
       document.getElementById('menuHola').innerHTML = `Hola, <b>${escapeHtml(nombre)}</b> 👋`;
       let pend = 0, falt = 0;
       todosPendientesRaw.forEach(d => { if (esFaltante_(d)) falt++; else pend++; });
-      document.getElementById('menuResumen').textContent = (pend + falt)
+      document.getElementById('menuResumen').textContent = !puede_('armar') ? 'Elegí qué querés hacer.' : (pend + falt)
         ? `Hay ${pend} producto${pend === 1 ? '' : 's'} pendiente${pend === 1 ? '' : 's'} de armar y ${falt} faltante${falt === 1 ? '' : 's'}.`
         : 'No hay pedidos pendientes de armar ahora mismo.';
       if (esAuditor_()) actualizarInsigniaAuditoria_();
@@ -1082,27 +1137,38 @@
     document.getElementById('inputDocumentoLogin').addEventListener('keydown', e => { if (e.key === 'Enter') intentarLogin(); });
     document.getElementById('btnCambiarPersona').addEventListener('click', cerrarSesionPersona);
 
-    function intentarLogin() {
+    async function intentarLogin() {
       const input = document.getElementById('inputDocumentoLogin');
       const documento = input.value.trim().replace(/\D/g, '');
-      const nombre = PERSONAS[documento];
       const errorDiv = document.getElementById('errorLogin');
-      if (!nombre) {
-        errorDiv.textContent = 'Documento no reconocido. Fijate que esté bien escrito, o pedile a un encargado que te agregue.';
-        errorDiv.style.display = 'block';
+      const btn = document.getElementById('btnConfirmarLogin');
+      const mostrarError = (msg) => { errorDiv.textContent = msg; errorDiv.style.display = 'block'; };
+      if (!documento) { mostrarError('Ingresá tu número de documento.'); return; }
+      btn.disabled = true;
+      let r;
+      try { r = await cargarUsuario_(documento); } finally { btn.disabled = false; }
+      if (!r.ok) {
+        mostrarError(r.motivo === 'inactivo' ? 'Tu usuario está desactivado. Hablá con Logística.'
+          : r.motivo === 'no_habilitado' ? 'Ese documento no está habilitado. Fijate que esté bien escrito, o pedile a Logística que te dé de alta.'
+          : 'No se pudo verificar tu documento. Revisá la conexión e intentá de nuevo.');
         return;
       }
       errorDiv.style.display = 'none';
-      personaActual = { documento, nombre };
+      establecerPersona_(documento, r.usuario);
       const expira = Date.now() + DURACION_SESION_MS;
       try {
-        localStorage.setItem('armador_persona', JSON.stringify({ documento, nombre, expira }));
+        localStorage.setItem('armador_persona', JSON.stringify({ documento, nombre: personaActual.nombre, expira }));
       } catch (e) { /* si el navegador bloquea storage, sigue igual pero pide login cada vez */ }
-      registrarSesionFirestore_(documento, nombre, expira);
+      registrarSesionFirestore_(documento, personaActual.nombre, expira);
       input.value = '';
       mostrarPersonaEnHeader();
       document.getElementById('loginOverlay').classList.remove('show');
       arrancarApp();
+    }
+
+    function cargarUsuario_(documento) { return cargarUsuario({ db, doc, getDoc, setDoc, serverTimestamp }, documento); }
+    function establecerPersona_(documento, u) {
+      personaActual = { documento, nombre: u.nombre, roles: u.roles || [], auditor: !!u.auditor, permisos: calcularPermisos(u.roles, u.auditor) };
     }
 
     function cerrarSesionPersona() {
@@ -1156,34 +1222,49 @@
       const nombre = personaActual ? personaActual.nombre : '—';
       document.getElementById('nombrePersonaActual').textContent = nombre;
       document.getElementById('avatarPersona').textContent = (nombre.trim()[0] || '?').toUpperCase();
-      document.getElementById('rolPersona').textContent = esAutorizadoGestion_() ? 'Administrador' : (esAuditor_() ? 'Auditor' : 'Armador');
-      const autorizado = esAutorizadoGestion_();
-      document.getElementById('menuSeccionGestion').style.display = autorizado ? '' : 'none';
-      document.getElementById('menuSeccionControl').style.display = esAuditor_() ? '' : 'none';
-      document.getElementById('menuSeccionCompras').style.display = esCompras_() ? '' : 'none';
-      // Si cambió la persona y la pantalla actual es de gestión, se vuelve al inicio
-      if (!puedeEntrar_(pantallaActual)) irA_('home');
+      const etiquetas = personaActual ? (personaActual.roles || []).map(r => NOMBRE_ROL[r] || r) : [];
+      if (personaActual && personaActual.auditor) etiquetas.push('Auditor');
+      document.getElementById('rolPersona').textContent = etiquetas.join(' · ') || 'Sin rol';
+      // El menú muestra solo lo que esta persona puede hacer (la suma de sus roles)
+      const mostrar = (id, ok) => { document.getElementById(id).style.display = ok ? '' : 'none'; };
+      mostrar('menuSeccionDeposito', puede_('contar'));
+      mostrar('btnVerAdmin', puede_('armar'));
+      mostrar('menuSeccionGestion', puede_('planificar'));
+      mostrar('menuSeccionCompras', puede_('compras_ver'));
+      mostrar('menuSeccionLogistica', puede_('metricas') || puede_('usuarios'));
+      mostrar('btnMetricas', puede_('metricas'));
+      mostrar('btnUsuarios', puede_('usuarios'));
+      mostrar('menuSeccionControl', puede_('auditar'));
+      mostrar('tabConteo', puede_('contar'));
+      // Si cambió la persona y la pantalla actual ya no le corresponde, se la lleva a su inicio
+      if (!puedeEntrar_(pantallaActual)) irA_(inicio_());
     }
 
     let appYaArrancada = false;
+    let armadoCargado = false;
     function arrancarApp() {
-      if (appYaArrancada) return;
       appYaArrancada = true;
-      cargarBultos();
-      cargarSucursales();
+      if (puede_('armar') && !armadoCargado) { armadoCargado = true; cargarBultos(); cargarSucursales(); }
+      if (!puede_('armar') && pantallaActual === 'home') irA_('menu');
     }
 
-    (function iniciarSesionSiCorresponde() {
+    (async function iniciarSesionSiCorresponde() {
       try {
         const guardada = JSON.parse(localStorage.getItem('armador_persona') || 'null');
         if (guardada && guardada.expira && Date.now() < guardada.expira) {
-          personaActual = { documento: guardada.documento, nombre: guardada.nombre };
-          mostrarPersonaEnHeader();
-          registrarSesionFirestore_(guardada.documento, guardada.nombre, guardada.expira); // refresca el registro en cada apertura de la página
-          arrancarApp();
-          return;
+          // Se vuelve a leer a la persona: si le cambiaron los roles o la desactivaron, se nota al abrir la app
+          const r = await cargarUsuario_(guardada.documento);
+          if (r.ok) {
+            establecerPersona_(guardada.documento, r.usuario);
+            mostrarPersonaEnHeader();
+            registrarSesionFirestore_(guardada.documento, personaActual.nombre, guardada.expira); // refresca el registro en cada apertura de la página
+            arrancarApp();
+            return;
+          }
+          localStorage.removeItem('armador_persona');
+        } else if (guardada) {
+          localStorage.removeItem('armador_persona'); // sesión vencida (pasaron las 4hs), se limpia
         }
-        if (guardada) localStorage.removeItem('armador_persona'); // sesión vencida (pasaron las 4hs), se limpia
       } catch (e) { /* localStorage no disponible o dato corrupto: pide login igual */ }
       document.getElementById('loginOverlay').classList.add('show');
     })();
@@ -1929,6 +2010,111 @@
       // Devuelve los datos de cada pedido afectado: sirven para la auditoría
       // (quedan guardados aunque después el pedido se procese o se borre).
       return candidatos.map(d => resumenPedidoParaAuditoria_(d.id, d.data()));
+    }
+
+    // ---------------- USUARIOS Y PERMISOS (solo Logística) ----------------
+    let usuariosCargados = [];
+    let usuarioEditando = null; // documento que se está editando; null = alta nueva
+
+    document.getElementById('btnUsuarios').addEventListener('click', abrirUsuarios_);
+    document.getElementById('btnMetricas').addEventListener('click', () => { if (puede_('metricas')) location.href = 'tiempos.html'; });
+    document.getElementById('btnModuloCompras').addEventListener('click', () => { if (puede_('compras_ver')) location.href = 'compras.html'; });
+    document.getElementById('buscarUsuario').addEventListener('input', renderizarUsuarios_);
+    document.getElementById('btnNuevoUsuario').addEventListener('click', () => abrirModalUsuario_(null));
+    document.getElementById('btnGuardarUsuario').addEventListener('click', guardarUsuario_);
+    document.getElementById('usuariosContenido').addEventListener('click', (e) => {
+      const f = e.target.closest('.usr-fila');
+      if (f) abrirModalUsuario_(f.dataset.dni);
+    });
+
+    async function abrirUsuarios_() {
+      if (!puede_('usuarios')) { mostrarToast('No estás autorizado para esto', true); return; }
+      irA_('usuarios');
+      document.getElementById('buscarUsuario').value = '';
+      await cargarUsuarios_();
+    }
+
+    async function cargarUsuarios_() {
+      const cont = document.getElementById('usuariosContenido');
+      cont.innerHTML = '<div class="cargando">Cargando...</div>';
+      try {
+        const snap = await getDocs(collection(db, 'usuarios'));
+        const porDni = {};
+        snap.forEach(d => { porDni[d.id] = { documento: d.id, ...d.data() }; });
+        // Migración: las personas que ya usaban la app y todavía no tienen su registro se crean ahora
+        for (const [dni, ini] of Object.entries(USUARIOS_INICIALES)) {
+          if (porDni[dni]) continue;
+          const nuevo = { documento: dni, nombre: ini.nombre, roles: ini.roles, auditor: !!ini.auditor, activo: true };
+          try { await setDoc(doc(db, 'usuarios', dni), { ...nuevo, creadoEn: serverTimestamp(), creadoPor: 'migración inicial' }); } catch (e) { /* queda solo en pantalla */ }
+          porDni[dni] = nuevo;
+        }
+        usuariosCargados = Object.values(porDni).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+        renderizarUsuarios_();
+      } catch (err) {
+        cont.innerHTML = `<div class="empty-state">No se pudo leer la lista de usuarios (${escapeHtml(err.message)}).<br>Si es un error de permisos, hay que publicar las reglas de Firestore actualizadas.</div>`;
+      }
+    }
+
+    function renderizarUsuarios_() {
+      const cont = document.getElementById('usuariosContenido');
+      const texto = document.getElementById('buscarUsuario').value.trim().toLowerCase();
+      const lista = usuariosCargados.filter(u => !texto || (u.nombre || '').toLowerCase().includes(texto) || (u.documento || '').includes(texto));
+      if (!lista.length) { cont.innerHTML = '<div class="empty-state">Sin resultados</div>'; return; }
+      cont.innerHTML = '<div class="lista-datos">' + lista.map(u => {
+        const roles = (u.roles || []).map(r => `<span class="rol-chip">${escapeHtml(NOMBRE_ROL[r] || r)}</span>`).join('');
+        return `<div class="usr-fila ${u.activo === false ? 'inactivo' : ''}" data-dni="${escapeHtml(u.documento)}">
+          <div class="usr-avatar">${escapeHtml((u.nombre || '?').trim()[0] || '?')}</div>
+          <div class="usr-cuerpo"><div class="usr-nombre">${escapeHtml(u.nombre || '')}</div><div class="usr-dni">DNI ${escapeHtml(u.documento)}</div></div>
+          <div class="usr-roles">${roles}${u.auditor ? '<span class="rol-chip auditor">Auditor</span>' : ''}${u.activo === false ? '<span class="rol-chip off">Desactivado</span>' : ''}</div>
+        </div>`;
+      }).join('') + '</div>';
+    }
+
+    function abrirModalUsuario_(dni) {
+      usuarioEditando = dni;
+      const u = dni ? usuariosCargados.find(x => x.documento === dni) : null;
+      document.getElementById('tituloModalUsuario').textContent = dni ? 'Editar persona' : 'Agregar persona';
+      const inDni = document.getElementById('usrDni');
+      inDni.value = dni || '';
+      inDni.disabled = !!dni;
+      document.getElementById('usrNombre').value = u ? (u.nombre || '') : '';
+      document.querySelectorAll('#usrRoles input').forEach(i => { i.checked = !!(u && (u.roles || []).includes(i.value)); });
+      document.getElementById('usrAuditor').checked = !!(u && u.auditor);
+      document.getElementById('usrActivo').checked = u ? u.activo !== false : true;
+      document.getElementById('usrError').style.display = 'none';
+      document.getElementById('modalUsuario').classList.add('show');
+    }
+
+    async function guardarUsuario_() {
+      const err = document.getElementById('usrError');
+      const falla = (m) => { err.textContent = m; err.style.display = 'block'; };
+      const documento = usuarioEditando || document.getElementById('usrDni').value.trim().replace(/\D/g, '');
+      const nombre = document.getElementById('usrNombre').value.trim();
+      const roles = [...document.querySelectorAll('#usrRoles input:checked')].map(i => i.value);
+      const auditor = document.getElementById('usrAuditor').checked;
+      const activo = document.getElementById('usrActivo').checked;
+      if (!/^\d{6,9}$/.test(documento)) return falla('Ingresá un DNI válido (solo números).');
+      if (!usuarioEditando && usuariosCargados.some(x => x.documento === documento)) return falla('Ese DNI ya está cargado. Buscalo en la lista para editarlo.');
+      if (!nombre) return falla('Ingresá el nombre y apellido.');
+      if (!roles.length) return falla('Elegí al menos un rol.');
+      // Nunca puede quedar el sistema sin nadie de Logística activo, ni una persona sacarse el acceso por error
+      const despues = usuariosCargados.filter(x => x.documento !== documento).concat([{ documento, roles, activo }]);
+      if (!despues.some(x => x.activo !== false && (x.roles || []).includes('logistica'))) return falla('Tiene que quedar al menos una persona activa con rol Logística.');
+      if (personaActual && documento === personaActual.documento && (!activo || !roles.includes('logistica'))) return falla('No podés sacarte a vos mismo el rol Logística ni desactivarte. Pedíselo a otra persona de Logística.');
+      const btn = document.getElementById('btnGuardarUsuario');
+      btn.disabled = true;
+      try {
+        const datos = { documento, nombre, roles, auditor, activo, actualizadoEn: serverTimestamp(), actualizadoPor: personaActual ? personaActual.nombre : null };
+        if (!usuarioEditando) { datos.creadoEn = serverTimestamp(); datos.creadoPor = personaActual ? personaActual.nombre : null; }
+        await setDoc(doc(db, 'usuarios', documento), datos, { merge: true });
+        window.cerrarModal('modalUsuario');
+        mostrarToast('Guardado ✓');
+        await cargarUsuarios_();
+      } catch (e) {
+        falla('No se pudo guardar: ' + e.message);
+      } finally {
+        btn.disabled = false;
+      }
     }
 
     // ---------------- CONTEO, COMPRAS Y ARMAR PEDIDO (módulo conteo.js, se carga la primera vez que se usa) ----------------

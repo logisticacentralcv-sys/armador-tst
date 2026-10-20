@@ -54,8 +54,9 @@
 
   <div id="pantallaPrincipal" style="display:none;">
     <header>
+      <a href="index.html" style="color:white; opacity:0.9; font-size:13px; text-decoration:none; font-weight:600;">← Volver al Armador</a>
       <h1>⏱ Tiempos de armado</h1>
-      <p>Panel privado — no visible para los armadores</p>
+      <p>Panel privado — solo para Logística</p>
     </header>
 
     <div class="container">
@@ -140,6 +141,8 @@
     import {
       getFirestore, collection, query, where, orderBy, onSnapshot, getDocs, Timestamp
     } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+    import { getDoc as getDocUsuario, doc as docUsuario, setDoc as setDocUsuario, serverTimestamp as ahoraServidor } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+    import { calcularPermisos, cargarUsuario, leerSesionGuardada } from './permisos.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyBjsx_gcl2X1yr8SPoi_tF3qGcrFRLK3bQ",
@@ -152,24 +155,39 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    const DNI_AUTORIZADOS = new Set(['43458682', '43985774']);
     const UMBRAL_PAUSA_MS = 5 * 60 * 1000; // 5 minutos sin marcar nada = se considera pausa, no tiempo activo
 
     // ---------------- ACCESO ----------------
     document.getElementById('btnEntrarAcceso').addEventListener('click', intentarAcceso);
     document.getElementById('inputDniAcceso').addEventListener('keydown', e => { if (e.key === 'Enter') intentarAcceso(); });
 
-    function intentarAcceso() {
+    // Pueden entrar quienes tengan el permiso "metricas" (rol Logística) en la colección "usuarios".
+    // Si ya ingresaron al Armador en este navegador, entran directo sin volver a poner el documento.
+    async function tieneAccesoMetricas_(dni) {
+      const r = await cargarUsuario({ db, doc: docUsuario, getDoc: getDocUsuario, setDoc: setDocUsuario, serverTimestamp: ahoraServidor }, dni);
+      return r.ok && calcularPermisos(r.usuario.roles, r.usuario.auditor).has('metricas');
+    }
+
+    async function intentarAcceso() {
       const dni = document.getElementById('inputDniAcceso').value.trim().replace(/\D/g, '');
-      if (!DNI_AUTORIZADOS.has(dni)) {
+      if (!(await tieneAccesoMetricas_(dni))) {
         document.getElementById('errorAcceso').textContent = 'No autorizado.';
         document.getElementById('errorAcceso').style.display = 'block';
         return;
       }
+      entrar_();
+    }
+
+    function entrar_() {
       document.getElementById('pantallaAcceso').style.display = 'none';
       document.getElementById('pantallaPrincipal').style.display = 'block';
       iniciar_();
     }
+
+    (async function entrarConSesionDelArmador_() {
+      const s = leerSesionGuardada();
+      if (s && await tieneAccesoMetricas_(s.documento)) entrar_();
+    })();
 
     // ---------------- UTILIDADES DE TIEMPO ----------------
     function formatearDuracion_(ms) {
