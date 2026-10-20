@@ -4,7 +4,7 @@
 //
 // Cada persona (por DNI) está en la colección "usuarios" de Firestore con:
 //   { documento, nombre, roles: [...], auditor: true/false, activo: true/false }
-// Lo que puede hacer es la UNIÓN de lo que permite cada uno de sus roles.
+// Cada rol es un PERFIL: la persona elige con cuál entra y ve solo lo de ese perfil.
 // ============================================================
 
 export const NOMBRE_ROL = {
@@ -51,6 +51,19 @@ export function calcularPermisos(roles, auditor) {
   (roles || []).forEach(r => (PERMISOS_POR_ROL[r] || []).forEach(p => permisos.add(p)));
   if (auditor) permisos.add('auditar'); // la marca de auditor suma la auditoría a cualquier rol
   return permisos;
+}
+
+// Perfiles que existen, en el orden en que se ofrecen al ingresar.
+export const PERFILES = ['armador', 'compras', 'planificacion', 'logistica'];
+
+// La persona entra COMO un perfil (Armador, Compras, Planificación o Logística) y ve solo lo de ese perfil:
+// entrar como Compras no muestra el armado, aunque la misma persona también sea armador. Puede tener varios
+// perfiles y cambiar entre ellos sin volver a poner el documento. La marca "puede auditar" suma la auditoría
+// cuando entra como Armador (Planificación y Logística ya la incluyen).
+// Devuelve el conjunto de permisos, o null si la persona no tiene ese perfil.
+export function resolverPermisos(usuario, perfil) {
+  if (!usuario || !perfil || !(usuario.roles || []).includes(perfil)) return null;
+  return calcularPermisos([perfil], perfil === 'armador' && !!usuario.auditor);
 }
 
 // Busca a la persona. api = { db, doc, getDoc, setDoc, serverTimestamp } (las funciones de Firestore de la página que llama).

@@ -186,7 +186,8 @@
 
     (async function entrarConSesionDelArmador_() {
       const s = leerSesionGuardada();
-      if (s && await tieneAccesoMetricas_(s.documento)) entrar_();
+      // directo solo si está usando el perfil Logística (si entró al Armador con otro perfil, tiene que escribir el documento)
+      if (s && s.perfil === 'logistica' && await tieneAccesoMetricas_(s.documento)) entrar_();
     })();
 
     // ---------------- UTILIDADES DE TIEMPO ----------------

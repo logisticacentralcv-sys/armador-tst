@@ -1,7 +1,6 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Módulo de Compras</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
 /* Concepto: tablero de operaciones a gran escala. Tipografía enorme para los números que importan, secciones que
    entran con movimiento y un gráfico que se puede tocar. Cobalto como acento; coral, ámbar y menta solo para estados. */
@@ -16,18 +15,6 @@
   --f-mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
   --ease:cubic-bezier(.2,.8,.2,1);
 }
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#070B16; --bg2:#0D1424; --surface:#0F1728; --ink:#F1F4FF; --ink2:#C9D1EE; --muted:#8B96B8; --line:#222C47; --line2:#19223A;
-  --accent:#7B93FF; --accent2:#3FD6F2; --accent-soft:#1A2554; --on-accent:#070B16;
-  --crit:#FF7A6B; --crit-soft:#3E1A18; --warn:#FFC14D; --warn-soft:#3A2A0B; --ok:#4FE0A0; --ok-soft:#103325;
-  --c1:#7B93FF; --c2:#FF7A6B; --c3:#4FE0A0; --c4:#FFC14D; --c5:#B591FF; --c6:#3FD6F2; --c7:#F27BC4; --c8:#FF9D6E; --c9:#9CC9A0; --c10:#8FB0E0;
-  --shadow:0 1px 2px rgba(0,0,0,.5),0 16px 40px -12px rgba(0,0,0,.6); color-scheme:dark}}
-:root[data-theme="dark"]{
-  --bg:#070B16; --bg2:#0D1424; --surface:#0F1728; --ink:#F1F4FF; --ink2:#C9D1EE; --muted:#8B96B8; --line:#222C47; --line2:#19223A;
-  --accent:#7B93FF; --accent2:#3FD6F2; --accent-soft:#1A2554; --on-accent:#070B16;
-  --crit:#FF7A6B; --crit-soft:#3E1A18; --warn:#FFC14D; --warn-soft:#3A2A0B; --ok:#4FE0A0; --ok-soft:#103325;
-  --c1:#7B93FF; --c2:#FF7A6B; --c3:#4FE0A0; --c4:#FFC14D; --c5:#B591FF; --c6:#3FD6F2; --c7:#F27BC4; --c8:#FF9D6E; --c9:#9CC9A0; --c10:#8FB0E0;
-  --shadow:0 1px 2px rgba(0,0,0,.5),0 16px 40px -12px rgba(0,0,0,.6); color-scheme:dark}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.5;margin:0}
@@ -259,14 +246,49 @@ textarea.nt{min-height:64px;font-family:var(--f-body);font-size:15px}
 </style>
 
 <style>.ana-t tr.selrow td{background:rgba(46,91,255,.10)}.ana-t td,.ana-t th{padding:9px 8px}.ana-t td.n{font-size:13.5px}.ana-t tr.row{cursor:pointer}</style>
-<style>.volver-app{display:inline-flex;align-items:center;gap:6px;margin-right:14px;padding:7px 14px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font-size:13.5px;font-weight:600;text-decoration:none;white-space:nowrap}.volver-app:hover{border-color:var(--accent);color:var(--accent)}.note.plan{border-left:4px solid var(--accent)}</style>
+<style id="tema-armador">
+/* Misma temática que el Armador: azul, tipografía del sistema, esquinas redondeadas, encabezado y pestañas iguales. */
+:root{--bg:#eef2f7;--bg2:#e3e9f2;--surface:#ffffff;--ink:#0b1220;--ink2:#334155;--muted:#475569;--line:#d8e0ea;--line2:#e8edf4;
+  --accent:#2563eb;--accent2:#06b6d4;--accent-soft:#eff6ff;--on-accent:#ffffff;--crit:#dc2626;--crit-soft:#fef2f2;--warn:#ea580c;--warn-soft:#fff7ed;--ok:#16a34a;--ok-soft:#f0fdf4;
+  --f-head:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;--f-body:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --shadow:0 1px 2px rgba(15,23,42,.06),0 8px 24px rgba(15,23,42,.08);--alto-barra:68px}
+body{background:var(--bg);color:var(--ink);font-size:16px;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{font-family:var(--f-head)}
+h1{font-size:clamp(26px,3.2vw,36px)!important;font-weight:800!important;letter-spacing:-.02em!important;line-height:1.1!important}
+h2{letter-spacing:-.01em}
+.hero .stat .v{font-size:clamp(28px,3.4vw,44px)!important}
+.barra-app{position:sticky;top:0;z-index:60;background:linear-gradient(135deg,#1e3a8a 0%,#2563eb 62%,#3b82f6 100%);color:#fff;padding:10px 0;box-shadow:0 4px 18px rgba(30,64,175,.3)}
+.barra-fila{max-width:1560px;margin:0 auto;padding:0 max(18px,env(safe-area-inset-left,0px));display:flex;align-items:center;gap:12px;min-height:48px}
+.barra-volver{flex-shrink:0;width:44px;height:44px;border-radius:50%;border:2px solid rgba(255,255,255,.6);background:rgba(255,255,255,.22);color:#fff;display:grid;place-items:center;text-decoration:none}
+.barra-volver svg{width:22px;height:22px;display:block;margin-left:-2px}
+.barra-titulo{flex:1;min-width:0}
+.barra-titulo h1{margin:0;font-size:20px!important;font-weight:800;line-height:1.15!important;color:#fff;letter-spacing:-.01em!important}
+.barra-titulo p{margin:2px 0 0;font-size:13.5px;opacity:.92;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.barra-avatar{flex-shrink:0;width:44px;height:44px;border-radius:50%;border:2px solid rgba(255,255,255,.6);background:rgba(255,255,255,.22);display:grid;place-items:center;font-weight:800;font-size:18px;color:#fff}
+.top{top:var(--alto-barra)!important;padding-top:12px!important}
+.nav{background:#dfe6f0}
+.nav .ind{background:var(--accent)!important;box-shadow:0 4px 14px rgba(37,99,235,.35)}
+.tab[aria-selected="true"]{color:#fff!important}
+.n-sol{background:var(--crit);color:#fff;border-radius:999px;padding:1px 8px;font-size:12px;margin-left:6px;font-weight:800}
+.btn{border-width:2px!important;font-size:15.5px;padding:11px 20px}
+.btn.pri{box-shadow:0 4px 14px rgba(37,99,235,.28)}
+.card{border-radius:18px!important;padding:20px!important;box-shadow:var(--shadow)}
+.note{border-radius:14px!important}
+.sol-card{cursor:pointer;transition:transform .15s,box-shadow .2s}
+.sol-card:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(15,23,42,.14)}
+.note.plan{border-left:4px solid var(--accent)}
+</style>
 </head><body>
+<div class="barra-app">
+  <div class="barra-fila">
+    <a class="barra-volver" href="index.html" aria-label="Volver al menú"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 5.5L8 12l6.5 6.5"/></svg></a>
+    <div class="barra-titulo"><h1>Planificación de compras</h1><p id="barraSub">Cargando…</p></div>
+    <div class="barra-avatar" id="barraAvatar">?</div>
+  </div>
+</div>
 <div class="app">
   <header class="top">
-    <div class="brand">
-      <a class="volver-app" href="index.html">← Armador</a><div class="logo">módulo<i>/</i>compras</div>
-      <div class="status" id="status"></div>
-    </div>
+    <div class="status" id="status" style="margin-bottom:10px"></div>
     <nav class="nav" role="tablist" id="tabs" aria-label="Secciones"></nav>
   </header>
   <main id="main" class="panel" aria-live="polite"><div class="note">Cargando datos…</div></main>
@@ -590,7 +612,7 @@ function saveParams() {
   saveT = setTimeout(async () => { try { await S.db.doc('cfg/params').set(S.params); } catch (e) { toast('No se pudo guardar los parámetros: ' + (e.message || e.code)); } }, 700);
 }
 async function saveMeta() { if (S.db) await S.db.doc('cfg/meta').set(S.meta); }
-async function saveMaster() { if (S.db) await S.db.doc('cfg/master').set({ items: S.master }); }
+async function saveMaster() { if (S.db) await S.db.doc('cfg/master').set({ items: S.master.filter(m => !sameAsBase(m)) }); } // solo lo que se editó a mano: el resto se lee de Firebase
 async function saveStock() { if (S.db) await S.db.doc('stock/current').set(S.stock); }
 function ddToPlain(c) { const o = {}; for (const s in S.dd[c]) { const a = Array.from(S.dd[c][s], x => Math.round(x * 1000) / 1000); if (a.some(x => x !== 0)) o[s] = a; } return o; }
 async function saveDays(cods, onp) {
@@ -716,7 +738,7 @@ const vmult = (m, u) => unitMult(m, u);
 const decOf = r => r.pm > 1 ? 1 : 0;
 const storeColor = s => `var(--c${(Math.max(0, S.storeList.indexOf(s)) % 10) + 1})`;
 
-const TABS = [['home', 'Panorama'], ['orden', 'Orden de compra'], ['tend', 'Tendencias'], ['fc', 'Pronóstico'], ['ana', 'Análisis'], ['prov', 'Proveedores'], ['cat', 'Catálogo'], ['datos', 'Datos'], ['teoria', 'Teoría']];
+const TABS = [['home', 'Panorama'], ['orden', 'Orden de compra'], ['sol', 'Solicitudes'], ['tend', 'Tendencias'], ['fc', 'Pronóstico'], ['ana', 'Análisis'], ['prov', 'Proveedores'], ['cat', 'Catálogo'], ['datos', 'Datos'], ['teoria', 'Teoría']];
 function renderTabs() {
   const nav = $('#tabs');
   if (!nav.dataset.built) {
@@ -736,15 +758,17 @@ window.addEventListener('resize', () => { moveInd(); });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(moveInd);
 function renderStatus() {
   if (!S.ready) { $('#status').innerHTML = ''; return; }
+  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span>`; return; }
   const part = isPartial() ? `<span class="pill warn" title="La última semana tiene datos hasta el ${dnFmt(S.lastDn)}; se completa con el perfil por día de la semana">semana en curso parcial</span>` : '';
   $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span>${part}`;
 }
 function render(anim) {
-  renderTabs(); renderStatus();
+  renderTabs(); renderStatus(); badgeSol();
   const main = $('#main');
   if (S.ui.tab === 'cat') { viewCat(main); countUp(main); return; }
   if (!S.ready || !S.master.length || !S.meta) { main.innerHTML = ''; viewDatos(main, true); return; }
-  ({ home: viewHome, orden: viewOrden, tend: viewTend, fc: viewFc, ana: viewAna, prov: viewProv, cat: viewCat, datos: viewDatos, teoria: viewTeoria })[S.ui.tab](main);
+  ({ home: viewHome, orden: viewOrden, sol: viewSol, tend: viewTend, fc: viewFc, ana: viewAna, prov: viewProv, cat: viewCat, datos: viewDatos, teoria: viewTeoria })[S.ui.tab](main);
+  if (S.meta && S.meta.virtual && S.ui.tab !== 'datos') { main.insertAdjacentHTML('afterbegin', '<div class="note warn"><b>Todavía no hay ventas cargadas.</b> Ves el stock y los parámetros de cada proveedor; el pronóstico y el pedido sugerido se calculan cuando pegás las ventas en <a href="#" id="irDatos" style="font-weight:700">Datos</a>.</div>'); const g = $('#irDatos'); if (g) g.onclick = e => { e.preventDefault(); S.ui.tab = 'datos'; render(true); window.scrollTo({ top: 0 }); }; }
   if (anim) [...main.children].forEach((el, i) => { el.classList.add('rise'); el.style.setProperty('--i', i); });
   countUp(main);
 }
@@ -1113,11 +1137,11 @@ function viewOrden(main) {
     <div class="hint" style="margin-top:10px">Pasá el mouse por el título de cada columna para ver qué es. Las columnas con fondo celeste se editan. Para ver paso a paso cómo se calculó un producto, tocá la fila. <a href="#" id="goTeoria">Ver la teoría completa ›</a></div>
     <div class="bar" style="margin-top:18px">
       <div class="fld" style="flex:1;min-width:260px"><label for="poNote">Observaciones para el proveedor (opcional)</label><input type="text" id="poNote" value="${esc(u.poNote)}" placeholder="Ej.: entrega por la mañana"></div>
-      ${u.poAsk ? `<button class="btn pri" id="poOk">Confirmar: emitir ${emit.length} líneas</button><button class="btn" id="poNo">Cancelar</button>` : (puedeAprobar() ? `<button class="btn pri" id="poEmit" ${emit.length ? '' : 'disabled'}>Emitir orden de compra</button>` : `<button class="btn pri" id="poPlan" ${emit.length ? '' : 'disabled'}>Dejar el plan listo para Compras</button>`)}
+      ${u.poAsk ? `<button class="btn pri" id="poOk">Confirmar: emitir ${emit.length} líneas</button><button class="btn" id="poNo">Cancelar</button>` : (puedeAprobar() ? `<button class="btn pri" id="poEmit" ${emit.length ? '' : 'disabled'}>Emitir orden de compra</button>` : `<button class="btn pri" id="poSol" ${emit.length ? '' : 'disabled'}>Enviar solicitud a Compras</button>`)}
       <button class="btn" id="poDraft" ${emit.length ? '' : 'disabled'}>Bajar borrador (Excel)</button>
     </div>
     ${u.poAsk ? '<div class="note" style="margin-top:12px">Al confirmar se guarda la orden en el historial y se descarga el Excel para mandar a compras. No se modifica el stock.</div>' : ''}
-    ${!puedeAprobar() ? '<div class="note" style="margin-top:12px"><b>Vos preparás el plan.</b> Dejá lo que corresponda en <b>Pedido final</b> (se guarda solo) y avisale a Compras con el botón. La orden la aprueba y emite Compras.</div>' : ''}
+    ${!puedeAprobar() ? '<div class="note" style="margin-top:12px"><b>Vos planificás la compra.</b> Dejá lo que corresponda en <b>Pedido final</b> (se guarda solo) y enviá la solicitud: Compras la ve con estos mismos datos y puede aceptarla, rechazarla o modificarla antes de hacer el pedido.</div>' : ''}
   </section>
   ${selR ? `<section class="card" id="poGraf"><div class="po-head"><div><div class="eyebrow">Cómo evoluciona el stock</div><h3 style="margin:2px 0 0">${esc(selR.m.nombre)}</h3></div><div class="fld"><label for="poSel">Producto</label><select id="poSel">${lines.map(x => `<option value="${x.m.cod}" ${x.m.cod === u.poSel ? 'selected' : ''}>${esc(x.m.nombre)}</option>`).join('')}</select></div></div>
     ${stockPanelHtml(selR, ulabel(selR))}
@@ -1139,7 +1163,7 @@ function viewOrden(main) {
   $$('tr.row', main).forEach(t => t.onclick = e => { if (e.target.closest('input')) return; openDetail(t.dataset.cod); });
   $$('input.ed', main).forEach(inp => { inp.onclick = e => e.stopPropagation(); inp.onchange = () => { const c = inp.dataset.cod, ov = S.params.prod[c] = S.params.prod[c] || {}, v = inp.value === '' ? undefined : Math.max(0, +inp.value); if (v === undefined || (inp.dataset.k === 'dias' && !(v > 0))) delete ov[inp.dataset.k]; else ov[inp.dataset.k] = v; if (inp.dataset.k !== 'final') delete ov.final; if (inp.dataset.k === 'nenv' && v !== undefined) delete ov.dias; if (inp.dataset.k === 'dias' && v > 0) delete ov.nenv; S.plan = []; saveParams(); viewOrden(main); }; });
   const bE = $('#poEmit'); if (bE) bE.onclick = () => { u.poAsk = true; viewOrden(main); };
-  const bP = $('#poPlan'); if (bP) bP.onclick = async () => { bP.disabled = true; await enviarPlan(cur, emit); viewOrden(main); };
+  const bS = $('#poSol'); if (bS) bS.onclick = async () => { bS.disabled = true; await enviarSolicitud(cur, emit); viewOrden(main); };
   const bN = $('#poNo'); if (bN) bN.onclick = () => { u.poAsk = false; viewOrden(main); };
   const bO = $('#poOk'); if (bO) bO.onclick = async () => { bO.disabled = true; await emitOrder(cur, emit); u.poAsk = false; viewOrden(main); };
   $('#poDraft').onclick = () => exportOrder(buildOrder(cur, emit, true));
@@ -1157,8 +1181,6 @@ async function emitOrder(cur, emit) {
   const o = buildOrder(cur, emit, false);
   S.orders.unshift(o);
   try { if (S.db) await S.db.doc('ordenes/' + o.id).set(o); } catch (e) { toast('La orden se descargó pero no se pudo guardar en el historial: ' + (e.message || e.code), 7000); }
-  const pl = S.planes && S.planes[cur.p];
-  if (pl && pl.estado === 'pendiente') { const hecho = { ...pl, estado: 'emitido', emitidoPor: S.user.nombre, emitidoEn: new Date().toISOString(), orden: o.num }; S.planes[cur.p] = hecho; try { await S.db.doc('planes/' + slugProv(cur.p)).set(hecho); } catch (e) { /* el plan queda pendiente: no afecta la orden */ } }
   exportOrder(o); toast('Orden ' + o.num + ' emitida.');
 }
 function exportOrder(o) {
@@ -1476,24 +1498,24 @@ function parseSales(rows) {
 }
 function planSalesImport(p) {
   const nDays = p.maxD - p.minD + 1, missing = []; for (let d = p.minD; d <= p.maxD; d++) if (!p.dayTot.has(d)) missing.push(d);
-  const has = !!S.meta;
+  const has = !!S.meta && !S.meta.virtual; // sin ventas todavía: no hay nada que reemplazar
   return { ...p, nDays, missing, gap: has && p.minD > S.lastDn + 1 ? p.minD - S.lastDn - 1 : 0, overlap: has ? Math.max(0, Math.min(p.maxD, S.lastDn) - Math.max(p.minD, S.start) + 1) : 0, partialWeek: dowOf(p.maxD) < 6, shorter: has && p.maxD < S.lastDn };
 }
 async function commitSales(p, setProg) {
-  const had = !!S.meta, p0 = p.minD - dowOf(p.minD);
+  const had = !!S.meta && !S.meta.virtual, p0 = p.minD - dowOf(p.minD);
   const oldStart = had ? S.start : p0, newStart = Math.min(oldStart, p0), newLast = Math.max(had ? S.lastDn : p.maxD, p.maxD);
   const newND = newLast - newStart + 1, off = oldStart - newStart, dd = {};
   for (const m of S.master) { dd[m.cod] = {}; const old = S.dd[m.cod] || {}; for (const s in old) { const a = new Float64Array(newND); a.set(old[s], off); dd[m.cod][s] = a; } }
   const i0 = p.minD - newStart, i1 = p.maxD - newStart;
   for (const c in dd) for (const s in dd[c]) for (let i = i0; i <= i1; i++) dd[c][s][i] = 0;
   for (const [cod, stores] of p.agg) for (const [s, days] of stores) { if (!dd[cod][s]) dd[cod][s] = new Float64Array(newND); for (const [d, q] of days) dd[cod][s][d - newStart] += q; }
-  const meta = Object.assign({}, S.meta || {}), fm = p.minD + ((7 - dowOf(p.minD)) % 7);
+  const meta = Object.assign({}, had ? S.meta : {}), fm = p.minD + ((7 - dowOf(p.minD)) % 7);
   meta.startWeek = dnToStr(newStart);
   meta.validFrom = had ? dnToStr(Math.min(strToDn(S.meta.validFrom), fm)) : dnToStr(fm);
   meta.lastDate = dnToStr(newLast);
   meta.updatedAt = dnToStr(todayDn());
   meta.lastImport = { desde: dnToStr(p.minD), hasta: dnToStr(p.maxD), filas: p.n, ignorados: [...p.ignored.keys()].slice(0, 60) };
-  S.meta = meta; S.dd = dd; setup(); S.ready = true; render();
+  S.meta = meta; S.dd = dd; S.sinVentas = false; setup(); S.ready = true; render();
   if (S.db) { await saveMeta(); await saveDays(S.master.map(m => m.cod), setProg); }
 }
 function defaultGroup(prov, cod) { return prov || 'SIN PROVEEDOR'; }
@@ -1537,7 +1559,7 @@ function pasteBox(id, btnId, onRows) {
   b.onclick = async () => { const t = $('#' + id).value.trim(); if (!t) { toast('Pegá primero los datos.'); return; } try { await onRows(parseDelimited(t), 'texto pegado'); } catch (e) { toast(e.message || String(e), 7000); } };
 }
 function dataStatusHtml() {
-  if (!S.meta) return '<div class="note warn">Todavía no hay ventas cargadas.</div>';
+  if (!S.meta || S.meta.virtual) return '<div class="note warn">Todavía no hay ventas cargadas.</div>';
   const cl = S.lastIdx, lastBySt = s => { let last = -1; for (const c in S.vd) { const a = S.vd[c][s]; if (a) for (let i = S.nW - 1; i > last; i--) if (a[i] > 0) { last = i; break; } } return last; };
   const closed = S.storeList.filter(s => { const l = lastBySt(s); return l >= 0 && l < cl - 2; }), notas = S.master.filter(m => m.nota);
   return `<div class="stats s">
@@ -1554,8 +1576,7 @@ function viewDatos(main, empty) {
   const stDate = S.stock ? S.stock.date : dnToStr(todayDn()), nk = Object.keys(S.notes || {}).sort().reverse();
   main.innerHTML = `
   <section>${heroHead('Datos', 'Cargá y actualizá la información', 'El stock y el catálogo se leen de tu Firebase. Las ventas las pegás desde Excel una vez por semana. Todo lo que configurás queda guardado en Firebase.')}</section>
-  ${empty ? '<div class="note warn"><b>Para empezar</b> 1) traé los productos desde Firebase, 2) revisá el catálogo (unidades por caja y proveedor), 3) pegá las ventas desde Excel.</div>' : ''}
-  <div id="fbBox">${fbCardHtml()}</div>
+  ${S.sinVentas ? '<div class="note"><b>Falta un solo paso:</b> pegá las ventas (abajo). El catálogo, los proveedores y el stock ya se leen solos del depósito.</div>' : ''}
   ${dataStatusHtml()}
   <div class="grid2">
     <div class="card"><h3>1. Ventas</h3>
@@ -1563,12 +1584,7 @@ function viewDatos(main, empty) {
       <div class="drop" id="dzV"><div class="dz-msg">Arrastrá el archivo acá o elegilo</div><input type="file" accept=".xlsx,.xls,.csv,.txt,.tsv" aria-label="Archivo de ventas" style="margin-top:8px"></div>
       <details style="margin-top:10px"><summary class="small" style="cursor:pointer">O pegar desde Excel</summary><textarea id="pV" placeholder="Cód. artículo\tDescripción\tCantidad venta\tDesc. sucursal\tFecha"></textarea><button class="btn sm" id="bPV" style="margin-top:6px">Leer texto pegado</button></details>
       <div id="pendV" style="margin-top:12px"></div></div>
-    <div class="card"><h3>2. Stock actual</h3>
-      <div class="muted small" style="margin:6px 0 12px">Archivo con PROVEEDOR, CÓDIGO, PRODUCTO, CANTIDAD y UNIDAD DE MEDIDA (CAJAS o UNIDADES). Se asocia al producto por código, con el proveedor de la base de productos. Si un código aparece en dos filas, se suman.</div>
-      <div class="drop" id="dzS"><div class="dz-msg">Arrastrá el archivo acá o elegilo</div><input type="file" accept=".xlsx,.xls,.csv,.txt,.tsv" aria-label="Archivo de stock" style="margin-top:8px"></div>
-      <details style="margin-top:10px"><summary class="small" style="cursor:pointer">O pegar desde Excel</summary><textarea id="pS" placeholder="PROVEEDOR\tCÓDIGO\tPRODUCTO\tCANTIDAD\tUNIDAD DE MEDIDA"></textarea><button class="btn sm" id="bPS" style="margin-top:6px">Leer texto pegado</button></details>
-      <div class="bar" style="margin-top:12px"><div class="fld"><label for="sDate">Fecha del stock</label><input type="date" id="sDate" value="${esc(stDate)}"></div><span class="muted small">Las ventas se proyectan desde esta fecha.</span></div>
-      <div id="pendS" style="margin-top:12px"></div></div>
+    ${fbCardHtml()}
   </div>
   <div class="grid2">
     <div class="card"><h3>Base de productos</h3>
@@ -1576,12 +1592,11 @@ function viewDatos(main, empty) {
       <div class="drop" id="dzM"><div class="dz-msg">Arrastrá el CSV acá o elegilo</div><input type="file" accept=".xlsx,.xls,.csv,.txt,.tsv" aria-label="Base de productos" style="margin-top:8px"></div><div id="pendM" style="margin-top:12px"></div></div>
     <div class="card"><h3>Copia de seguridad</h3>
       <div class="muted small" style="margin:6px 0 12px">Todo se guarda automáticamente en tu Firebase (colección comprasConfig). Si querés una copia propia, descargala.</div>
-      <button class="btn" id="bBk" ${S.meta ? '' : 'disabled'}>Descargar copia (JSON)</button></div>
+      <button class="btn" id="bBk" ${(S.meta && !S.meta.virtual) ? '' : 'disabled'}>Descargar copia (JSON)</button></div>
   </div>
   ${nk.length ? `<div class="card"><h3>Anotaciones de días (${nk.length})</h3><div class="muted small" style="margin:6px 0 10px">Las escribís desde el gráfico, al tocar un día. Acá podés repasarlas o borrarlas.</div><div class="tw" style="max-height:300px"><table><thead><tr><th>Día</th><th>Nota</th><th></th></tr></thead><tbody>${nk.map(k => `<tr><td>${dayLabel(strToDn(k))}</td><td class="wrap">${esc(S.notes[k])}</td><td><button class="btn sm" data-delnote="${k}">Borrar</button></td></tr>`).join('')}</tbody></table></div></div>` : ''}`;
   if (!S.ready && !S.master.length) $('#dzV').style.opacity = .6;
   dropZone('dzV', onSalesRows, 'Arrastrá el archivo acá o elegilo'); pasteBox('pV', 'bPV', onSalesRows);
-  dropZone('dzS', onStockRows, 'Arrastrá el archivo acá o elegilo'); pasteBox('pS', 'bPS', onStockRows);
   dropZone('dzM', onMasterRows, 'Arrastrá el CSV acá o elegilo');
   $('#bBk').onclick = () => { const dias = {}; S.master.forEach(m => dias[m.cod] = ddToPlain(m.cod)); saveFile('backup_compras_' + dnToStr(todayDn()) + '.json', JSON.stringify({ meta: S.meta, master: S.master, params: S.params, stock: S.stock, notas: S.notes, ordenes: S.orders, dias })); };
   $$('[data-delnote]', main).forEach(b => b.onclick = () => { delete S.notes[b.dataset.delnote]; saveNotes(); viewDatos(main); });
@@ -1596,7 +1611,7 @@ function renderPending() {
   $('#noV') && ($('#noV').onclick = () => { PEND.ventas = null; renderPending(); });
   $('#okS') && ($('#okS').onclick = async () => { const dt = $('#sDate').value || dnToStr(todayDn()); S.stock = { date: dt, file: s.file, rows: s.data.rows }; PEND.stock = null; buildStock(); invalidate(); try { await saveStock(); toast('Stock cargado (' + dnFmt(strToDn(dt)) + ').'); } catch (e) { toast('No se pudo guardar el stock: ' + (e.message || e.code)); } render(); });
   $('#noS') && ($('#noS').onclick = () => { PEND.stock = null; renderPending(); });
-  $('#okM') && ($('#okM').onclick = async () => { S.master = m.items; PEND.master = null; S.master.forEach(x => { if (!S.params.prov[x.prov]) S.params.prov[x.prov] = { ...DEFAULT_PROV }; }); S.mm = {}; S.master.forEach(x => S.mm[x.cod] = x); if (S.meta) setup(); saveParams(); try { await saveMaster(); } catch (e) { toast('No se pudo guardar: ' + (e.message || e.code)); } toast('Base de productos actualizada.'); render(); });
+  $('#okM') && ($('#okM').onclick = async () => { S.master = mezclarMaster(S.base || {}, S.master.concat(m.items)); PEND.master = null; S.master.forEach(x => { if (!S.params.prov[x.prov]) S.params.prov[x.prov] = { ...DEFAULT_PROV }; }); S.mm = {}; S.master.forEach(x => S.mm[x.cod] = x); if (S.meta) setup(); saveParams(); try { await saveMaster(); } catch (e) { toast('No se pudo guardar: ' + (e.message || e.code)); } toast('Base de productos actualizada.'); render(); });
   $('#noM') && ($('#noM').onclick = () => { PEND.master = null; renderPending(); });
 }
 async function onSalesRows(rows, file) {
@@ -1719,54 +1734,140 @@ function viewTeoria(main) {
   $$('.toc a', main).forEach(a => a.onclick = e => { e.preventDefault(); const t = $('#' + a.dataset.t); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
 }
 
-/* ================= acceso y plan de compra ================= */
+/* ================= acceso y solicitudes de compra ================= */
 function gateHtml(ac) {
-  const msg = ac.motivo === 'sin_permiso' ? 'Tu usuario no tiene acceso al módulo de Compras.' : 'Ingresá primero al Armador con tu documento.';
-  return `<div class="note crit"><b>${msg}</b><br><br><a class="volver-app" href="index.html">← Ir al Armador</a></div>`;
+  const msg = ac.motivo === 'sin_permiso' ? 'Este perfil no tiene acceso a la planificación de compras. Entrá como Compras, Planificación o Logística.' : 'Ingresá primero al Armador con tu documento.';
+  return `<div class="note crit"><b>${msg}</b><br><br><a class="btn pri" href="index.html" style="text-decoration:none;display:inline-block">← Ir al Armador</a></div>`;
 }
-// Planificación PREPARA el plan (deja las cantidades en "Pedido final", que se guardan para todos) y avisa; Compras lo revisa,
-// lo aprueba y emite la orden. Cada plan queda registrado por proveedor en comprasConfig (planes).
 const puedeAprobar = () => !!(S.user && S.user.aprobar);
 const slugProv = p => String(p).normalize('NFD').replace(/[^\w]+/g, '').toLowerCase().slice(0, 24);
+const tabInicial = () => { const h = (location.hash || '').replace('#', ''); return TABS.some(t => t[0] === h) ? h : 'home'; };
+
+const ESTADO_SOL = { pendiente: ['Pendiente', 'warn'], aprobada: ['Aprobada', 'ok'], rechazada: ['Rechazada', 'crit'] };
+const solPendientes = () => (S.solic || []).filter(x => x.estado === 'pendiente');
+const ultimaSolicitud = prov => (S.solic || []).find(x => x.prov === prov && x.estado !== 'reemplazada'); // S.solic va de la más nueva a la más vieja
+const fmtFechaHora = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }); };
+
 function planBanner(prov) {
-  const pl = S.planes && S.planes[prov];
-  if (!pl || pl.estado !== 'pendiente') return '';
-  return `<div class="note plan" style="margin-top:14px"><b>Plan de ${esc(pl.por)}</b> para ${esc(prov)} · ${nf(pl.nLineas)} líneas · ${esc(pl.fecha)}. ${puedeAprobar() ? 'Revisalo: las cantidades de “Pedido final” son las que dejó. Si está bien, emití la orden.' : 'Está esperando que Compras lo apruebe y emita la orden.'}</div>`;
+  const s = ultimaSolicitud(prov); if (!s) return '';
+  if (s.estado === 'pendiente') return `<div class="note plan" style="margin-top:14px"><b>Solicitud de ${esc(s.por)}</b> para ${esc(prov)} · ${nf(s.nLineas)} líneas · ${fmtFechaHora(s.en)}. ${puedeAprobar() ? 'Revisala en la pestaña <b>Solicitudes</b>: podés aceptarla, rechazarla o modificarla.' : 'Compras la está revisando.'}</div>`;
+  if (s.estado === 'rechazada') return `<div class="note warn" style="margin-top:14px"><b>Compras rechazó la última solicitud</b> (${esc((s.resolucion || {}).por || '')}, ${fmtFechaHora((s.resolucion || {}).en)}): “${esc((s.resolucion || {}).motivo || '')}”. Ajustá lo que haga falta y volvé a enviarla.</div>`;
+  return '';
 }
-async function enviarPlan(cur, emit) {
-  if (!emit.length) { toast('No hay líneas para pasar a Compras.'); return; }
+async function enviarSolicitud(cur, emit) {
+  if (!emit.length) { toast('No hay líneas para enviar a Compras.'); return; }
   const o = buildOrder(cur, emit, true);
-  const pl = { prov: cur.p, estado: 'pendiente', por: S.user.nombre, porDni: S.user.dni, fecha: dnToStr(todayDn()), en: new Date().toISOString(), nLineas: emit.length, tot: o.tot, lineas: o.lines.map(l => ({ cod: l.cod, nombre: l.nombre, unidad: l.unidad, qty: l.qty })) };
-  S.planes = S.planes || {}; S.planes[cur.p] = pl;
-  try { await S.db.doc('planes/' + slugProv(cur.p)).set(pl); toast('Plan de ' + cur.p + ' listo para Compras (' + emit.length + ' líneas).'); }
-  catch (e) { toast('No se pudo guardar el plan: ' + (e.message || e.code), 7000); }
+  const id = 'sol_' + Date.now().toString(36) + '_' + slugProv(cur.p).slice(0, 10);
+  const sol = { id, prov: cur.p, estado: 'pendiente', por: S.user.nombre, porDni: S.user.dni, en: new Date().toISOString(), fecha: dnToStr(todayDn()), nLineas: emit.length, orden: o };
+  S.solic = S.solic || [];
+  for (const x of S.solic) if (x.prov === cur.p && x.estado === 'pendiente') { x.estado = 'reemplazada'; try { await S.db.doc('solicitudes/' + x.id).set(x); } catch (e) { /* queda como estaba */ } } // la anterior ya no vale
+  S.solic.unshift(sol);
+  try { await S.db.doc('solicitudes/' + id).set(sol); toast('Solicitud enviada a Compras: ' + cur.p + ' (' + emit.length + ' líneas).'); }
+  catch (e) { toast('No se pudo guardar la solicitud: ' + (e.message || e.code), 7000); }
+}
+function badgeSol() {
+  const b = $('.tab[data-tab="sol"]'); if (!b) return;
+  const n = puedeAprobar() ? solPendientes().length : 0;
+  b.innerHTML = 'Solicitudes' + (n ? `<span class="n-sol">${n}</span>` : '');
+  moveInd();
+}
+async function resolverSolicitud(s, res) {
+  s.resolucion = { por: S.user.nombre, porDni: S.user.dni, en: new Date().toISOString(), ...res };
+  try { await S.db.doc('solicitudes/' + s.id).set(s); } catch (e) { toast('No se pudo guardar la respuesta: ' + (e.message || e.code), 7000); }
+}
+async function aprobarSolicitud(s, qtys) {
+  const hoy = dnToStr(todayDn()), n = S.orders.filter(o => o.fecha === hoy).length + 1;
+  const cambios = s.orden.lines.map((l, i) => ({ cod: l.cod, nombre: l.nombre, de: l.qty, a: Math.max(0, Math.round(+qtys[i] || 0)) })).filter(x => x.de !== x.a);
+  const lines = s.orden.lines.map((l, i) => { const q = Math.max(0, Math.round(+qtys[i] || 0)); return { ...l, qty: q, qtyPlan: l.qty, kg: +(l.qty > 0 ? l.kg * q / l.qty : 0).toFixed(1) }; }).filter(l => l.qty > 0);
+  if (!lines.length) { toast('Todas las cantidades están en 0: en ese caso rechazá la solicitud.'); return false; }
+  const o = { ...s.orden, id: 'oc_' + Date.now().toString(36) + '_' + slugProv(s.prov).slice(0, 14), num: 'OC-' + hoy.replace(/-/g, '') + '-' + String(n).padStart(2, '0'), borrador: false, lines,
+    tot: { cajas: lines.filter(l => l.unidad === 'cajas').reduce((a, l) => a + l.qty, 0), unidades: lines.filter(l => l.unidad !== 'cajas').reduce((a, l) => a + l.qty, 0), kg: Math.round(lines.reduce((a, l) => a + l.kg, 0)) },
+    solicitud: s.id, solicitadaPor: s.por, aprobadaPor: S.user.nombre };
+  S.orders.unshift(o);
+  try { await S.db.doc('ordenes/' + o.id).set(o); } catch (e) { toast('La orden se descargó pero no se pudo guardar en el historial: ' + (e.message || e.code), 7000); }
+  s.estado = 'aprobada';
+  await resolverSolicitud(s, { orden: o.num, cambios });
+  exportOrder(o); toast('Orden ' + o.num + ' emitida.');
+  return true;
+}
+async function rechazarSolicitud(s, motivo) { s.estado = 'rechazada'; await resolverSolicitud(s, { motivo }); toast('Solicitud rechazada: Planificación va a ver el motivo.'); }
+
+function viewSol(main) {
+  const u = S.ui;
+  if (u.solSel) { const s = (S.solic || []).find(x => x.id === u.solSel); if (s) return viewSolDetalle(main, s); u.solSel = ''; }
+  u.solF = u.solF || 'pendiente';
+  const todas = (S.solic || []).filter(x => x.estado !== 'reemplazada'), cuenta = k => todas.filter(x => k === 'todas' || x.estado === k).length;
+  const lista = todas.filter(x => u.solF === 'todas' || x.estado === u.solF);
+  const chips = [['pendiente', 'Pendientes'], ['aprobada', 'Aprobadas'], ['rechazada', 'Rechazadas'], ['todas', 'Todas']].map(([k, t]) => `<button class="pchip" aria-pressed="${u.solF === k}" data-f="${k}">${t}<span class="n">${cuenta(k)}</span></button>`).join('');
+  main.innerHTML = `<section>${heroHead('Solicitudes de compra', puedeAprobar() ? 'Lo que Planificación pide comprar' : 'Lo que enviaste a Compras', puedeAprobar() ? 'Cada solicitud trae los mismos datos que vio Planificación. Podés aceptarla, rechazarla (con el motivo) o modificar las cantidades antes de emitir la orden.' : 'Acá ves cómo va cada solicitud que enviaste: pendiente, aprobada (con la orden) o rechazada (con el motivo).')}</section>
+  <div class="provrow" role="group" aria-label="Estado">${chips}</div>
+  ${lista.length ? lista.map(s => { const e = ESTADO_SOL[s.estado] || [s.estado, ''], t = s.orden.tot || {}; return `<section class="card sol-card" data-sol="${esc(s.id)}"><div class="flex"><div><div class="eyebrow">${esc(s.por)} · ${fmtFechaHora(s.en)}</div><h2 style="margin:4px 0 0">${esc(s.prov)}</h2></div><span class="sp"></span><span class="chip ${e[1]}">${e[0]}</span></div>
+      <div class="muted small" style="margin-top:8px">${nf(s.nLineas)} líneas · ${nf(t.cajas || 0)} cajas${t.unidades ? ' · ' + nf(t.unidades) + ' u. sueltas' : ''} · ${nf(t.kg || 0)} kg${s.resolucion && s.resolucion.orden ? ' · orden ' + esc(s.resolucion.orden) : ''}${s.estado === 'rechazada' ? ' · “' + esc((s.resolucion || {}).motivo || '') + '”' : ''}</div></section>`; }).join('') : `<div class="note">${u.solF === 'pendiente' ? 'No hay solicitudes pendientes.' : 'No hay solicitudes en este estado.'}</div>`}`;
+  $$('.pchip', main).forEach(b => b.onclick = () => { u.solF = b.dataset.f; viewSol(main); });
+  $$('.sol-card', main).forEach(b => b.onclick = () => { u.solSel = b.dataset.sol; u.solRech = false; viewSol(main); window.scrollTo({ top: 0 }); });
+}
+function viewSolDetalle(main, s) {
+  const u = S.ui, o = s.orden, e = ESTADO_SOL[s.estado] || [s.estado, ''], edita = puedeAprobar() && s.estado === 'pendiente';
+  const filas = o.lines.map((l, i) => `<tr><td class="sticky1 wrap"><div class="pn">${esc(l.nombre)}<small>cód. ${esc(l.cod)}</small></div></td>
+    <td class="n"><b>${nf(l.stock, 1)}</b><span class="u">${esc(l.unidad)}</span></td><td class="n"><b>${nf(l.pron, 1)}</b><span class="u">${esc(l.unidad)}</span><span class="sub">${nf(l.nDias, 0)} días</span></td>
+    <td class="n"><b>${nf(l.llega, 1)}</b><span class="u">${esc(l.unidad)}</span><span class="sub">llega ${esc(o.llegada)}</span></td><td class="n"><b>${nf(l.sug)}</b><span class="u">${esc(l.unidad)}</span></td>
+    <td class="n"><b>${nf(l.qty)}</b><span class="u">${esc(l.unidad)}</span></td>
+    <td class="n ${edita ? 'ed' : ''}">${edita ? `<input class="ed solq" type="number" min="0" step="1" data-i="${i}" value="${l.qty}" aria-label="Cantidad final ${esc(l.nombre)}"><span class="u">${esc(l.unidad)}</span>` : `<b>${nf(((s.resolucion || {}).cambios || []).find(x => x.cod === l.cod) ? ((s.resolucion || {}).cambios.find(x => x.cod === l.cod)).a : l.qty)}</b><span class="u">${esc(l.unidad)}</span>`}</td>
+    <td class="n">${l.kg ? `<b>${nf(l.kg, 0)}</b><span class="u">kg</span>` : '<span class="muted">—</span>'}</td></tr>`).join('');
+  const res = s.resolucion || {};
+  const resHtml = s.estado === 'aprobada' ? `<div class="note ok" style="margin-top:14px"><b>Aprobada por ${esc(res.por)}</b> · ${fmtFechaHora(res.en)} · orden <b>${esc(res.orden)}</b>.${(res.cambios || []).length ? ' Cambios de Compras: ' + res.cambios.map(x => `${esc(x.nombre)} ${nf(x.de)} → ${nf(x.a)}`).join('; ') + '.' : ' Sin cambios.'}</div>`
+    : s.estado === 'rechazada' ? `<div class="note crit" style="margin-top:14px"><b>Rechazada por ${esc(res.por)}</b> · ${fmtFechaHora(res.en)}: “${esc(res.motivo || '')}”</div>`
+    : puedeAprobar() ? '' : '<div class="note plan" style="margin-top:14px">Compras todavía no respondió esta solicitud.</div>';
+  main.innerHTML = `<section><div class="bar"><button class="btn sm" id="solVolver">← Solicitudes</button></div>${heroHead('Solicitud de compra', 'Pedido a ' + esc(s.prov), `Enviada por ${esc(s.por)} (${fmtFechaHora(s.en)}). Estos son los datos tal como los dejó Planificación.`)}</section>
+  <section class="card"><div class="flex"><div class="bar" style="gap:14px 28px;flex-wrap:wrap"><div><div class="eyebrow">Fecha del pedido</div><b>${esc(o.fecha)}</b></div><div><div class="eyebrow">Primer envío</div><b>${esc(o.envio || '')}</b></div><div><div class="eyebrow">Lead time</div><b>${esc(o.lt)} días</b></div><div><div class="eyebrow">Llega el proveedor</div><b>${esc(o.llegada)}</b></div></div><span class="sp"></span><span class="chip ${e[1]}">${e[0]}</span></div>
+    ${o.obs ? `<div class="muted small" style="margin-top:10px">Observaciones: ${esc(o.obs)}</div>` : ''}
+    <div class="tw" style="max-height:none;margin-top:16px"><table><thead><tr><th class="sticky1">Producto</th><th class="n">Stock actual</th><th class="n">Pronóstico</th><th class="n">Stock al llegar</th><th class="n">Pedido sugerido</th><th class="n">Pedido de Planificación</th><th class="n ${edita ? 'ed' : ''}">${edita ? 'Pedido final (Compras)' : 'Pedido final'}</th><th class="n">Kilos</th></tr></thead><tbody>${filas}</tbody></table></div>
+    <div class="muted small" style="margin-top:10px" id="solTot"></div>
+    ${resHtml}
+    ${edita ? (u.solRech ? `<div class="bar" style="margin-top:16px;align-items:flex-end;flex-wrap:wrap"><div class="fld" style="flex:1;min-width:260px"><label for="solMot">Motivo del rechazo (lo ve Planificación)</label><input type="text" id="solMot" placeholder="Ej.: el proveedor no entrega esta semana"></div><button class="btn pri" id="solRechOk" style="background:var(--crit);border-color:var(--crit)">Confirmar rechazo</button><button class="btn" id="solRechNo">Cancelar</button></div>`
+      : `<div class="bar" style="margin-top:18px;flex-wrap:wrap"><button class="btn pri" id="solOk">Aceptar y emitir la orden</button><button class="btn" id="solRech">Rechazar</button><span class="hint">Si cambiás alguna cantidad, la orden sale con tu cambio y queda registrado.</span></div>`) : ''}</section>`;
+  const qtys = () => $$('.solq', main).map(i => Math.max(0, Math.round(+i.value || 0)));
+  const tot = () => { const q = o.lines.map((l, i) => $$('.solq', main)[i] ? qtys()[i] : l.qty), cam = o.lines.filter((l, i) => q[i] !== l.qty).length; const el = $('#solTot'); if (el) el.innerHTML = edita ? (cam ? `<b>${cam}</b> línea${cam > 1 ? 's' : ''} con cambios respecto de lo que pidió Planificación.` : 'Sin cambios respecto de lo que pidió Planificación.') : ''; };
+  $('#solVolver').onclick = () => { u.solSel = ''; u.solRech = false; viewSol(main); };
+  $$('.solq', main).forEach(i => i.oninput = tot); tot();
+  const ok = $('#solOk'); if (ok) ok.onclick = async () => { ok.disabled = true; const hecho = await aprobarSolicitud(s, qtys()); if (hecho) { u.solSel = ''; render(false); } else ok.disabled = false; };
+  const r1 = $('#solRech'); if (r1) r1.onclick = () => { u.solRech = true; viewSolDetalle(main, s); };
+  const r0 = $('#solRechNo'); if (r0) r0.onclick = () => { u.solRech = false; viewSolDetalle(main, s); };
+  const r2 = $('#solRechOk'); if (r2) r2.onclick = async () => { const m = ($('#solMot').value || '').trim(); if (!m) { toast('Escribí el motivo del rechazo.'); return; } r2.disabled = true; await rechazarSolicitud(s, m); u.solRech = false; u.solSel = ''; render(false); };
 }
 
 /* ================= arranque ================= */
 async function boot() {
   renderTabs();
   try {
-    let FB; try { FB = await window.fbReady; } catch (e) { $('#main').innerHTML = '<div class="note crit"><b>No se pudo conectar con Firebase.</b> ' + esc(e.message || e.code || e) + '<br>Revisá la conexión a internet y que la página se abra desde GitHub Pages o un servidor (no como archivo suelto en algunos navegadores).</div>'; return; }
+    let FB; try { FB = await window.fbReady; } catch (e) { $('#main').innerHTML = '<div class="note crit"><b>No se pudo conectar con Firebase.</b> ' + esc(e.message || e.code || e) + '</div>'; return; }
     S.fb = FB; S.db = FB.db;
     const AC = window.__acceso || { ok: false, motivo: 'sin_sesion' };
-    if (!AC.ok) { $('#tabs').style.display = 'none'; $('#main').innerHTML = gateHtml(AC); return; }
-    S.user = AC;
+    if (!AC.ok) { $('#tabs').style.display = 'none'; $('#barraSub').textContent = ''; $('#main').innerHTML = gateHtml(AC); return; }
+    S.user = AC; $('#barraSub').textContent = AC.perfilNombre + ' · ' + AC.nombre; $('#barraAvatar').textContent = (AC.nombre.trim()[0] || '?').toUpperCase();
     try { await FB.ping(); } catch (e) { $('#main').innerHTML = rulesNote(e); return; }
-    const [mA, pA, meA, stA, nA, ds, os, ps] = await Promise.all([S.db.doc('cfg/master').get(), S.db.doc('cfg/params').get(), S.db.doc('cfg/meta').get(), S.db.doc('stock/current').get(), S.db.doc('cfg/notas').get(), S.db.collection('dias').get(), S.db.collection('ordenes').get().catch(() => ({ docs: [] })), S.db.collection('planes').get().catch(() => ({ docs: [] }))]);
-    S.master = mA.exists ? (mA.data().items || []).map(x => ({ ...x })) : [];
+    const [mA, pA, meA, nA, ds, os, so] = await Promise.all([S.db.doc('cfg/master').get(), S.db.doc('cfg/params').get(), S.db.doc('cfg/meta').get(), S.db.doc('cfg/notas').get(), S.db.collection('dias').get(),
+      S.db.collection('ordenes').get().catch(() => ({ docs: [] })), S.db.collection('solicitudes').get().catch(() => ({ docs: [] }))]);
+    const prods = await FB.loadCatalogo(false); FBC.prods = prods; FBC.at = Date.now();
+    S.base = masterBase(prods);
+    S.master = mezclarMaster(S.base, mA.exists ? (mA.data().items || []) : []);
     S.params = pA.exists ? JSON.parse(JSON.stringify(pA.data())) : { g: { ...DEFAULT_G }, prov: {}, prod: {} };
     S.meta = meA.exists ? JSON.parse(JSON.stringify(meA.data())) : null;
-    S.stock = stA.exists ? JSON.parse(JSON.stringify(stA.data())) : null;
+    S.stock = stockDe(prods);
     S.notes = nA.exists ? JSON.parse(JSON.stringify(nA.data().items || {})) : {};
     S.dd = {}; ds.docs.forEach(d => { const x = d.data(); S.dd[x.cod] = JSON.parse(JSON.stringify(x.s || {})); });
+    S.master.forEach(m => { if (!S.dd[m.cod]) S.dd[m.cod] = {}; }); // productos nuevos (o sin ventas): serie vacía
     S.orders = os.docs.map(d => JSON.parse(JSON.stringify(d.data()))).sort((a, b) => (b.fecha + b.num).localeCompare(a.fecha + a.num));
-    S.planes = {}; ps.docs.forEach(d => { const x = d.data(); if (x && x.prov) S.planes[x.prov] = JSON.parse(JSON.stringify(x)); });
+    S.solic = so.docs.map(d => JSON.parse(JSON.stringify(d.data()))).sort((a, b) => (b.en || '').localeCompare(a.en || ''));
     S.params.g = Object.assign({}, DEFAULT_G, S.params.g || {});
-    if (S.meta && S.master.length) { setup(); S.ready = true; }
-    else { S.params.prov = S.params.prov || {}; S.params.prod = S.params.prod || {}; S.mm = {}; S.master.forEach(p => S.mm[p.cod] = p); S.storeList = []; S.stores = new Set(); S.dow = [1 / 7, 1 / 7, 1 / 7, 1 / 7, 1 / 7, 1 / 7, 1 / 7]; }
+    S.params.prov = S.params.prov || {}; S.params.prod = S.params.prod || {};
+    if (S.master.length) {
+      if (!S.meta) { S.meta = metaVirtual(); S.sinVentas = true; S.ui.poOnly = false; } // todavía sin ventas: se ve el stock y los parámetros; el pronóstico llega con las ventas
+      setup(); S.ready = true;
+    } else { S.mm = {}; S.storeList = []; S.stores = new Set(); S.dow = [1 / 7, 1 / 7, 1 / 7, 1 / 7, 1 / 7, 1 / 7, 1 / 7]; }
   } catch (e) { $('#main').innerHTML = '<div class="note crit">Error al cargar los datos: ' + esc(e.message || e.code || e) + '</div>'; return; }
+  S.ui.tab = tabInicial();
   render(true);
-  if (S.master.length) fbSyncStock(true);
 }
 boot();
 /* ================= Análisis del pronóstico: todos los números ================= */
@@ -1953,51 +2054,59 @@ let saveMT = null;
 function saveMasterSoon() { clearTimeout(saveMT); saveMT = setTimeout(() => saveMaster().catch(e => toast('No se pudo guardar el catálogo: ' + (e.message || e.code))), 700); }
 const fbTime = () => FBC.at ? new Date(FBC.at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '';
 
+/* ---- Catálogo, proveedores, unidades por caja y stock: se leen solos de Firebase (productos, bultos) ---- */
+const CAMPOS_MASTER = ['nombre', 'prov', 'uni', 'xcaja', 'ucaja', 'kgu', 'vida', 'grupo', 'nota'];
+function masterBase(prods) {
+  const base = {};
+  prods.forEach(p => {
+    const cod = normCod(p.cod), prov = String(p.prov || '').trim().toUpperCase();
+    if (!cod || !prov) return; // sin proveedor no se puede planificar una compra
+    base[cod] = { cod, nombre: p.nombre || cod, prov, uni: 'UNI', xcaja: !!p.ucaja, ucaja: p.ucaja || null, kgu: null, vida: '', grupo: defaultGroup(prov, cod), nota: '' };
+  });
+  return base;
+}
+// Lo que se corrigió a mano (catálogo editable, planilla opcional) manda sobre lo que viene de Firebase.
+function mezclarMaster(base, guardados) {
+  const ov = {}; (guardados || []).forEach(x => { if (x && x.cod) ov[x.cod] = x; });
+  const out = Object.values(base).map(b => { const o = ov[b.cod]; return o ? { ...b, ...o, ucaja: o.ucaja || b.ucaja, xcaja: !!(o.xcaja || b.xcaja) } : { ...b }; });
+  (guardados || []).forEach(x => { if (x && x.cod && !base[x.cod]) out.push({ ...x }); }); // cargados a mano o que ya no figuran con proveedor
+  return out;
+}
+function sameAsBase(m) {
+  const b = S.base && S.base[m.cod]; if (!b) return false;
+  return CAMPOS_MASTER.every(k => (m[k] === undefined ? null : m[k]) === (b[k] === undefined ? null : b[k]));
+}
+function stockDe(prods) {
+  const by = {}; prods.forEach(p => by[normCod(p.cod)] = p);
+  const rows = []; S.master.forEach(m => { const p = by[m.cod]; if (p) rows.push({ cod: m.cod, prov: m.prov, qty: p.stock, unit: 'unidades' }); });
+  return { date: dnToStr(todayDn()), file: 'Firebase · stock del depósito', rows };
+}
+function metaVirtual() {
+  const hoy = todayDn(), ini = hoy - dowOf(hoy) - 7 * 12;
+  return { startWeek: dnToStr(ini), validFrom: dnToStr(ini), lastDate: dnToStr(hoy - 1), updatedAt: dnToStr(hoy), virtual: true };
+}
+
 async function fbSyncStock(quiet) {
   try {
-    const prods = await S.fb.loadProductos(); FBC.prods = prods; FBC.at = Date.now();
-    const by = {}; prods.forEach(p => by[normCod(p.cod)] = p);
-    const rows = []; S.master.forEach(m => { const p = by[m.cod]; if (p) rows.push({ cod: m.cod, prov: m.prov, qty: p.stock, unit: 'unidades' }); });
-    S.stock = { date: dnToStr(todayDn()), file: 'Firebase · productos.stockTotal', rows };
-    await saveStock();
-    if (S.meta) { buildStock(); invalidate(); }
-    if (!quiet) toast(`Stock actualizado: ${rows.length} de ${S.master.length} productos del catálogo encontrados en Firebase.`, 5000);
+    const prods = await S.fb.loadCatalogo(!quiet); FBC.prods = prods; FBC.at = Date.now();
+    S.base = masterBase(prods); S.master = mezclarMaster(S.base, S.master);
+    S.master.forEach(m => { if (!S.dd[m.cod]) S.dd[m.cod] = {}; if (!S.params.prov[m.prov]) S.params.prov[m.prov] = { ...DEFAULT_PROV }; });
+    S.stock = stockDe(prods);
+    if (S.meta) { setup(); invalidate(); }
+    if (!quiet) toast(`Stock actualizado: ${nf(S.stock.rows.length)} productos del depósito.`, 4000);
     render(false);
   } catch (e) { toast('No se pudo leer el stock de Firebase: ' + (e.message || e.code || e), 7000); }
 }
 
 function fbCardHtml() {
-  const n = FBC.prods ? FBC.prods.length : null;
-  return `<div class="card" style="margin-bottom:16px"><h3>Firebase · stock y catálogo</h3>
-    <div class="muted small" style="margin:6px 0 12px">El <b>stock</b> se lee de <code>productos.stockTotal</code> (en unidades) y los <b>proveedores</b> de los pedidos del armador. ${n !== null ? `Última lectura ${fbTime()}: ${nf(n)} productos en Firebase, ${nf(S.master.length)} en este módulo.` : 'Todavía no se leyó el stock en esta sesión.'}</div>
-    <div class="bar"><button class="btn" id="fbScan">${S.master.length ? 'Agregar productos de Firebase' : 'Elegir proveedores y traer el catálogo'}</button><button class="btn" id="fbStock" ${S.master.length ? '' : 'disabled'}>Actualizar stock ahora</button></div>
-    <div id="fbOut" style="margin-top:12px"></div></div>`;
+  const provs = new Set(S.master.map(m => m.prov)).size;
+  return `<div class="card"><h3>2. Catálogo y stock · conectados</h3>
+    <div class="muted small" style="margin:6px 0 12px">Los <b>productos</b>, los <b>proveedores</b> y el <b>stock</b> se leen solos del depósito (Firebase). Las unidades por caja salen del conteo. No hay nada que cargar a mano.</div>
+    <div class="stats s"><div class="stat"><div class="v">${nf(S.master.length)}</div><div class="l">productos con proveedor</div></div><div class="stat"><div class="v">${nf(provs)}</div><div class="l">proveedores</div></div></div>
+    <div class="bar" style="margin-top:12px"><button class="btn" id="fbStock">Actualizar stock ahora</button><span class="muted small">${FBC.at ? 'Última lectura a las ' + fbTime() + '.' : ''}</span></div></div>`;
 }
 function fbBind() {
   const b = $('#fbStock'); if (b) b.onclick = async () => { b.disabled = true; await fbSyncStock(false); };
-  const s = $('#fbScan'); if (s) s.onclick = async () => { s.disabled = true; $('#fbOut').innerHTML = '<div class="muted small">Leyendo productos y pedidos de Firebase…</div>'; try { await fbScan(); } catch (e) { $('#fbOut').innerHTML = '<div class="note crit">' + esc(e.message || e.code || e) + '</div>'; } s.disabled = false; };
-}
-async function fbScan() {
-  const [prods, pm] = await Promise.all([S.fb.loadProductos(), S.fb.loadProvMap()]);
-  FBC.prods = prods; FBC.at = Date.now();
-  const have = new Set(S.master.map(m => m.cod)), groups = {};
-  prods.forEach(p => { const cod = normCod(p.cod); if (!cod || have.has(cod)) return; const pv = String(pm[cod] || p.prov || '').trim().toUpperCase() || 'SIN PROVEEDOR'; (groups[pv] = groups[pv] || []).push({ cod, nombre: p.nombre }); });
-  const known = new Set(S.master.map(m => m.prov)), names = Object.keys(groups).sort((a, b) => (a === 'SIN PROVEEDOR') - (b === 'SIN PROVEEDOR') || a.localeCompare(b));
-  if (!names.length) { $('#fbOut').innerHTML = '<div class="note">No hay productos nuevos en Firebase: todos los códigos ya están en este módulo.</div>'; return; }
-  $('#fbOut').innerHTML = `<div class="note"><b>${nf(prods.length)} productos en Firebase.</b> Marcá los proveedores que forman esta familia de compra; solo se agregan esos productos (después los afinás en <b>Catálogo</b>).</div>
-    <div class="tw" style="max-height:340px;margin-top:8px"><table><thead><tr><th></th><th>Proveedor</th><th class="r">Productos nuevos</th></tr></thead><tbody>${names.map((n, i) => `<tr><td><input type="checkbox" data-pv="${i}" ${known.has(n) ? 'checked' : ''} aria-label="Agregar ${esc(n)}"></td><td>${esc(n)}</td><td class="r">${nf(groups[n].length)}</td></tr>`).join('')}</tbody></table></div>
-    <div class="bar" style="margin-top:10px"><button class="btn" id="fbAdd">Agregar los marcados</button><span class="muted small" id="fbAddN"></span></div>`;
-  const upd = () => { const n = $$('[data-pv]:checked', $('#fbOut')).reduce((a, c) => a + groups[names[+c.dataset.pv]].length, 0); $('#fbAddN').textContent = n + ' productos'; $('#fbAdd').disabled = !n; };
-  $$('[data-pv]', $('#fbOut')).forEach(c => c.onchange = upd); upd();
-  $('#fbAdd').onclick = async () => {
-    let n = 0;
-    $$('[data-pv]:checked', $('#fbOut')).forEach(c => { const pv = names[+c.dataset.pv]; groups[pv].forEach(p => { S.master.push({ cod: p.cod, nombre: p.nombre || p.cod, prov: pv, uni: 'UNI', xcaja: false, ucaja: null, kgu: null, vida: '', grupo: defaultGroup(pv, p.cod), nota: '' }); n++; }); if (!S.params.prov[pv]) S.params.prov[pv] = { ...DEFAULT_PROV }; });
-    S.mm = {}; S.master.forEach(x => S.mm[x.cod] = x);
-    try { await saveMaster(); saveParams(); } catch (e) { toast('No se pudo guardar: ' + (e.message || e.code)); }
-    if (S.meta) setup(); invalidate();
-    toast(n + ' productos agregados. Completá unidades por caja en Catálogo y cargá las ventas en Datos.', 6000);
-    await fbSyncStock(true);
-  };
 }
 
 /* ================= Catálogo editable ================= */
@@ -2054,20 +2163,33 @@ try {
     }),
     collection: name => ({ get: async () => { const s = await getDocs(query(collection(fs, COL), where('_col', '==', name))); return { docs: s.docs.map(d => ({ id: d.id, data: () => d.data() })) }; } })
   };
-  // Quién está usando el módulo: se toma la sesión del Armador y se leen sus roles (permisos.js)
-  const { calcularPermisos, cargarUsuario, leerSesionGuardada } = await import('./permisos.js');
+  // Quién está usando el módulo y con qué perfil: se toma la sesión del Armador y se leen sus perfiles (permisos.js)
+  const { resolverPermisos, cargarUsuario, leerSesionGuardada, NOMBRE_ROL, PERFILES } = await import('./permisos.js');
   let acceso = { ok: false, motivo: 'sin_sesion' };
   const ses = leerSesionGuardada();
   if (ses) {
     const r = await cargarUsuario({ db: fs, doc, getDoc, setDoc, serverTimestamp }, ses.documento);
     if (r.ok) {
-      const perm = calcularPermisos(r.usuario.roles, r.usuario.auditor);
-      acceso = perm.has('compras_ver') ? { ok: true, dni: ses.documento, nombre: r.usuario.nombre, aprobar: perm.has('compras_aprobar') } : { ok: false, motivo: 'sin_permiso', nombre: r.usuario.nombre };
+      // el perfil con el que entró al Armador; si no vino (sesión vieja), el primero que le sirva para Compras
+      const perfil = [ses.perfil, ...PERFILES].find(p => p && resolverPermisos(r.usuario, p) && (p === ses.perfil || resolverPermisos(r.usuario, p).has('compras_ver')));
+      const perm = perfil ? resolverPermisos(r.usuario, perfil) : null;
+      acceso = (perm && perm.has('compras_ver')) ? { ok: true, dni: ses.documento, nombre: r.usuario.nombre, perfil, perfilNombre: NOMBRE_ROL[perfil], aprobar: perm.has('compras_aprobar') } : { ok: false, motivo: 'sin_permiso', nombre: r.usuario.nombre };
     }
   }
   window.__acceso = acceso;
+  // Catálogo (productos con proveedor), unidades por caja (del conteo) y stock del depósito. Se guarda unos minutos en el navegador
+  // para no volver a leer miles de productos cada vez que se abre la pantalla; "Actualizar stock ahora" fuerza la lectura.
+  const CLAVE_CAT = 'compras_catalogo_v1', VIDA_CAT = 10 * 60 * 1000;
+  const loadCatalogo = async (forzar) => {
+    try { const c = JSON.parse(sessionStorage.getItem(CLAVE_CAT) || 'null'); if (!forzar && c && Date.now() - c.t < VIDA_CAT) return c.d; } catch (e) { /* sin caché */ }
+    const [sp, sb] = await Promise.all([getDocs(collection(fs, 'productos')), getDocs(collection(fs, 'bultos'))]);
+    const caja = {}; sb.docs.forEach(d => { const x = d.data(), base = String(x.codigoBase || '').trim(), u = Number(x.unidadesPorBulto); if (base && u > 0) caja[base] = u; });
+    const d = sp.docs.map(x => { const v = x.data(), u = Number(v.unidadesPorBulto); return { cod: x.id, nombre: v.producto || '', stock: Number(v.stockTotal) || 0, prov: v.proveedor || '', ucaja: u > 0 ? u : (caja[x.id] || null) }; });
+    try { sessionStorage.setItem(CLAVE_CAT, JSON.stringify({ t: Date.now(), d })); } catch (e) { /* si no entra, igual funciona */ }
+    return d;
+  };
   window.__fbOk({
-    db,
+    db, loadCatalogo,
     ping: async () => { await setDoc(doc(fs, COL, '_ping'), { t: Date.now() }); await getDoc(doc(fs, COL, '_ping')); },
     loadProductos: async () => { const s = await getDocs(collection(fs, 'productos')); return s.docs.map(d => { const x = d.data(); return { cod: d.id, nombre: x.producto || '', stock: Number(x.stockTotal) || 0, prov: x.proveedor || '' }; }); },
     loadProvMap: async () => { const s = await getDocs(query(collection(fs, 'pedidos'), limit(5000))), m = {}; s.docs.forEach(d => { const x = d.data(); if (x.codigo && x.proveedor) m[String(x.codigo).trim().replace(/\.0+$/, '').replace(/^0+(?=\d)/, '')] = String(x.proveedor).trim().toUpperCase(); }); return m; }

@@ -267,6 +267,18 @@
     .rol-chip.auditor { background: #ede9fe; color: #5b21b6; }
     .rol-chip.off { background: #fee2e2; color: #991b1b; }
     @media (max-width: 640px) { .usr-fila { flex-wrap: wrap; } .usr-roles { max-width: 100%; justify-content: flex-start; margin-left: 56px; } }
+    /* ---------- Ingreso: elegir perfil ---------- */
+    .login-sub { color: var(--muted); font-size: 14.5px; margin: -6px 0 14px; line-height: 1.4; }
+    .perfil-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+    .perfil-op { border: 2px solid var(--border); border-radius: 16px; background: white; padding: 12px 8px; text-align: center; cursor: pointer; }
+    .perfil-op .pi { display: block; font-size: 26px; line-height: 1.1; }
+    .perfil-op b { display: block; font-size: 16px; margin-top: 4px; color: var(--text); }
+    .perfil-op small { display: block; font-size: 12.5px; color: var(--muted); line-height: 1.25; margin-top: 2px; }
+    .perfil-op.activo { border-color: var(--primary); background: var(--primary-soft); box-shadow: 0 0 0 4px rgba(37,99,235,0.14); }
+    .mu-sub { font-size: 12.5px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin: 2px 0 6px; }
+    .mu-perfil { width: 100%; text-align: left; padding: 11px 14px; margin-bottom: 6px; border: 2px solid var(--border); border-radius: 12px; background: white; font-size: 15.5px; font-weight: 700; cursor: pointer; }
+    .mu-perfil:active { background: var(--primary-soft); }
+    #muPerfiles { margin-bottom: 10px; }
     .select-redondo { width: 100%; padding: 14px 20px; border: 2px solid var(--border); border-radius: 999px; font-size: 16.5px; font-weight: 600; background: white; margin-bottom: 14px; cursor: pointer; }
     .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
     .chip { border: 2px solid var(--border); background: white; border-radius: 999px; padding: 9px 16px; font-size: 15px; font-weight: 700; color: var(--text); cursor: pointer; }
@@ -340,12 +352,18 @@
 <body>
 
   <div class="modal-overlay" id="loginOverlay" style="align-items:center; z-index:200;">
-    <div class="modal" style="border-radius:18px; max-width:360px; margin:0 auto;">
-      <h2>👤 ¿Quién sos?</h2>
-      <p style="color:var(--muted); font-size:13px; margin-top:-8px;">Ingresá tu número de documento para identificarte. Queda registrado en cada pedido que armes.</p>
+    <div class="modal" style="border-radius:22px; max-width:430px; margin:0 auto;">
+      <h2>👤 ¿Cómo querés entrar?</h2>
+      <p class="login-sub">Elegí tu perfil e ingresá tu documento. Queda registrado en lo que hagas.</p>
+      <div class="perfil-grid" id="perfilesLogin">
+        <button type="button" class="perfil-op" data-perfil="armador"><span class="pi">📦</span><b>Armador</b><small>Armar pedidos y contar stock</small></button>
+        <button type="button" class="perfil-op" data-perfil="compras"><span class="pi">🛒</span><b>Compras</b><small>Aprobar y hacer la compra</small></button>
+        <button type="button" class="perfil-op" data-perfil="planificacion"><span class="pi">🗓️</span><b>Planificación</b><small>Planificar y habilitar</small></button>
+        <button type="button" class="perfil-op" data-perfil="logistica"><span class="pi">🚚</span><b>Logística</b><small>Todo, con métricas</small></button>
+      </div>
       <input type="text" id="inputDocumentoLogin" placeholder="Documento (sin puntos)" inputmode="numeric"
-        style="width:100%; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:16px; margin-bottom:8px;">
-      <div id="errorLogin" style="color:#dc2626; font-size:13px; margin-bottom:8px; display:none;"></div>
+        style="width:100%; padding:13px 14px; border:2px solid var(--border); border-radius:14px; font-size:17px; margin-bottom:8px;">
+      <div id="errorLogin" style="color:#dc2626; font-size:14px; margin-bottom:8px; display:none;"></div>
       <button class="btn btn-primary" id="btnConfirmarLogin">Ingresar</button>
     </div>
   </div>
@@ -363,6 +381,7 @@
         <div id="menuUsuario" class="menu-usuario" style="display:none;">
           <div class="mu-nombre" id="nombrePersonaActual">—</div>
           <div class="mu-rol" id="rolPersona"></div>
+          <div id="muPerfiles" style="display:none;"></div>
           <button id="btnCambiarPersona" class="mu-cambiar">🔄 Cambiar de persona</button>
         </div>
       </div>
@@ -385,6 +404,15 @@
       <div class="menu-saludo">
         <div class="ms-hola" id="menuHola">Hola 👋</div>
         <div class="ms-resumen" id="menuResumen"></div>
+      </div>
+
+      <div class="menu-seccion" id="menuSeccionArmado" style="display:none;">
+        <div class="menu-seccion-titulo">Armado</div>
+        <button class="menu-tile" id="btnIrArmar">
+          <span class="ico">📋</span>
+          <span class="cuerpo"><b>Armar pedidos</b><small>Pendientes y faltantes por sucursal.</small></span>
+          <span class="flecha">›</span>
+        </button>
       </div>
 
       <div class="menu-seccion" id="menuSeccionDeposito">
@@ -437,17 +465,23 @@
 
       <div class="menu-seccion" id="menuSeccionCompras" style="display:none;">
         <div class="menu-seccion-titulo">Compras</div>
+        <button class="menu-tile compras" id="btnSolicitudes">
+          <span class="ico">📨</span>
+          <span class="cuerpo"><b id="tituloSolicitudes">Solicitudes de compra</b><small id="subSolicitudes">Lo que pide Planificación: aceptar, rechazar o modificar.</small></span>
+          <span class="tile-badge" id="badgeSolicitudes" style="display:none;"></span>
+          <span class="flecha">›</span>
+        </button>
         <button class="menu-tile compras" id="btnModuloCompras">
           <span class="ico">📈</span>
           <span class="cuerpo"><b>Planificación de compras</b><small>Ventas, pronóstico y orden de compra por proveedor.</small></span>
           <span class="flecha">›</span>
         </button>
-        <button class="menu-tile compras" id="btnCompras">
+        <button class="menu-tile compras" id="btnCompras" style="display:none;">
           <span class="ico">🛒</span>
           <span class="cuerpo"><b>Compras</b><small>Stock por proveedor, para ver qué falta.</small></span>
           <span class="flecha">›</span>
         </button>
-        <button class="menu-tile compras" id="btnArmarPedidoProv">
+        <button class="menu-tile compras" id="btnArmarPedidoProv" style="display:none;">
           <span class="ico">📝</span>
           <span class="cuerpo"><b>Armar pedido a proveedor</b><small>Calcular qué pedir y bajar la orden en PDF.</small></span>
           <span class="flecha">›</span>
@@ -913,7 +947,7 @@
       </div>
       <div class="field"><label>Documento (DNI)</label><input type="text" id="usrDni" inputmode="numeric" placeholder="Ej: 40123456"></div>
       <div class="field"><label>Nombre y apellido</label><input type="text" id="usrNombre" placeholder="Nombre completo"></div>
-      <div class="campo-titulo">Roles <span>(puede tener más de uno: ve la suma de los menús)</span></div>
+      <div class="campo-titulo">Perfiles <span>(puede tener más de uno: al entrar elige con cuál)</span></div>
       <div id="usrRoles">
         <label class="rol-opt"><input type="checkbox" value="armador"><span><b>Armador</b><small>Arma pedidos, cuenta stock y ve el stock.</small></span></label>
         <label class="rol-opt"><input type="checkbox" value="compras"><span><b>Compras</b><small>Ve el stock, prepara y <u>aprueba</u> la compra, emite la orden.</small></span></label>
@@ -921,7 +955,7 @@
         <label class="rol-opt"><input type="checkbox" value="logistica"><span><b>Logística</b><small>Todo, incluidas las métricas y la administración de usuarios.</small></span></label>
       </div>
       <div class="campo-titulo">Extras</div>
-      <label class="rol-opt"><input type="checkbox" id="usrAuditor"><span><b>Puede auditar</b><small>Habilita la auditoría de "sin stock", aunque su rol no la incluya.</small></span></label>
+      <label class="rol-opt"><input type="checkbox" id="usrAuditor"><span><b>Puede auditar</b><small>Habilita la auditoría de "sin stock" cuando entra como Armador.</small></span></label>
       <label class="rol-opt"><input type="checkbox" id="usrActivo" checked><span><b>Activo</b><small>Si se desmarca, esa persona no puede ingresar.</small></span></label>
       <div id="usrError" class="aviso extra" style="display:none;"></div>
       <button class="btn btn-success" id="btnGuardarUsuario">✔ Guardar</button>
@@ -948,7 +982,7 @@
       getFirestore, doc, getDoc, setDoc, deleteDoc, collection, collectionGroup, query, where, orderBy, limit,
       getDocs, runTransaction, writeBatch, serverTimestamp, increment, addDoc
     } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
-    import { NOMBRE_ROL, USUARIOS_INICIALES, calcularPermisos, cargarUsuario } from './permisos.js';
+    import { NOMBRE_ROL, USUARIOS_INICIALES, PERFILES, resolverPermisos, cargarUsuario } from './permisos.js';
 
     // ⚠️ CONFIGURACIÓN: mismo proyecto de Firebase que app-firestore.html
     const firebaseConfig = {
@@ -1029,7 +1063,19 @@
       return puede_(CAP_REQUERIDA[req] || req);
     }
     // Pantalla de arranque: quien no arma (por ejemplo, solo Compras) empieza directo en el menú.
-    function inicio_() { return puede_('armar') ? 'home' : 'menu'; }
+    // El Armador arranca en el armado (pendientes y faltantes). Los demás perfiles arrancan en su menú.
+    function inicio_() { return (personaActual && personaActual.perfil === 'armador' && puede_('armar')) ? 'home' : 'menu'; }
+    // Para un perfil que no es Armador, el armado es una pantalla más del menú (y el menú es su raíz).
+    function padreDe_(nombre) {
+      const armador = personaActual && personaActual.perfil === 'armador';
+      if (nombre === 'home') return armador ? null : 'menu';
+      if (nombre === 'menu') return armador ? 'home' : null;
+      return PANTALLAS[nombre] && PANTALLAS[nombre].padre;
+    }
+    function profundidad_(nombre) {
+      if (personaActual && personaActual.perfil !== 'armador') { if (nombre === 'home') return 2; if (nombre === 'armar') return 3; if (nombre === 'menu') return 0; if (PROFUNDIDAD[nombre] >= 2) return 1 + PROFUNDIDAD[nombre]; }
+      return PROFUNDIDAD[nombre];
+    }
 
     function textosEncabezado_() {
       switch (pantallaActual) {
@@ -1052,8 +1098,9 @@
       const [titulo, sub] = textosEncabezado_();
       document.getElementById('tituloPantalla').textContent = titulo;
       document.getElementById('subtitulo').textContent = sub;
-      document.getElementById('btnVolverHeader').style.display = (PANTALLAS[pantallaActual].padre && puedeEntrar_(PANTALLAS[pantallaActual].padre)) ? 'grid' : 'none';
-      document.getElementById('btnMenu').style.display = pantallaActual === 'home' ? 'flex' : 'none';
+      const padreAct = padreDe_(pantallaActual);
+      document.getElementById('btnVolverHeader').style.display = (padreAct && puedeEntrar_(padreAct)) ? 'grid' : 'none';
+      document.getElementById('btnMenu').style.display = (pantallaActual === 'home' && personaActual && personaActual.perfil === 'armador') ? 'flex' : 'none';
       medirEncabezado_();
     }
 
@@ -1072,7 +1119,7 @@
       elNuevo.style.display = 'block';
       elNuevo.classList.remove('anim-adelante', 'anim-atras');
       void elNuevo.offsetWidth; // reinicia la animación aunque se vuelva a entrar a la misma pantalla
-      elNuevo.classList.add(PROFUNDIDAD[nombre] >= PROFUNDIDAD[anterior] ? 'anim-adelante' : 'anim-atras');
+      elNuevo.classList.add(profundidad_(nombre) >= profundidad_(anterior) ? 'anim-adelante' : 'anim-atras');
       document.body.dataset.pantalla = nombre; // las pantallas de datos usan todo el ancho en compu
       if (nombre !== 'stock' && conteoApi) conteoApi.detenerEscaneres(); // no dejar la cámara prendida al irse del conteo
       const barraPdf = document.getElementById('cn_barraPedidoPDF'); if (barraPdf && nombre !== 'pedidoprov') barraPdf.style.display = 'none';
@@ -1088,7 +1135,7 @@
 
     function volverDePantalla_() {
       if (pantallaActual === 'armar') { volverAElegirSucursal(); return; }
-      const padre = PANTALLAS[pantallaActual] && PANTALLAS[pantallaActual].padre;
+      const padre = padreDe_(pantallaActual);
       if (padre) irA_(padre);
     }
 
@@ -1114,11 +1161,21 @@
       document.getElementById('menuHola').innerHTML = `Hola, <b>${escapeHtml(nombre)}</b> 👋`;
       let pend = 0, falt = 0;
       todosPendientesRaw.forEach(d => { if (esFaltante_(d)) falt++; else pend++; });
-      document.getElementById('menuResumen').textContent = !puede_('armar') ? 'Elegí qué querés hacer.' : (pend + falt)
+      document.getElementById('menuResumen').textContent = (personaActual && personaActual.perfil !== 'armador') ? `Perfil ${NOMBRE_ROL[personaActual.perfil]} · elegí qué querés hacer.` : (pend + falt)
         ? `Hay ${pend} producto${pend === 1 ? '' : 's'} pendiente${pend === 1 ? '' : 's'} de armar y ${falt} faltante${falt === 1 ? '' : 's'}.`
         : 'No hay pedidos pendientes de armar ahora mismo.';
       if (esAuditor_()) actualizarInsigniaAuditoria_();
       if (esAutorizadoGestion_()) actualizarInsigniaSinStock_();
+      if (puede_('compras_aprobar')) actualizarInsigniaSolicitudes_();
+    }
+
+    async function actualizarInsigniaSolicitudes_() {
+      const b = document.getElementById('badgeSolicitudes');
+      try {
+        const snap = await getDocs(query(collection(db, 'comprasConfig'), where('_col', '==', 'solicitudes'), where('estado', '==', 'pendiente')));
+        b.textContent = snap.size;
+        b.style.display = snap.size ? 'inline-block' : 'none';
+      } catch (err) { b.style.display = 'none'; }
     }
 
     async function actualizarInsigniaAuditoria_() {
@@ -1153,11 +1210,17 @@
           : 'No se pudo verificar tu documento. Revisá la conexión e intentá de nuevo.');
         return;
       }
+      const perfil = (document.querySelector('#perfilesLogin .perfil-op.activo') || {}).dataset?.perfil || 'armador';
+      if (!resolverPermisos(r.usuario, perfil)) {
+        mostrarError(`Ese documento no tiene el perfil ${NOMBRE_ROL[perfil]}. Probá con otro perfil, o pedile a Logística que te lo habilite.`);
+        return;
+      }
       errorDiv.style.display = 'none';
-      establecerPersona_(documento, r.usuario);
+      establecerPersona_(documento, r.usuario, perfil);
       const expira = Date.now() + DURACION_SESION_MS;
       try {
-        localStorage.setItem('armador_persona', JSON.stringify({ documento, nombre: personaActual.nombre, expira }));
+        localStorage.setItem('armador_persona', JSON.stringify({ documento, nombre: personaActual.nombre, perfil, expira }));
+        localStorage.setItem('armador_perfil_pref', perfil);
       } catch (e) { /* si el navegador bloquea storage, sigue igual pero pide login cada vez */ }
       registrarSesionFirestore_(documento, personaActual.nombre, expira);
       input.value = '';
@@ -1167,8 +1230,47 @@
     }
 
     function cargarUsuario_(documento) { return cargarUsuario({ db, doc, getDoc, setDoc, serverTimestamp }, documento); }
-    function establecerPersona_(documento, u) {
-      personaActual = { documento, nombre: u.nombre, roles: u.roles || [], auditor: !!u.auditor, permisos: calcularPermisos(u.roles, u.auditor) };
+    function establecerPersona_(documento, u, perfil) {
+      personaActual = { documento, nombre: u.nombre, roles: u.roles || [], auditor: !!u.auditor, perfil, permisos: resolverPermisos(u, perfil) || new Set() };
+    }
+
+    // ---- elegir perfil en la pantalla de ingreso ----
+    const ICONO_PERFIL = { armador: '📦', compras: '🛒', planificacion: '🗓️', logistica: '🚚' };
+    function perfilPreferido_() { try { return localStorage.getItem('armador_perfil_pref') || 'armador'; } catch (e) { return 'armador'; } }
+    function seleccionarPerfilLogin_(perfil) {
+      document.querySelectorAll('#perfilesLogin .perfil-op').forEach(b => b.classList.toggle('activo', b.dataset.perfil === perfil));
+    }
+    document.getElementById('perfilesLogin').addEventListener('click', (e) => {
+      const b = e.target.closest('.perfil-op');
+      if (b) { seleccionarPerfilLogin_(b.dataset.perfil); document.getElementById('inputDocumentoLogin').focus(); }
+    });
+    seleccionarPerfilLogin_(perfilPreferido_());
+
+    // ---- cambiar de perfil sin volver a poner el documento ----
+    document.getElementById('muPerfiles').addEventListener('click', (e) => {
+      const b = e.target.closest('.mu-perfil');
+      if (b) cambiarPerfil_(b.dataset.perfil);
+    });
+    function cambiarPerfil_(perfil) {
+      const permisos = personaActual && resolverPermisos(personaActual, perfil);
+      if (!permisos) return;
+      personaActual.perfil = perfil;
+      personaActual.permisos = permisos;
+      try {
+        const s = JSON.parse(localStorage.getItem('armador_persona') || 'null');
+        if (s) { s.perfil = perfil; localStorage.setItem('armador_persona', JSON.stringify(s)); }
+        localStorage.setItem('armador_perfil_pref', perfil);
+      } catch (e) { /* sin storage: sigue igual */ }
+      document.getElementById('menuUsuario').style.display = 'none';
+      mostrarPersonaEnHeader();
+      arrancarApp();
+      irA_(inicio_());
+    }
+    function renderPerfilesPopover_() {
+      const cont = document.getElementById('muPerfiles');
+      const otros = personaActual ? (personaActual.roles || []).filter(r => r !== personaActual.perfil && PERFILES.includes(r)) : [];
+      cont.style.display = otros.length ? 'block' : 'none';
+      cont.innerHTML = otros.length ? '<div class="mu-sub">Cambiar de perfil</div>' + otros.map(r => `<button class="mu-perfil" data-perfil="${r}">${ICONO_PERFIL[r]} ${escapeHtml(NOMBRE_ROL[r])}</button>`).join('') : '';
     }
 
     function cerrarSesionPersona() {
@@ -1176,6 +1278,7 @@
       personaActual = null;
       if (intervaloLatido) { clearInterval(intervaloLatido); intervaloLatido = null; }
       try { localStorage.removeItem('armador_persona'); } catch (e) {}
+      seleccionarPerfilLogin_(perfilPreferido_());
       document.getElementById('loginOverlay').classList.add('show');
       document.getElementById('inputDocumentoLogin').focus();
     }
@@ -1222,12 +1325,17 @@
       const nombre = personaActual ? personaActual.nombre : '—';
       document.getElementById('nombrePersonaActual').textContent = nombre;
       document.getElementById('avatarPersona').textContent = (nombre.trim()[0] || '?').toUpperCase();
-      const etiquetas = personaActual ? (personaActual.roles || []).map(r => NOMBRE_ROL[r] || r) : [];
-      if (personaActual && personaActual.auditor) etiquetas.push('Auditor');
-      document.getElementById('rolPersona').textContent = etiquetas.join(' · ') || 'Sin rol';
+      const etiquetas = personaActual ? [NOMBRE_ROL[personaActual.perfil] || personaActual.perfil] : [];
+      if (personaActual && personaActual.perfil === 'armador' && personaActual.auditor) etiquetas.push('Auditor');
+      document.getElementById('rolPersona').textContent = etiquetas.join(' · ') || 'Sin perfil';
+      renderPerfilesPopover_();
       // El menú muestra solo lo que esta persona puede hacer (la suma de sus roles)
       const mostrar = (id, ok) => { document.getElementById(id).style.display = ok ? '' : 'none'; };
+      mostrar('menuSeccionArmado', puede_('armar') && personaActual.perfil !== 'armador'); // el Armador ya arranca en el armado
       mostrar('menuSeccionDeposito', puede_('contar'));
+      const compra = puede_('compras_aprobar');
+      document.getElementById('tituloSolicitudes').textContent = compra ? 'Solicitudes de compra' : 'Mis solicitudes de compra';
+      document.getElementById('subSolicitudes').textContent = compra ? 'Lo que pide Planificación: aceptar, rechazar o modificar.' : 'Lo que enviaste a Compras y cómo va.';
       mostrar('btnVerAdmin', puede_('armar'));
       mostrar('menuSeccionGestion', puede_('planificar'));
       mostrar('menuSeccionCompras', puede_('compras_ver'));
@@ -1242,24 +1350,33 @@
 
     let appYaArrancada = false;
     let armadoCargado = false;
+    function asegurarArmado_() {
+      if (!armadoCargado) { armadoCargado = true; cargarBultos(); cargarSucursales(); }
+    }
     function arrancarApp() {
       appYaArrancada = true;
-      if (puede_('armar') && !armadoCargado) { armadoCargado = true; cargarBultos(); cargarSucursales(); }
-      if (!puede_('armar') && pantallaActual === 'home') irA_('menu');
+      // Los pendientes y faltantes solo se cargan si el perfil arma: Compras, por ejemplo, ni los lee.
+      if (personaActual && personaActual.perfil === 'armador' && puede_('armar')) asegurarArmado_();
+      if (inicio_() === 'menu' && pantallaActual === 'home') irA_('menu');
     }
+    document.getElementById('btnIrArmar').addEventListener('click', () => { if (puede_('armar')) { asegurarArmado_(); irA_('home'); } });
 
     (async function iniciarSesionSiCorresponde() {
       try {
         const guardada = JSON.parse(localStorage.getItem('armador_persona') || 'null');
         if (guardada && guardada.expira && Date.now() < guardada.expira) {
-          // Se vuelve a leer a la persona: si le cambiaron los roles o la desactivaron, se nota al abrir la app
+          // Se vuelve a leer a la persona: si le cambiaron los perfiles o la desactivaron, se nota al abrir la app
           const r = await cargarUsuario_(guardada.documento);
           if (r.ok) {
-            establecerPersona_(guardada.documento, r.usuario);
-            mostrarPersonaEnHeader();
-            registrarSesionFirestore_(guardada.documento, personaActual.nombre, guardada.expira); // refresca el registro en cada apertura de la página
-            arrancarApp();
-            return;
+            // el perfil con el que había entrado; si ya no lo tiene (o es una sesión vieja sin perfil), se usa el primero que tenga
+            const perfil = [guardada.perfil, perfilPreferido_(), ...PERFILES].find(p => p && resolverPermisos(r.usuario, p));
+            if (perfil) {
+              establecerPersona_(guardada.documento, r.usuario, perfil);
+              mostrarPersonaEnHeader();
+              registrarSesionFirestore_(guardada.documento, personaActual.nombre, guardada.expira); // refresca el registro en cada apertura de la página
+              arrancarApp();
+              return;
+            }
           }
           localStorage.removeItem('armador_persona');
         } else if (guardada) {
@@ -2019,6 +2136,7 @@
     document.getElementById('btnUsuarios').addEventListener('click', abrirUsuarios_);
     document.getElementById('btnMetricas').addEventListener('click', () => { if (puede_('metricas')) location.href = 'tiempos.html'; });
     document.getElementById('btnModuloCompras').addEventListener('click', () => { if (puede_('compras_ver')) location.href = 'compras.html'; });
+    document.getElementById('btnSolicitudes').addEventListener('click', () => { if (puede_('compras_ver')) location.href = 'compras.html#sol'; });
     document.getElementById('buscarUsuario').addEventListener('input', renderizarUsuarios_);
     document.getElementById('btnNuevoUsuario').addEventListener('click', () => abrirModalUsuario_(null));
     document.getElementById('btnGuardarUsuario').addEventListener('click', guardarUsuario_);
