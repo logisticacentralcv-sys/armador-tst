@@ -279,6 +279,67 @@
     .mu-perfil { width: 100%; text-align: left; padding: 11px 14px; margin-bottom: 6px; border: 2px solid var(--border); border-radius: 12px; background: white; font-size: 15.5px; font-weight: 700; cursor: pointer; }
     .mu-perfil:active { background: var(--primary-soft); }
     #muPerfiles { margin-bottom: 10px; }
+    /* ---------- Centro de control (métricas): navegación fija + paneles ---------- */
+    body[data-pantalla="metricas"] .container, body[data-pantalla="metricas"] .hdr-fila { max-width: 1380px; }
+    .mt-layout { display: grid; grid-template-columns: 268px minmax(0, 1fr); gap: 22px; align-items: start; }
+    .mt-nav { position: sticky; top: calc(var(--alto-header, 68px) + 16px); display: flex; flex-direction: column; gap: 3px; padding: 12px; background: white; border-radius: var(--radius); border: 1px solid rgba(216,224,234,0.8); box-shadow: var(--shadow); max-height: calc(100vh - var(--alto-header, 68px) - 32px); overflow-y: auto; }
+    .mt-grupo { font-size: 12px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin: 14px 10px 4px; }
+    .mt-grupo:first-child { margin-top: 4px; }
+    .mt-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px; border: none; border-radius: 14px; background: transparent; color: var(--text); font-size: 15.5px; font-weight: 700; text-align: left; cursor: pointer; }
+    .mt-item .mi { flex-shrink: 0; width: 28px; text-align: center; font-size: 18px; }
+    .mt-item .mt { flex: 1; min-width: 0; }
+    @media (hover: hover) { .mt-item:hover:not(.activo) { background: #f1f5f9; } }
+    .mt-item.activo { background: var(--primary); color: white; box-shadow: 0 4px 14px rgba(37,99,235,0.3); }
+    .mt-item.mt-ir { font-weight: 600; color: var(--muted); }
+    .mt-contenido { min-width: 0; }
+    .mt-panel { display: none; }
+    .mt-panel.activo { display: block; animation: aparecer 0.3s var(--ease) both; }
+    .mt-titulo { margin-bottom: 16px; }
+    .mt-titulo h2 { margin: 0 0 4px; font-size: 26px; font-weight: 800; letter-spacing: -0.01em; }
+    .mt-titulo p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.45; max-width: 820px; }
+    .mt-h3 { margin: 0 0 12px; font-size: 18px; font-weight: 800; }
+    .mt-cab { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+    .mt-stats { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 12px; font-size: 15px; }
+    .mt-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .mt-kpi { text-align: left; border: 2px solid var(--border); border-radius: var(--radius); background: white; padding: 14px 16px; box-shadow: var(--shadow); cursor: default; }
+    .mt-kpi[data-panel] { cursor: pointer; }
+    .mt-kpi .k-num { display: block; font-size: 32px; font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; }
+    .mt-kpi .k-txt { display: block; margin-top: 4px; font-size: 14.5px; font-weight: 700; color: var(--muted); }
+    .mt-kpi.verde .k-num { color: var(--green-dark); } .mt-kpi.rojo .k-num { color: var(--red); } .mt-kpi.naranja .k-num { color: var(--orange); }
+    .mt-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .mt-grid2 > .card { margin-bottom: 16px; min-width: 0; }
+    .mt-rango, .mt-barra { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: white; border: 1px solid rgba(216,224,234,0.8); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 16px; box-shadow: var(--shadow); }
+    .mt-rango input[type=date], .mt-barra input[type=date], .mt-barra select { border: 2px solid var(--border); border-radius: 14px; padding: 10px 12px; font-size: 16px; background: white; }
+    .btn-chico.azul { background: var(--primary); color: white; }
+    .mt-contenido .card { overflow-x: auto; } /* las tablas anchas se deslizan dentro de su tarjeta y no ensanchan la página */
+    .mt-contenido table { width: 100%; border-collapse: collapse; font-size: 15px; }
+    .mt-contenido th { text-align: left; padding: 10px; font-size: 12.5px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); border-bottom: 2px solid var(--border); white-space: nowrap; }
+    .mt-contenido td { padding: 11px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .mt-contenido tr:last-child td { border-bottom: none; }
+    .persona-activa { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 16px; margin-bottom: 10px; border: 2px solid var(--border); border-radius: var(--radius-sm); background: white; }
+    .persona-activa.armando { border-color: #86efac; background: #f0fdf4; }
+    .persona-activa.pausado { border-color: #fed7aa; background: #fff7ed; }
+    .estado-dot { display: inline-block; width: 10px; height: 10px; margin-right: 7px; border-radius: 50%; }
+    .estado-dot.verde { background: var(--green); } .estado-dot.naranja { background: var(--orange); }
+    .fila-feed { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--border); font-size: 15px; }
+    .fila-feed .hora { flex-shrink: 0; width: 82px; color: var(--muted); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+    .fila-feed .persona-feed { flex-shrink: 0; width: 130px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fila-feed .detalle-feed { flex: 1; min-width: 0; }
+    .fila-feed .producto-feed { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fila-feed .sucursal-feed { color: var(--muted); font-size: 13.5px; }
+    .fila-feed .cantidad-feed { flex-shrink: 0; font-weight: 800; font-size: 17px; }
+    .fila-feed.sin-stock .cantidad-feed { color: var(--red); }
+    .badge-tipo { margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: #fee2e2; color: var(--red); font-size: 12px; font-weight: 800; }
+    @media (max-width: 899px) {
+      .mt-layout { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+      .mt-nav { position: sticky; top: var(--alto-header, 68px); z-index: 12; flex-direction: row; gap: 6px; padding: 8px; border-radius: 999px; overflow-x: auto; max-height: none; scrollbar-width: none; }
+      .mt-nav::-webkit-scrollbar { display: none; }
+      .mt-grupo, .mt-ir, .mt-ir-grupo { display: none; }
+      .mt-item { width: auto; flex-shrink: 0; padding: 10px 16px; border-radius: 999px; white-space: nowrap; }
+      .mt-item .mi { width: auto; }
+      .mt-grid2 { grid-template-columns: minmax(0, 1fr); }
+      .fila-feed .persona-feed { width: 90px; }
+    }
     .select-redondo { width: 100%; padding: 14px 20px; border: 2px solid var(--border); border-radius: 999px; font-size: 16.5px; font-weight: 600; background: white; margin-bottom: 14px; cursor: pointer; }
     .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
     .chip { border: 2px solid var(--border); background: white; border-radius: 999px; padding: 9px 16px; font-size: 15px; font-weight: 700; color: var(--text); cursor: pointer; }
@@ -868,6 +929,84 @@
     </div>
     </div>
 
+    <div class="pantalla" id="pasoMetricas" style="display:none;">
+      <div id="mtCargando" class="cargando">Cargando el centro de control...</div>
+      <div class="mt-layout" id="mtLayout" style="display:none;">
+        <nav class="mt-nav" id="mtNav" aria-label="Paneles del centro de control">
+          <div class="mt-grupo">En vivo</div>
+          <button class="mt-item activo" data-panel="resumen"><span class="mi">📊</span><span class="mt">Resumen</span></button>
+          <div class="mt-grupo">Productividad</div>
+          <button class="mt-item" data-panel="dia"><span class="mi">📅</span><span class="mt">Resumen por día</span></button>
+          <button class="mt-item" data-panel="historial"><span class="mi">🗓️</span><span class="mt">Historial por fechas</span></button>
+          <button class="mt-item" data-panel="scoring"><span class="mi">🏆</span><span class="mt">Scoring de armadores</span></button>
+          <button class="mt-item" data-panel="evolucion"><span class="mi">📈</span><span class="mt">Evolución del score</span></button>
+          <div class="mt-grupo">Control</div>
+          <button class="mt-item" data-panel="auditoria"><span class="mi">🔎</span><span class="mt">Auditorías de sin stock</span><span class="tile-badge" id="mt_audBadge" style="display:none;"></span></button>
+          <div class="mt-grupo mt-ir-grupo">Ir a</div>
+          <button class="mt-item mt-ir" data-ir="compras"><span class="mi">📈</span><span class="mt">Planificación de compras</span></button>
+          <button class="mt-item mt-ir" data-ir="solicitudes"><span class="mi">📨</span><span class="mt">Solicitudes de compra</span></button>
+          <button class="mt-item mt-ir" data-ir="stock"><span class="mi">📦</span><span class="mt">Stock</span></button>
+          <button class="mt-item mt-ir" data-ir="armar"><span class="mi">📋</span><span class="mt">Armar pedidos</span></button>
+          <button class="mt-item mt-ir" data-ir="usuarios"><span class="mi">👥</span><span class="mt">Usuarios y permisos</span></button>
+          <button class="mt-item mt-ir" data-ir="menu"><span class="mi">☰</span><span class="mt">Todas las funciones</span></button>
+        </nav>
+
+        <div class="mt-contenido" id="mtContenido">
+          <div class="mt-rango" id="mtRango" style="display:none;">
+            <b class="mt-rango-t">📅 Período</b>
+            <input type="date" id="mt_inputRangoDesde"> <span class="contador">hasta</span> <input type="date" id="mt_inputRangoHasta">
+            <button class="btn-chico azul" id="mt_btnBuscarRango">Buscar</button>
+            <span class="contador">Lo usan Historial, Scoring y Evolución.</span>
+          </div>
+
+          <section class="mt-panel activo" data-seccion="resumen">
+            <div class="mt-titulo"><h2>Resumen</h2><p>Lo que está pasando hoy: armado, personas conectadas y auditorías.</p></div>
+            <div class="mt-kpis" id="mt_kpiResumen"></div>
+            <div class="mt-grid2">
+              <div class="card"><h3 class="mt-h3">🟢 Armando ahora mismo</h3><div id="mt_contenidoTiempoReal"><div class="empty-state">Cargando...</div></div></div>
+              <div class="card"><h3 class="mt-h3">👤 Personas conectadas</h3><div id="mt_contenidoSesiones"><div class="empty-state">Cargando...</div></div></div>
+            </div>
+            <div class="card">
+              <div class="mt-cab"><h3 class="mt-h3">📋 Últimos movimientos</h3><span id="mt_contadorTotalHoy" class="contador"></span></div>
+              <div id="mt_statsHoy" class="mt-stats"></div>
+              <div id="mt_contenidoFeed" style="max-height:440px; overflow-y:auto;"><div class="empty-state">Cargando...</div></div>
+            </div>
+          </section>
+
+          <section class="mt-panel" data-seccion="dia">
+            <div class="mt-titulo"><h2>Resumen por día</h2><p>Cuántos pedidos armó cada persona, en cuánto tiempo y con qué pausas.</p></div>
+            <div class="mt-barra"><b>Fecha</b> <input type="date" id="mt_inputFecha"></div>
+            <div class="card"><div id="mt_contenidoResumen"><div class="empty-state">Elegí una fecha.</div></div></div>
+          </section>
+
+          <section class="mt-panel" data-seccion="historial">
+            <div class="mt-titulo"><h2>Historial por fechas</h2><p>Totales de cada armador en el período: días trabajados, picks, tiempo activo y pausas.</p></div>
+            <div class="card"><div id="mt_contenidoRango"><div class="empty-state">Cargando...</div></div></div>
+          </section>
+
+          <section class="mt-panel" data-seccion="scoring">
+            <div class="mt-titulo"><h2>Scoring de armadores</h2><p>Compara a cada armador contra el resto del grupo en el mismo período — no es un estándar absoluto. (El "% sin stock" no entra en este score porque no siempre depende del armador — se ve aparte, en la tabla de "Historial por rango" de arriba.)</p></div>
+            <div class="card"><div id="mt_contenidoScoring"><div class="empty-state">Cargando...</div></div></div>
+          </section>
+
+          <section class="mt-panel" data-seccion="evolucion">
+            <div class="mt-titulo"><h2>Evolución del score</h2><p>Mismo score (Velocidad 50% / Continuidad 25% / Volumen 25%), calculado cada día por separado — cada día se compara solo contra quienes trabajaron ESE día.</p></div>
+            <div class="card"><div id="mt_contenidoGrafico"><div class="empty-state">Cargando...</div></div></div>
+          </section>
+
+          <section class="mt-panel" data-seccion="auditoria">
+            <div class="mt-titulo"><h2>Auditorías de sin stock</h2><p>Todo lo que se marcó "Sin stock": qué sucursales lo pidieron, quién lo canceló, y quién lo habilitó o confirmó que no había. La auditoría se hace desde el 🔎 del Armador (ahí no se ve quién marcó).</p></div>
+            <div class="mt-barra">
+              <input type="date" id="mt_audDesde"> <span class="contador">hasta</span> <input type="date" id="mt_audHasta">
+              <select id="mt_audFiltroEstado"><option value="todos">Todos</option><option value="pendiente">Sin auditar</option><option value="auditado">Auditados</option><option value="incidencia">Solo incidencias</option></select>
+              <button class="btn-chico azul" id="mt_btnAudBuscar">Buscar</button><button class="btn-chico" id="mt_btnAudCSV">⬇ CSV</button>
+            </div>
+            <div class="card"><div id="mt_audResumenContenido"></div><div id="mt_audDetalleContenido"><div class="empty-state">Cargando...</div></div></div>
+          </section>
+        </div>
+      </div>
+    </div>
+
     <div class="pantalla" id="pasoUsuarios" style="display:none;">
       <div class="aviso">Acá se da de alta a las personas, se les asigna <b>uno o más roles</b> y se habilita quién puede auditar. Los cambios se aplican la próxima vez que esa persona abra la app.</div>
       <div class="filtros">
@@ -980,7 +1119,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
     import {
       getFirestore, doc, getDoc, setDoc, deleteDoc, collection, collectionGroup, query, where, orderBy, limit,
-      getDocs, runTransaction, writeBatch, serverTimestamp, increment, addDoc
+      getDocs, runTransaction, writeBatch, serverTimestamp, increment, addDoc, onSnapshot, Timestamp
     } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
     import { NOMBRE_ROL, USUARIOS_INICIALES, PERFILES, resolverPermisos, cargarUsuario } from './permisos.js';
 
@@ -1037,11 +1176,15 @@
       compras:   { el: 'pasoCompras', padre: 'menu', requiere: 'compras' },
       pedidoprov: { el: 'pasoPedidoProv', padre: 'menu', requiere: 'compras' },
       usuarios:  { el: 'pasoUsuarios', padre: 'menu', requiere: 'usuarios' },
+      metricas:  { el: 'pasoMetricas', padre: null, requiere: 'metricas' },
       auditoria: { el: 'pasoAuditoria', padre: 'menu', requiere: 'auditor' },
       extra:     { el: 'pasoExtra', padre: 'menu', requiere: 'gestion' }
     };
     // Profundidad de cada pantalla: sirve para animar hacia adelante (entra por la derecha) o hacia atrás (por la izquierda)
-    const PROFUNDIDAD = { home: 0, menu: 1, armar: 1, stock: 2, admin: 2, habilitar: 2, sinstock: 2, compras: 2, pedidoprov: 2, usuarios: 2, auditoria: 2, extra: 2 };
+    // Panel que se está viendo del centro de control (Logística), y sus títulos
+    const PANELES_MT = { resumen: ['Resumen', 'Lo que pasa hoy'], dia: ['Resumen por día', 'Quién armó qué, y cuánto tardó'], historial: ['Historial por fechas', 'Totales por armador'], scoring: ['Scoring de armadores', 'Comparativo del período'], evolucion: ['Evolución del score', 'Día por día'], auditoria: ['Auditorías de sin stock', 'Control de lo marcado sin stock'] };
+    let panelMetricas = 'resumen';
+    let metricasApi = null, cargaMetricasPromesa = null;
     let pantallaActual = 'home';
     let stockTabActual = 'stock';       // pestaña de la pantalla Stock: 'stock' o 'conteo'
     let conteoApi = null;               // módulo conteo.js, una vez cargado
@@ -1064,17 +1207,25 @@
     }
     // Pantalla de arranque: quien no arma (por ejemplo, solo Compras) empieza directo en el menú.
     // El Armador arranca en el armado (pendientes y faltantes). Los demás perfiles arrancan en su menú.
-    function inicio_() { return (personaActual && personaActual.perfil === 'armador' && puede_('armar')) ? 'home' : 'menu'; }
+    function inicio_() {
+      if (!personaActual) return 'menu';
+      if (personaActual.perfil === 'armador' && puede_('armar')) return 'home';
+      if (personaActual.perfil === 'logistica' && puede_('metricas')) return 'metricas'; // Logística entra directo al centro de control
+      return 'menu';
+    }
     // Para un perfil que no es Armador, el armado es una pantalla más del menú (y el menú es su raíz).
     function padreDe_(nombre) {
-      const armador = personaActual && personaActual.perfil === 'armador';
-      if (nombre === 'home') return armador ? null : 'menu';
-      if (nombre === 'menu') return armador ? 'home' : null;
+      const perfil = personaActual && personaActual.perfil;
+      if (nombre === 'metricas') return null;
+      if (nombre === 'home') return perfil === 'armador' ? null : 'menu';
+      if (nombre === 'menu') return perfil === 'armador' ? 'home' : (perfil === 'logistica' ? 'metricas' : null);
       return PANTALLAS[nombre] && PANTALLAS[nombre].padre;
     }
+    // Cuántos pasos hay desde la pantalla de inicio: sirve para animar hacia adelante o hacia atrás
     function profundidad_(nombre) {
-      if (personaActual && personaActual.perfil !== 'armador') { if (nombre === 'home') return 2; if (nombre === 'armar') return 3; if (nombre === 'menu') return 0; if (PROFUNDIDAD[nombre] >= 2) return 1 + PROFUNDIDAD[nombre]; }
-      return PROFUNDIDAD[nombre];
+      let d = 0, n = nombre;
+      while (padreDe_(n) && d < 6) { n = padreDe_(n); d++; }
+      return d;
     }
 
     function textosEncabezado_() {
@@ -1084,6 +1235,7 @@
         case 'stock': return stockTabActual === 'conteo' ? ['Contar stock', 'Sumá lo que hay en cada posición'] : ['Stock', 'Todos los productos, con lo que tiene stock primero'];
         case 'compras': return ['Compras', 'Stock por proveedor'];
         case 'usuarios': return ['Usuarios y permisos', 'Quién entra a la app y qué puede hacer'];
+        case 'metricas': return ['Centro de control', (PANELES_MT[panelMetricas] || PANELES_MT.resumen)[0]];
         case 'pedidoprov': return ['Armar pedido a proveedor', 'Calcular qué pedir y bajar la orden en PDF'];
         case 'admin': return ['Armado sin procesar', 'Lo armado que todavía no se procesó'];
         case 'habilitar': return ['Habilitar pendientes', 'Liberar lo que esperaba al proveedor'];
@@ -1100,7 +1252,7 @@
       document.getElementById('subtitulo').textContent = sub;
       const padreAct = padreDe_(pantallaActual);
       document.getElementById('btnVolverHeader').style.display = (padreAct && puedeEntrar_(padreAct)) ? 'grid' : 'none';
-      document.getElementById('btnMenu').style.display = (pantallaActual === 'home' && personaActual && personaActual.perfil === 'armador') ? 'flex' : 'none';
+      document.getElementById('btnMenu').style.display = ((pantallaActual === 'home' && personaActual && personaActual.perfil === 'armador') || pantallaActual === 'metricas') ? 'flex' : 'none';
       medirEncabezado_();
     }
 
@@ -1122,6 +1274,7 @@
       elNuevo.classList.add(profundidad_(nombre) >= profundidad_(anterior) ? 'anim-adelante' : 'anim-atras');
       document.body.dataset.pantalla = nombre; // las pantallas de datos usan todo el ancho en compu
       if (nombre !== 'stock' && conteoApi) conteoApi.detenerEscaneres(); // no dejar la cámara prendida al irse del conteo
+      if (nombre === 'metricas') entrarMetricas_();
       const barraPdf = document.getElementById('cn_barraPedidoPDF'); if (barraPdf && nombre !== 'pedidoprov') barraPdf.style.display = 'none';
       pantallaActual = nombre;
       actualizarEncabezado_();
@@ -1357,7 +1510,7 @@
       appYaArrancada = true;
       // Los pendientes y faltantes solo se cargan si el perfil arma: Compras, por ejemplo, ni los lee.
       if (personaActual && personaActual.perfil === 'armador' && puede_('armar')) asegurarArmado_();
-      if (inicio_() === 'menu' && pantallaActual === 'home') irA_('menu');
+      if (inicio_() !== 'home' && pantallaActual === 'home') irA_(inicio_());
     }
     document.getElementById('btnIrArmar').addEventListener('click', () => { if (puede_('armar')) { asegurarArmado_(); irA_('home'); } });
 
@@ -2129,12 +2282,68 @@
       return candidatos.map(d => resumenPedidoParaAuditoria_(d.id, d.data()));
     }
 
+    // ---------------- CENTRO DE CONTROL / MÉTRICAS (módulo metricas.js, se carga la primera vez) ----------------
+    function cargarMetricas_() {
+      if (metricasApi) return Promise.resolve(metricasApi);
+      if (!cargaMetricasPromesa) {
+        cargaMetricasPromesa = import('./metricas.js').then(m => {
+          metricasApi = m.iniciarMetricas({ db, collection, query, where, orderBy, onSnapshot, getDocs, Timestamp });
+          return metricasApi;
+        }).catch(err => { cargaMetricasPromesa = null; throw err; });
+      }
+      return cargaMetricasPromesa;
+    }
+
+    async function entrarMetricas_() {
+      let panel = 'resumen';
+      try { panel = sessionStorage.getItem('mt_panel') || 'resumen'; } catch (e) { /* sin storage */ }
+      irPanelMetricas_(panel);
+      const carga = document.getElementById('mtCargando');
+      try {
+        await cargarMetricas_();
+        metricasApi.abrir();
+        carga.style.display = 'none';
+        document.getElementById('mtLayout').style.display = 'grid';
+        if (['historial', 'scoring', 'evolucion'].includes(panelMetricas)) metricasApi.asegurarRango();
+      } catch (err) {
+        carga.textContent = 'No se pudo cargar el centro de control: ' + err.message;
+        carga.style.display = 'block';
+      }
+    }
+
+    function irPanelMetricas_(panel) {
+      if (!PANELES_MT[panel]) panel = 'resumen';
+      panelMetricas = panel;
+      document.querySelectorAll('#mtNav .mt-item[data-panel]').forEach(b => b.classList.toggle('activo', b.dataset.panel === panel));
+      document.querySelectorAll('#mtContenido .mt-panel').forEach(s => s.classList.toggle('activo', s.dataset.seccion === panel));
+      const usaRango = ['historial', 'scoring', 'evolucion'].includes(panel);
+      document.getElementById('mtRango').style.display = usaRango ? 'flex' : 'none';
+      try { sessionStorage.setItem('mt_panel', panel); } catch (e) { /* sin storage */ }
+      if (usaRango && metricasApi) metricasApi.asegurarRango();
+      if (pantallaActual === 'metricas') { actualizarEncabezado_(); window.scrollTo({ top: 0 }); }
+    }
+
+    document.getElementById('pasoMetricas').addEventListener('click', (e) => {
+      const p = e.target.closest('[data-panel]');
+      if (p) { irPanelMetricas_(p.dataset.panel); return; }
+      const ir = e.target.closest('[data-ir]');
+      if (!ir) return;
+      switch (ir.dataset.ir) {
+        case 'compras': if (puede_('compras_ver')) location.href = 'compras.html'; break;
+        case 'solicitudes': if (puede_('compras_ver')) location.href = 'compras.html#sol'; break;
+        case 'stock': abrirStockGlobal(); break;
+        case 'armar': if (puede_('armar')) { asegurarArmado_(); irA_('home'); } break;
+        case 'usuarios': abrirUsuarios_(); break;
+        case 'menu': irA_('menu'); break;
+      }
+    });
+
     // ---------------- USUARIOS Y PERMISOS (solo Logística) ----------------
     let usuariosCargados = [];
     let usuarioEditando = null; // documento que se está editando; null = alta nueva
 
     document.getElementById('btnUsuarios').addEventListener('click', abrirUsuarios_);
-    document.getElementById('btnMetricas').addEventListener('click', () => { if (puede_('metricas')) location.href = 'tiempos.html'; });
+    document.getElementById('btnMetricas').addEventListener('click', () => { if (puede_('metricas')) irA_('metricas'); });
     document.getElementById('btnModuloCompras').addEventListener('click', () => { if (puede_('compras_ver')) location.href = 'compras.html'; });
     document.getElementById('btnSolicitudes').addEventListener('click', () => { if (puede_('compras_ver')) location.href = 'compras.html#sol'; });
     document.getElementById('buscarUsuario').addEventListener('input', renderizarUsuarios_);
