@@ -1563,7 +1563,48 @@ function findCols(rows, spec) {
   }
   return null;
 }
+// El export de ventas identifica cada producto por su CÓDIGO INTERNO ("33145 - ACEITE OLIVA..."); el catálogo de Firebase, por código de barras.
+// El puente es el campo codigoInterno de cada producto de Firebase.
+function mapaCodigoInterno() { const m = {}; S.master.forEach(p => { if (p.ci && !m[p.ci]) m[p.ci] = p.cod; }); return m; }
+const esFechaCelda = v => v instanceof Date || (typeof v === 'number' ? v > 30000 && v < 90000 : !isNaN(parseDateAny(v)));
+const AVISO_TRUNCADO = /exported data exceeded|may have been omitted/i;
+function ignoradosTop(v) { const a = [...v.ignored.entries()].filter(([, o]) => o.nombre).sort((x, y) => y[1].q - x[1].q).slice(0, 3); return a.length ? ` (los de más venta: ${a.map(([, o]) => esc(o.nombre) + ' ' + nf(o.q) + ' u.').join(', ')})` : ''; }
+// Export "ventas por día": una fila de fechas (cada una repetida: "Kg Vendidos" + "Última Venta"), el encabezado con el artículo y la sucursal, y un renglón por artículo y sucursal.
+function parseSalesMatriz(rows) {
+  let h = -1;
+  for (let r = 0; r < Math.min(rows.length, 8); r++) { const k = (rows[r] || []).map(normKey); if (k.some(x => /articulo/.test(x)) && k.some(x => /sucursal/.test(x))) { h = r; break; } }
+  if (h < 0) return null;
+  let fr = -1;
+  for (let r = h - 1; r >= 0; r--) if ((rows[r] || []).filter(esFechaCelda).length >= 3) { fr = r; break; }
+  if (fr < 0) return null;
+  const hdr = rows[h].map(normKey), ai = hdr.findIndex(x => /articulo/.test(x)), si = hdr.findIndex(x => /sucursal/.test(x)), fi = hdr.findIndex(x => /^familia/.test(x));
+  const cols = []; rows[fr].forEach((v, i) => { if (esFechaCelda(v) && /vendid|cantidad|unidades/.test(hdr[i] || '')) cols.push([i, parseDateAny(v)]); });
+  if (!cols.length) return null;
+  const cim = mapaCodigoInterno(), agg = new Map(), ignored = new Map(), dayTot = new Map(), fams = new Set();
+  let minD = Infinity, maxD = -Infinity, n = 0, bad = 0, truncado = false;
+  for (let r = h + 1; r < rows.length; r++) {
+    const row = rows[r] || [];
+    if (AVISO_TRUNCADO.test(String(row[0] ?? '') + String(row[ai] ?? ''))) { truncado = true; continue; }
+    const m = String(row[ai] ?? '').match(/^\s*([A-Za-z0-9.]+)\s+-\s*(.*)$/);
+    if (!m) { bad++; continue; }
+    const cod0 = normCod(m[1]), key = S.mm[cod0] ? cod0 : cim[cod0], suc = normSuc(row[si]) || 'SIN SUCURSAL';
+    if (fi >= 0 && row[fi]) fams.add(String(row[fi]).trim());
+    for (const [i, d] of cols) {
+      const v = row[i]; if (v === null || v === undefined || v === '') continue;
+      const q = toNum(v); if (isNaN(q)) { bad++; continue; }
+      if (!key) { const o = ignored.get(cod0) || { n: 0, q: 0, nombre: m[2].trim() }; o.n++; o.q += q; ignored.set(cod0, o); continue; }
+      n++; if (d < minD) minD = d; if (d > maxD) maxD = d;
+      let a = agg.get(key); if (!a) agg.set(key, a = new Map());
+      let b = a.get(suc); if (!b) a.set(suc, b = new Map());
+      b.set(d, (b.get(d) || 0) + q); dayTot.set(d, (dayTot.get(d) || 0) + 1);
+    }
+  }
+  if (!n) { const conCi = S.master.filter(p => p.ci).length; throw new Error(conCi ? 'No hay ventas de productos de tu catálogo en el archivo. Revisá que los códigos internos coincidan con los de Firebase.' : 'Los productos de Firebase no tienen código interno (campo codigoInterno), así que no puedo cruzar las ventas. Corré la sincronización de proveedores en la planilla para cargarlo.'); }
+  return { agg, ignored, minD, maxD, n, bad, dayTot, truncado, matriz: true, familias: [...fams] };
+}
 function parseSales(rows) {
+  const mat = parseSalesMatriz(rows); if (mat) return mat;
+  const cim = mapaCodigoInterno();
   const hit = findCols(rows, { cod: /^cod/, suc: /sucursal/, qty: /cantidad/, fecha: /^fecha/ });
   if (!hit) throw new Error('No encontré las columnas "Cód. artículo", "Cantidad venta", "Desc. sucursal" y "Fecha". Revisá el encabezado.');
   const { cod: ci, suc: si, qty: qi, fecha: fi } = hit.cols;
@@ -1572,9 +1613,10 @@ function parseSales(rows) {
     const row = rows[r], cm = String(row[ci] ?? '').match(/^\s*([A-Za-z0-9.]+)\s+-\s/), cod = normCod(cm ? cm[1] : row[ci]), d = parseDateAny(row[fi]), q = toNum(row[qi]);
     if (!cod || isNaN(d) || isNaN(q)) { bad++; continue; }
     const suc = normSuc(row[si]) || 'SIN SUCURSAL';
-    if (!S.mm[cod]) { const o = ignored.get(cod) || { n: 0 }; o.n++; ignored.set(cod, o); continue; }
+    const key = S.mm[cod] ? cod : cim[cod];
+    if (!key) { const o = ignored.get(cod) || { n: 0, q: 0, nombre: '' }; o.n++; o.q += q; ignored.set(cod, o); continue; }
     n++; if (d < minD) minD = d; if (d > maxD) maxD = d;
-    let a = agg.get(cod); if (!a) agg.set(cod, a = new Map());
+    let a = agg.get(key); if (!a) agg.set(key, a = new Map());
     let b = a.get(suc); if (!b) a.set(suc, b = new Map());
     b.set(d, (b.get(d) || 0) + q); dayTot.set(d, (dayTot.get(d) || 0) + 1);
   }
@@ -1592,7 +1634,7 @@ async function commitSales(p, setProg) {
   const newND = newLast - newStart + 1, off = oldStart - newStart, dd = {};
   for (const m of S.master) { dd[m.cod] = {}; const old = S.dd[m.cod] || {}; for (const s in old) { const a = new Float64Array(newND); a.set(old[s], off); dd[m.cod][s] = a; } }
   const i0 = p.minD - newStart, i1 = p.maxD - newStart;
-  for (const c in dd) for (const s in dd[c]) for (let i = i0; i <= i1; i++) dd[c][s][i] = 0;
+  for (const c in dd) { if (!p.agg.has(c)) continue; for (const s in dd[c]) for (let i = i0; i <= i1; i++) dd[c][s][i] = 0; } // solo los productos que vienen en el archivo: así se pueden cargar las ventas por partes sin pisarse
   for (const [cod, stores] of p.agg) for (const [s, days] of stores) { if (!dd[cod][s]) dd[cod][s] = new Float64Array(newND); for (const [d, q] of days) dd[cod][s][d - newStart] += q; }
   const meta = Object.assign({}, had ? S.meta : {}), fm = p.minD + ((7 - dowOf(p.minD)) % 7);
   meta.startWeek = dnToStr(newStart);
@@ -1666,7 +1708,7 @@ function viewDatos(main, empty) {
   <div class="grid2">
     <div class="card"><h3>1. Ventas</h3>
       <div class="muted small" style="margin:6px 0 12px">Subí el export “Resumen de ventas por artículo” (Excel o CSV) con una fila por producto, sucursal y día. Los <b>días</b> que vengan en el archivo reemplazan a los ya cargados; los demás se conservan. Podés subir todo el año o solo las últimas semanas.</div>
-      <div class="drop" id="dzV"><div class="dz-msg">Arrastrá el archivo acá o elegilo</div><input type="file" accept=".xlsx,.xls,.csv,.txt,.tsv" aria-label="Archivo de ventas" style="margin-top:8px"></div>
+      <div class="drop" id="dzV"><div class="dz-msg">Arrastrá el archivo acá o elegilo</div><input type="file" accept=".xlsx,.xls,.csv,.txt,.tsv" aria-label="Archivo de ventas" style="margin-top:8px"></div><div class="hint" style="margin-top:6px">Acepta el export por día (una columna “Kg Vendidos” por fecha, con el artículo como “código - nombre”, que se cruza por <b>código interno</b>) y el detalle largo (una fila por venta). Si el sistema avisa que el export superó el volumen permitido, exportalo por partes y cargá cada parte: se suman sin pisarse.</div>
       <details style="margin-top:10px"><summary class="small" style="cursor:pointer">O pegar desde Excel</summary><textarea id="pV" placeholder="Cód. artículo\tDescripción\tCantidad venta\tDesc. sucursal\tFecha"></textarea><button class="btn sm" id="bPV" style="margin-top:6px">Leer texto pegado</button></details>
       <div id="pendV" style="margin-top:12px"></div></div>
     ${fbCardHtml()}
@@ -1689,7 +1731,7 @@ function viewDatos(main, empty) {
 }
 function renderPending() {
   const v = PEND.ventas, s = PEND.stock, m = PEND.master;
-  if ($('#pendV')) $('#pendV').innerHTML = v ? `<div class="note"><b>${esc(v.file)}</b>: ${nf(v.n)} filas de ventas del ${dnFmt(v.minD)} al ${dnFmt(v.maxD)} (${nf(v.nDays)} días${v.partialWeek ? ', la última semana incompleta: hasta ' + DOWN[dowOf(v.maxD)] : ''}).${v.ignored.size ? ` ${v.ignored.size} códigos fuera de la base se ignoran.` : ''}${v.bad ? ` ${v.bad} filas sin dato válido (totales o vacías) se saltean.` : ''}${v.overlap ? `<br>Reemplaza ${nf(v.overlap)} días que ya estaban cargados.` : ''}${v.gap ? `<br><b>Atención:</b> faltan ${v.gap} días entre lo ya cargado (hasta el ${dnFmt(S.lastDn)}) y este archivo; quedarán en cero.` : ''}${v.missing.length ? `<br><b>Atención:</b> ${v.missing.length} días del rango no tienen ninguna venta en el archivo (ej. ${v.missing.slice(0, 4).map(dnFmtS).join(', ')}).` : ''}${v.shorter ? '<br><b>Atención:</b> el archivo termina antes de la última fecha cargada (' + dnFmt(S.lastDn) + ').' : ''}</div><div class="flex" style="margin-top:8px"><button class="btn pri" id="okV">Confirmar y guardar</button><button class="btn" id="noV">Cancelar</button></div><div class="pbar" id="pbV" style="margin-top:8px;display:none"><i></i></div>` : '';
+  if ($('#pendV')) $('#pendV').innerHTML = v ? `<div class="note"><b>${esc(v.file)}</b>: ${nf(v.n)} filas de ventas del ${dnFmt(v.minD)} al ${dnFmt(v.maxD)} (${nf(v.nDays)} días${v.partialWeek ? ', la última semana incompleta: hasta ' + DOWN[dowOf(v.maxD)] : ''}).${v.ignored.size ? ` ${nf(v.ignored.size)} códigos no están en el catálogo y se ignoran${ignoradosTop(v)}.` : ''}${v.bad ? ` ${v.bad} filas sin dato válido (totales o vacías) se saltean.` : ''}${v.overlap ? `<br>Reemplaza esos ${nf(v.overlap)} días solo para los ${nf(v.agg.size)} productos que vienen en el archivo; los demás no se tocan.` : ''}${v.gap ? `<br><b>Atención:</b> faltan ${v.gap} días entre lo ya cargado (hasta el ${dnFmt(S.lastDn)}) y este archivo; quedarán en cero.` : ''}${v.missing.length ? `<br><b>Atención:</b> ${v.missing.length} días del rango no tienen ninguna venta en el archivo (ej. ${v.missing.slice(0, 4).map(dnFmtS).join(', ')}).` : ''}${v.shorter ? '<br><b>Atención:</b> el archivo termina antes de la última fecha cargada (' + dnFmt(S.lastDn) + ').' : ''}${v.truncado ? `<br><b>⚠ Archivo incompleto:</b> trae el aviso “Exported data exceeded the allowed volume”: el sistema cortó la exportación y faltan datos${v.familias && v.familias.length ? ` (las familias llegan hasta ${esc(v.familias[v.familias.length - 1])})` : ''}. Exportalo por partes —por familia o con menos días— y cargá cada parte: se suman sin pisarse.` : ''}${v.maxD < todayDn() - 7 ? `<br><b>Ojo:</b> las ventas llegan hasta el ${dnFmt(v.maxD)}, hace ${todayDn() - v.maxD} días: el pronóstico parte de datos viejos. Cargá también las ventas más recientes.` : ''}</div><div class="flex" style="margin-top:8px"><button class="btn pri" id="okV">Confirmar y guardar</button><button class="btn" id="noV">Cancelar</button></div><div class="pbar" id="pbV" style="margin-top:8px;display:none"><i></i></div>` : '';
   if ($('#pendS')) $('#pendS').innerHTML = s ? (() => { const keep = { stock: S.stock, map: S.stockMap, mis: S.stockMissing, unk: S.stockUnknown, dn: S.stockDn }; S.stock = s.data; buildStock(); const info = { unk: S.stockUnknown.slice(), mis: S.stockMissing.length, n: Object.keys(S.stockMap).length, zero: Object.values(S.stockMap).every(x => x === 0) }; S.stock = keep.stock; S.stockMap = keep.map; S.stockMissing = keep.mis; S.stockUnknown = keep.unk; S.stockDn = keep.dn; return `<div class="note"><b>${esc(s.file)}</b>: ${s.data.rows.length} filas, ${info.n} productos reconocidos.${info.unk.length ? ` <b>Códigos que no están en la base:</b> ${info.unk.slice(0, 8).map(esc).join(', ')}.` : ''}${info.mis ? ` ${info.mis} productos de la base no están en el archivo (se toman con stock 0).` : ''}${info.zero ? ' <b>Todas las cantidades son 0.</b>' : ''}</div><div class="flex" style="margin-top:8px"><button class="btn pri" id="okS">Usar este stock</button><button class="btn" id="noS">Cancelar</button></div>`; })() : '';
   if ($('#pendM')) $('#pendM').innerHTML = m ? `<div class="note"><b>${esc(m.file)}</b>: ${m.items.length} productos, ${[...new Set(m.items.map(x => x.prov))].length} proveedores. ${m.items.filter(x => !S.mm[x.cod]).length} códigos nuevos.</div><div class="flex" style="margin-top:8px"><button class="btn pri" id="okM">Reemplazar base de productos</button><button class="btn" id="noM">Cancelar</button></div>` : '';
   $('#okV') && ($('#okV').onclick = async () => { const bar = $('#pbV'); bar.style.display = ''; $('#okV').disabled = true; try { await commitSales(v, p => { bar.firstChild.style.width = Math.round(p * 100) + '%'; }); PEND.ventas = null; toast('Ventas guardadas. Datos hasta el ' + dnFmt(S.lastDn) + '.'); render(); } catch (e) { toast('Error al guardar: ' + (e.message || e.code || e), 8000); $('#okV').disabled = false; } });
@@ -1726,8 +1768,8 @@ function viewTeoria(main) {
     <ol class="plain"><li><b>Mide el nivel de ventas actual</b> de cada producto a partir de las últimas semanas.</li><li><b>Lo ajusta por estacionalidad</b> comparando con el mismo período del año anterior.</li><li><b>Lo reparte por día de la semana</b> y lo proyecta desde la fecha del stock.</li><li><b>Calcula con cuánto stock llegás cuando llega el proveedor</b> (stock de hoy menos lo que se vende hasta entonces).</li><li><b>Pide lo que falta</b> para cubrir los días de abastecimiento que elegiste, contados desde la llegada, redondeado a cajas o unidades.</li></ol>
     <p>Nada es una caja negra. <b>Dónde ver los cálculos:</b> en la Orden de compra, pasá el mouse por el título de cada columna para ver qué es, y tocá cualquier fila (o “ver cálculo”) para ver los 6 pasos de ese producto con sus números. Acá, abajo de todo, hay el mismo cálculo con un producto de ejemplo, y cada sección explica una fórmula.</p>`)}
   ${sec('t-datos', 'Datos de entrada', kv([
-    ['Ventas diarias', 'Una fila por producto, sucursal y día (el export “Resumen de ventas por artículo”). Se guardan día por día; las semanas, los promedios y los perfiles se calculan a partir de ahí. Los días del archivo nuevo reemplazan a los ya cargados, así que podés volver a subir la misma semana sin duplicar.'],
-    ['Códigos ajenos', 'Los productos que no están en el catálogo se ignoran. Las filas de totales o sin fecha se saltean. Las devoluciones (cantidades negativas) se restan.'],
+    ['Ventas diarias', 'Se acepta el export por día (una columna de “Kg Vendidos” por fecha, un renglón por artículo y sucursal) o el detalle largo (una fila por producto, sucursal y día). Se guardan día por día; las semanas, los promedios y los perfiles se calculan a partir de ahí. Los días del archivo nuevo reemplazan a los ya cargados, pero solo para los productos que vienen en ese archivo: podés volver a subir la misma semana sin duplicar, y cargar las ventas por partes (por familia, por ejemplo) sin que una parte pise a la otra.'],
+    ['Códigos ajenos', 'Los productos se identifican por su código interno (el “33145” de “33145 - ACEITE OLIVA…”), que se cruza con el campo código interno de cada producto de Firebase; también se aceptan códigos de barras. Los que no están en el catálogo se ignoran (el aviso muestra los de más venta). Las filas de totales o sin fecha se saltean. Las devoluciones (cantidades negativas) se restan.'],
     ['Base de productos', 'Define proveedor, si se compra por caja, unidades por caja y kilos por unidad. El proveedor de cada producto sale siempre de esta base.'],
     ['Stock', 'Cantidad física por producto, en cajas o en unidades. Se convierte a unidades de venta y, si un código aparece dos veces, se suma. Las ventas se proyectan desde la fecha del stock.'],
     ['Administración', 'Por defecto sus ventas no entran al pronóstico (no son ventas al público). Se puede incluir en Proveedores.']]))}
@@ -2149,7 +2191,7 @@ function masterBase(prods) {
   prods.forEach(p => {
     const cod = normCod(p.cod), prov = String(p.prov || '').trim().toUpperCase();
     if (!cod || !prov) return; // sin proveedor no se puede planificar una compra
-    base[cod] = { cod, nombre: p.nombre || cod, prov, uni: 'UNI', xcaja: !!p.ucaja, ucaja: p.ucaja || null, kgu: null, vida: '', grupo: defaultGroup(prov, cod), nota: '' };
+    base[cod] = { cod, ci: normCod(p.ci), nombre: p.nombre || cod, prov, uni: 'UNI', xcaja: !!p.ucaja, ucaja: p.ucaja || null, kgu: null, vida: '', grupo: defaultGroup(prov, cod), nota: '' };
   });
   return base;
 }
@@ -2268,19 +2310,19 @@ try {
   window.__acceso = acceso;
   // Catálogo (productos con proveedor), unidades por caja (del conteo) y stock del depósito. Se guarda unos minutos en el navegador
   // para no volver a leer miles de productos cada vez que se abre la pantalla; "Actualizar stock ahora" fuerza la lectura.
-  const CLAVE_CAT = 'compras_catalogo_v1', VIDA_CAT = 10 * 60 * 1000;
+  const CLAVE_CAT = 'compras_catalogo_v2', VIDA_CAT = 10 * 60 * 1000;
   const loadCatalogo = async (forzar) => {
     try { const c = JSON.parse(sessionStorage.getItem(CLAVE_CAT) || 'null'); if (!forzar && c && Date.now() - c.t < VIDA_CAT) return c.d; } catch (e) { /* sin caché */ }
     const [sp, sb] = await Promise.all([getDocs(collection(fs, 'productos')), getDocs(collection(fs, 'bultos'))]);
     const caja = {}; sb.docs.forEach(d => { const x = d.data(), base = String(x.codigoBase || '').trim(), u = Number(x.unidadesPorBulto); if (base && u > 0) caja[base] = u; });
-    const d = sp.docs.map(x => { const v = x.data(), u = Number(v.unidadesPorBulto); return { cod: x.id, nombre: v.producto || '', stock: Number(v.stockTotal) || 0, prov: v.proveedor || '', ucaja: u > 0 ? u : (caja[x.id] || null) }; });
+    const d = sp.docs.map(x => { const v = x.data(), u = Number(v.unidadesPorBulto); return { cod: x.id, nombre: v.producto || '', stock: Number(v.stockTotal) || 0, prov: v.proveedor || '', ci: String(v.codigoInterno ?? '').trim(), ucaja: u > 0 ? u : (caja[x.id] || null) }; });
     try { sessionStorage.setItem(CLAVE_CAT, JSON.stringify({ t: Date.now(), d })); } catch (e) { /* si no entra, igual funciona */ }
     return d;
   };
   window.__fbOk({
     db, loadCatalogo,
     ping: async () => { await setDoc(doc(fs, COL, '_ping'), { t: Date.now() }); await getDoc(doc(fs, COL, '_ping')); },
-    loadProductos: async () => { const s = await getDocs(collection(fs, 'productos')); return s.docs.map(d => { const x = d.data(); return { cod: d.id, nombre: x.producto || '', stock: Number(x.stockTotal) || 0, prov: x.proveedor || '' }; }); },
+    loadProductos: async () => { const s = await getDocs(collection(fs, 'productos')); return s.docs.map(d => { const x = d.data(); return { cod: d.id, nombre: x.producto || '', stock: Number(x.stockTotal) || 0, prov: x.proveedor || '', ci: String(x.codigoInterno ?? '').trim() }; }); },
     loadProvMap: async () => { const s = await getDocs(query(collection(fs, 'pedidos'), limit(5000))), m = {}; s.docs.forEach(d => { const x = d.data(); if (x.codigo && x.proveedor) m[String(x.codigo).trim().replace(/\.0+$/, '').replace(/^0+(?=\d)/, '')] = String(x.proveedor).trim().toUpperCase(); }); return m; }
   });
 } catch (e) { window.__fbFail(e); }
