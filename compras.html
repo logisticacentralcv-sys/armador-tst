@@ -149,7 +149,18 @@ ul.plain,ol.plain{margin:6px 0 0;padding-left:22px}ul.plain li,ol.plain li{margi
 .sec-h{display:flex;align-items:baseline;gap:14px 20px;flex-wrap:wrap;justify-content:space-between}
 /* orden de compra */
 .po-head{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:28px;align-items:end}
-.po-meta{display:flex;gap:10px;flex-wrap:wrap}
+.po-titulo{min-width:0}
+.po-estado{margin-top:10px;max-width:520px;line-height:1.5}
+.po-meta{display:grid;grid-template-columns:repeat(3,minmax(120px,1fr));gap:10px}
+.po-params{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:16px;margin:22px 0 4px}
+.po-grupo{border:1px solid var(--line,rgba(120,130,160,.22));border-radius:18px;padding:16px 18px;background:rgba(120,130,160,.04);min-width:0}
+.po-gt{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;margin-bottom:14px}
+.po-gt .n{display:inline-grid;place-items:center;flex:none;width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:13px;font-weight:700}
+.po-fila{display:flex;flex-wrap:wrap;gap:14px 16px;align-items:flex-end}
+.po-fila input{width:110px}
+.po-fila input[type=date]{width:172px}
+.po-fila .dato .v{min-height:40px;display:flex;align-items:center;padding:0 14px;border-radius:12px;background:rgba(120,130,160,.12);font-weight:700;white-space:nowrap}
+.po-nota{margin-top:12px;font-size:13px;line-height:1.45;max-width:560px}
 .tag-l{display:flex;flex-direction:column;gap:2px;padding:12px 18px;border-radius:18px;background:var(--bg2);min-width:130px}
 .tag-l .k{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
 .tag-l .v{font-family:var(--f-head);font-weight:800;font-size:28px;letter-spacing:-.03em}
@@ -164,8 +175,8 @@ ul.plain,ol.plain{margin:6px 0 0;padding-left:22px}ul.plain li,ol.plain li{margi
 .formula b{color:var(--accent)}
 .kv{display:grid;grid-template-columns:minmax(150px,220px) 1fr;gap:10px 22px;font-size:15.5px}
 .kv dt{font-weight:700;font-family:var(--f-head);font-size:17px}.kv dd{margin:0;color:var(--ink2)}
-@media (max-width:900px){.hero,.po-head,.insp,.theory{grid-template-columns:1fr}.toc{position:static;flex-direction:row;flex-wrap:wrap}.kv{grid-template-columns:1fr}}
-@media (max-width:640px){.card{padding:18px;border-radius:18px}.tab{padding:8px 14px;font-size:14px}th,td{padding:12px 12px}}
+@media (max-width:900px){.po-params{grid-template-columns:1fr}.hero,.po-head,.insp,.theory{grid-template-columns:1fr}.toc{position:static;flex-direction:row;flex-wrap:wrap}.kv{grid-template-columns:1fr}}
+@media (max-width:640px){.po-meta{grid-template-columns:repeat(2,minmax(0,1fr))}.po-fila input[type=date]{width:100%}.card{padding:18px;border-radius:18px}.tab{padding:8px 14px;font-size:14px}th,td{padding:12px 12px}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-delay:0ms!important;transition-duration:.01ms!important}html{scroll-behavior:auto}}
 
 /* ---- agregados v2 ---- */
@@ -1186,17 +1197,31 @@ function viewOrden(main) {
   <div class="provrow" role="group" aria-label="Proveedor">${chips}</div>
   <section class="card">
     <div class="po-head">
-      <div><div class="eyebrow">Proveedor</div><h2>${esc(cur.p)}</h2><div class="bar" style="margin-top:12px;gap:14px;align-items:flex-end;flex-wrap:wrap">
-        <div class="fld"><label for="poPed">Fecha del pedido</label><input type="date" id="poPed" value="${dnToStr(pedDn)}"></div>
-        <div class="fld"><label for="poDenv">Días hasta el envío</label><input type="number" id="poDenv" min="0" step="1" value="${denvP}" style="width:100px"></div>
-        <div class="fld"><label>Primer envío</label><div style="padding:9px 0;font-weight:700">${dnLong(envDn)}</div></div>
-        <div class="fld"><label for="poLT">Lead time (días)</label><input type="number" id="poLT" min="0" step="1" value="${pr.lt}" style="width:100px"><div class="hint" style="max-width:240px;margin-top:4px">${ltTexto(pr)}</div></div>
-        <div class="fld"><label>Llega el proveedor</label><div style="padding:9px 0;font-weight:700">${dnLong(arr)}</div></div>
-        <div class="fld"><label for="poFrec" title="Cada cuántos días enviás a sucursales">Frecuencia de envío (días)</label><input type="number" id="poFrec" min="1" step="1" value="${pr.frec !== undefined ? pr.frec : 7}" style="width:100px"></div>
-        <div class="fld"><label for="poNenv" title="Cuántos envíos cubre cada pedido (por defecto; se cambia por producto)">Envíos a cubrir</label><input type="number" id="poNenv" min="0.5" step="0.5" value="${pr.nenv !== undefined ? pr.nenv : 1}" style="width:100px"></div>
-        <div class="muted small" style="max-width:360px">Stock cargado al ${dnFmt(from)}${pedDn > from ? ' (se asume sin cambios hasta el envío)' : ''}. ${CONF_LABEL[pr.conf]}${pr.configurado ? '' : ' · <span class="chip warn">valores por defecto</span>'}</div>
-      </div></div>
+      <div class="po-titulo"><div class="eyebrow">Proveedor</div><h2>${esc(cur.p)}</h2>
+        <div class="muted small po-estado">Stock cargado al ${dnFmt(from)}${pedDn > from ? ' (se asume sin cambios hasta el envío)' : ''}. ${CONF_LABEL[pr.conf]}${pr.configurado ? '' : ' · <span class="chip warn">valores por defecto</span>'}</div>
+      </div>
       <div class="po-meta"><div class="tag-l"><span class="k">Líneas</span><span class="v">${emit.length}</span></div><div class="tag-l"><span class="k">Cajas</span><span class="v">${nf(cur.cajas)}</span></div>${cur.uni ? `<div class="tag-l"><span class="k">Unidades sueltas</span><span class="v">${nf(cur.uni)}</span></div>` : ''}<div class="tag-l"><span class="k">Kilos</span><span class="v">${nf(kg)}</span></div><div class="tag-l"><span class="k">Colchón sobre el pedido</span><span class="v">${kg > 0 ? nf(kgSS / kg * 100, 0) + '%' : '—'}</span></div><div class="tag-l"><span class="k">Cubre al menos</span><span class="v">${emit.length ? nf(minCover, 0) + ' d' : '—'}</span></div></div>
+    </div>
+    <div class="po-params">
+      <div class="po-grupo">
+        <div class="po-gt"><span class="n">1</span>Cuándo llega la mercadería</div>
+        <div class="po-fila">
+          <div class="fld"><label for="poPed">Fecha del pedido</label><input type="date" id="poPed" value="${dnToStr(pedDn)}"></div>
+          <div class="fld"><label for="poLT">Lead time (días)</label><input type="number" id="poLT" min="0" step="1" value="${pr.lt}"></div>
+          <div class="fld dato"><label>Llega el proveedor</label><div class="v">${dnLong(arr)}</div></div>
+        </div>
+        <div class="hint po-nota">${ltTexto(pr)}</div>
+      </div>
+      <div class="po-grupo">
+        <div class="po-gt"><span class="n">2</span>Cómo se envía a las sucursales</div>
+        <div class="po-fila">
+          <div class="fld"><label for="poDenv">Días hasta el envío</label><input type="number" id="poDenv" min="0" step="1" value="${denvP}"></div>
+          <div class="fld dato"><label>Primer envío</label><div class="v">${dnLong(envDn)}</div></div>
+          <div class="fld"><label for="poFrec" title="Cada cuántos días enviás a sucursales">Frecuencia de envío (días)</label><input type="number" id="poFrec" min="1" step="1" value="${pr.frec !== undefined ? pr.frec : 7}"></div>
+          <div class="fld"><label for="poNenv" title="Cuántos envíos cubre cada pedido (por defecto; se cambia por producto)">Envíos a cubrir</label><input type="number" id="poNenv" min="0.5" step="0.5" value="${pr.nenv !== undefined ? pr.nenv : 1}"></div>
+        </div>
+        <div class="hint po-nota">Cada envío lleva a las sucursales tantos días de venta como la frecuencia. Los días a cubrir son frecuencia × envíos, y se pueden cambiar producto por producto en la tabla.</div>
+      </div>
     </div>
     ${planBanner(cur.p)}
     ${moqBad ? `<div class="note warn" style="margin-top:14px">El pedido (${nf(kg)} kg) no llega al mínimo del proveedor (${nf(pr.moq)} kg).</div>` : ''}
