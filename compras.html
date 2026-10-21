@@ -833,9 +833,9 @@ window.addEventListener('resize', () => { moveInd(); });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(moveInd);
 function renderStatus() {
   if (!S.ready) { $('#status').innerHTML = ''; return; }
-  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span>`; return; }
+  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con carga de ventas por código interno (21/10)">v. 21/10 · código interno</span>`; return; }
   const part = isPartial() ? `<span class="pill warn" title="La última semana tiene datos hasta el ${dnFmt(S.lastDn)}; se completa con el perfil por día de la semana">semana en curso parcial</span>` : '';
-  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span>${part}`;
+  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con carga de ventas por código interno (21/10)">v. 21/10 · código interno</span>${part}`;
 }
 function render(anim) {
   renderTabs(); renderStatus(); badgeSol();
@@ -1570,6 +1570,24 @@ const esFechaCelda = v => v instanceof Date || (typeof v === 'number' ? v > 3000
 const AVISO_TRUNCADO = /exported data exceeded|may have been omitted/i;
 function ignoradosTop(v) { const a = [...v.ignored.entries()].filter(([, o]) => o.nombre).sort((x, y) => y[1].q - x[1].q).slice(0, 3); return a.length ? ` (los de más venta: ${a.map(([, o]) => esc(o.nombre) + ' ' + nf(o.q) + ' u.').join(', ')})` : ''; }
 // Export "ventas por día": una fila de fechas (cada una repetida: "Kg Vendidos" + "Última Venta"), el encabezado con el artículo y la sucursal, y un renglón por artículo y sucursal.
+function errorSinCoincidencias(ignored) {
+  const conCi = S.master.filter(p => p.ci), ej = [...ignored.keys()].slice(0, 3).join(', ') || '—', ejCat = conCi.slice(0, 3).map(p => p.ci).join(', ');
+  const e = new Error(conCi.length
+    ? `No hay ventas de productos de tu catálogo en el archivo. El archivo trae códigos como ${ej} y tu catálogo tiene ${nf(conCi.length)} productos con código interno (por ejemplo ${ejCat}). Revisá que sean los mismos.`
+    : `Ningún producto de Firebase tiene código interno (campo codigoInterno) y tampoco lo pude sacar de los pedidos, así que no puedo cruzar las ventas (el archivo trae códigos como ${ej}). Corré la sincronización de proveedores en la planilla para cargarlo.`);
+  e.sinMatch = true; return e;
+}
+// Si los productos de Firebase no traen el código interno, se arma el cruce con los pedidos (que traen código de barras y código interno juntos).
+async function completarCodigosInternos() {
+  if (S.ciDesdePedidos) return 0;
+  S.ciDesdePedidos = true;
+  let FB; try { FB = await window.fbReady; } catch (e) { return 0; }
+  if (!FB || !FB.loadCiMap) return 0;
+  let m; try { m = await FB.loadCiMap(); } catch (e) { return 0; }
+  const porCod = {}; for (const ci in m) if (!porCod[m[ci]]) porCod[m[ci]] = ci;
+  let n = 0; S.master.forEach(p => { if (!p.ci && porCod[p.cod]) { p.ci = porCod[p.cod]; n++; } });
+  return n;
+}
 function parseSalesMatriz(rows) {
   let h = -1;
   for (let r = 0; r < Math.min(rows.length, 8); r++) { const k = (rows[r] || []).map(normKey); if (k.some(x => /articulo/.test(x)) && k.some(x => /sucursal/.test(x))) { h = r; break; } }
@@ -1599,7 +1617,7 @@ function parseSalesMatriz(rows) {
       b.set(d, (b.get(d) || 0) + q); dayTot.set(d, (dayTot.get(d) || 0) + 1);
     }
   }
-  if (!n) { const conCi = S.master.filter(p => p.ci).length; throw new Error(conCi ? 'No hay ventas de productos de tu catálogo en el archivo. Revisá que los códigos internos coincidan con los de Firebase.' : 'Los productos de Firebase no tienen código interno (campo codigoInterno), así que no puedo cruzar las ventas. Corré la sincronización de proveedores en la planilla para cargarlo.'); }
+  if (!n) throw errorSinCoincidencias(ignored);
   return { agg, ignored, minD, maxD, n, bad, dayTot, truncado, matriz: true, familias: [...fams] };
 }
 function parseSales(rows) {
@@ -1620,7 +1638,7 @@ function parseSales(rows) {
     let b = a.get(suc); if (!b) a.set(suc, b = new Map());
     b.set(d, (b.get(d) || 0) + q); dayTot.set(d, (dayTot.get(d) || 0) + 1);
   }
-  if (!n) throw new Error('No hay ventas de productos de tu catálogo en el archivo. Revisá que los códigos coincidan con los del catálogo.');
+  if (!n) throw errorSinCoincidencias(ignored);
   return { agg, ignored, minD, maxD, n, bad, dayTot };
 }
 function planSalesImport(p) {
@@ -1731,7 +1749,7 @@ function viewDatos(main, empty) {
 }
 function renderPending() {
   const v = PEND.ventas, s = PEND.stock, m = PEND.master;
-  if ($('#pendV')) $('#pendV').innerHTML = v ? `<div class="note"><b>${esc(v.file)}</b>: ${nf(v.n)} filas de ventas del ${dnFmt(v.minD)} al ${dnFmt(v.maxD)} (${nf(v.nDays)} días${v.partialWeek ? ', la última semana incompleta: hasta ' + DOWN[dowOf(v.maxD)] : ''}).${v.ignored.size ? ` ${nf(v.ignored.size)} códigos no están en el catálogo y se ignoran${ignoradosTop(v)}.` : ''}${v.bad ? ` ${v.bad} filas sin dato válido (totales o vacías) se saltean.` : ''}${v.overlap ? `<br>Reemplaza esos ${nf(v.overlap)} días solo para los ${nf(v.agg.size)} productos que vienen en el archivo; los demás no se tocan.` : ''}${v.gap ? `<br><b>Atención:</b> faltan ${v.gap} días entre lo ya cargado (hasta el ${dnFmt(S.lastDn)}) y este archivo; quedarán en cero.` : ''}${v.missing.length ? `<br><b>Atención:</b> ${v.missing.length} días del rango no tienen ninguna venta en el archivo (ej. ${v.missing.slice(0, 4).map(dnFmtS).join(', ')}).` : ''}${v.shorter ? '<br><b>Atención:</b> el archivo termina antes de la última fecha cargada (' + dnFmt(S.lastDn) + ').' : ''}${v.truncado ? `<br><b>⚠ Archivo incompleto:</b> trae el aviso “Exported data exceeded the allowed volume”: el sistema cortó la exportación y faltan datos${v.familias && v.familias.length ? ` (las familias llegan hasta ${esc(v.familias[v.familias.length - 1])})` : ''}. Exportalo por partes —por familia o con menos días— y cargá cada parte: se suman sin pisarse.` : ''}${v.maxD < todayDn() - 7 ? `<br><b>Ojo:</b> las ventas llegan hasta el ${dnFmt(v.maxD)}, hace ${todayDn() - v.maxD} días: el pronóstico parte de datos viejos. Cargá también las ventas más recientes.` : ''}</div><div class="flex" style="margin-top:8px"><button class="btn pri" id="okV">Confirmar y guardar</button><button class="btn" id="noV">Cancelar</button></div><div class="pbar" id="pbV" style="margin-top:8px;display:none"><i></i></div>` : '';
+  if ($('#pendV')) $('#pendV').innerHTML = v ? `<div class="note"><b>${esc(v.file)}</b>: ${nf(v.n)} filas de ventas del ${dnFmt(v.minD)} al ${dnFmt(v.maxD)} (${nf(v.nDays)} días${v.partialWeek ? ', la última semana incompleta: hasta ' + DOWN[dowOf(v.maxD)] : ''}).${v.ignored.size ? ` ${nf(v.ignored.size)} códigos no están en el catálogo y se ignoran${ignoradosTop(v)}.` : ''}${v.bad ? ` ${v.bad} filas sin dato válido (totales o vacías) se saltean.` : ''}${v.overlap ? `<br>Reemplaza esos ${nf(v.overlap)} días solo para los ${nf(v.agg.size)} productos que vienen en el archivo; los demás no se tocan.` : ''}${v.gap ? `<br><b>Atención:</b> faltan ${v.gap} días entre lo ya cargado (hasta el ${dnFmt(S.lastDn)}) y este archivo; quedarán en cero.` : ''}${v.missing.length ? `<br><b>Atención:</b> ${v.missing.length} días del rango no tienen ninguna venta en el archivo (ej. ${v.missing.slice(0, 4).map(dnFmtS).join(', ')}).` : ''}${v.shorter ? '<br><b>Atención:</b> el archivo termina antes de la última fecha cargada (' + dnFmt(S.lastDn) + ').' : ''}${v.ciDesdePedidos ? `<br>Los productos de Firebase no traían el código interno: lo tomé de los pedidos (${nf(v.ciDesdePedidos)} productos).` : ''}${v.truncado ? `<br><b>⚠ Archivo incompleto:</b> trae el aviso “Exported data exceeded the allowed volume”: el sistema cortó la exportación y faltan datos${v.familias && v.familias.length ? ` (las familias llegan hasta ${esc(v.familias[v.familias.length - 1])})` : ''}. Exportalo por partes —por familia o con menos días— y cargá cada parte: se suman sin pisarse.` : ''}${v.maxD < todayDn() - 7 ? `<br><b>Ojo:</b> las ventas llegan hasta el ${dnFmt(v.maxD)}, hace ${todayDn() - v.maxD} días: el pronóstico parte de datos viejos. Cargá también las ventas más recientes.` : ''}</div><div class="flex" style="margin-top:8px"><button class="btn pri" id="okV">Confirmar y guardar</button><button class="btn" id="noV">Cancelar</button></div><div class="pbar" id="pbV" style="margin-top:8px;display:none"><i></i></div>` : '';
   if ($('#pendS')) $('#pendS').innerHTML = s ? (() => { const keep = { stock: S.stock, map: S.stockMap, mis: S.stockMissing, unk: S.stockUnknown, dn: S.stockDn }; S.stock = s.data; buildStock(); const info = { unk: S.stockUnknown.slice(), mis: S.stockMissing.length, n: Object.keys(S.stockMap).length, zero: Object.values(S.stockMap).every(x => x === 0) }; S.stock = keep.stock; S.stockMap = keep.map; S.stockMissing = keep.mis; S.stockUnknown = keep.unk; S.stockDn = keep.dn; return `<div class="note"><b>${esc(s.file)}</b>: ${s.data.rows.length} filas, ${info.n} productos reconocidos.${info.unk.length ? ` <b>Códigos que no están en la base:</b> ${info.unk.slice(0, 8).map(esc).join(', ')}.` : ''}${info.mis ? ` ${info.mis} productos de la base no están en el archivo (se toman con stock 0).` : ''}${info.zero ? ' <b>Todas las cantidades son 0.</b>' : ''}</div><div class="flex" style="margin-top:8px"><button class="btn pri" id="okS">Usar este stock</button><button class="btn" id="noS">Cancelar</button></div>`; })() : '';
   if ($('#pendM')) $('#pendM').innerHTML = m ? `<div class="note"><b>${esc(m.file)}</b>: ${m.items.length} productos, ${[...new Set(m.items.map(x => x.prov))].length} proveedores. ${m.items.filter(x => !S.mm[x.cod]).length} códigos nuevos.</div><div class="flex" style="margin-top:8px"><button class="btn pri" id="okM">Reemplazar base de productos</button><button class="btn" id="noM">Cancelar</button></div>` : '';
   $('#okV') && ($('#okV').onclick = async () => { const bar = $('#pbV'); bar.style.display = ''; $('#okV').disabled = true; try { await commitSales(v, p => { bar.firstChild.style.width = Math.round(p * 100) + '%'; }); PEND.ventas = null; toast('Ventas guardadas. Datos hasta el ' + dnFmt(S.lastDn) + '.'); render(); } catch (e) { toast('Error al guardar: ' + (e.message || e.code || e), 8000); $('#okV').disabled = false; } });
@@ -1743,7 +1761,15 @@ function renderPending() {
 }
 async function onSalesRows(rows, file) {
   if (!S.master.length) throw new Error('Primero cargá la base de productos.');
-  const p = planSalesImport(parseSales(rows)); p.file = file; PEND.ventas = p; renderPending();
+  let parsed, desdePedidos = 0;
+  try { parsed = parseSales(rows); }
+  catch (e) {
+    if (!e.sinMatch) throw e;
+    desdePedidos = await completarCodigosInternos();            // reintenta una vez con el cruce armado desde los pedidos
+    if (!desdePedidos) throw e;
+    parsed = parseSales(rows);
+  }
+  const p = planSalesImport(parsed); p.file = file; p.ciDesdePedidos = desdePedidos; PEND.ventas = p; renderPending();
 }
 async function onStockRows(rows, file) { PEND.stock = { file, data: { rows: parseStock(rows) } }; const m = String(file).match(/(\d{4}-\d{2}-\d{2})/); if (m && $('#sDate')) $('#sDate').value = m[1]; renderPending(); }
 async function onMasterRows(rows, file) { PEND.master = { file, items: parseMaster(rows) }; renderPending(); }
@@ -2323,7 +2349,9 @@ try {
     db, loadCatalogo,
     ping: async () => { await setDoc(doc(fs, COL, '_ping'), { t: Date.now() }); await getDoc(doc(fs, COL, '_ping')); },
     loadProductos: async () => { const s = await getDocs(collection(fs, 'productos')); return s.docs.map(d => { const x = d.data(); return { cod: d.id, nombre: x.producto || '', stock: Number(x.stockTotal) || 0, prov: x.proveedor || '', ci: String(x.codigoInterno ?? '').trim() }; }); },
-    loadProvMap: async () => { const s = await getDocs(query(collection(fs, 'pedidos'), limit(5000))), m = {}; s.docs.forEach(d => { const x = d.data(); if (x.codigo && x.proveedor) m[String(x.codigo).trim().replace(/\.0+$/, '').replace(/^0+(?=\d)/, '')] = String(x.proveedor).trim().toUpperCase(); }); return m; }
+    loadProvMap: async () => { const s = await getDocs(query(collection(fs, 'pedidos'), limit(5000))), m = {}; s.docs.forEach(d => { const x = d.data(); if (x.codigo && x.proveedor) m[String(x.codigo).trim().replace(/\.0+$/, '').replace(/^0+(?=\d)/, '')] = String(x.proveedor).trim().toUpperCase(); }); return m; },
+    // código interno -> código de barras, de los pedidos: sirve cuando los productos de Firebase no traen el código interno
+    loadCiMap: async () => { const s = await getDocs(query(collection(fs, 'pedidos'), limit(5000))), m = {}, n = v => String(v ?? '').trim().replace(/\.0+$/, '').replace(/^0+(?=\d)/, ''); s.docs.forEach(d => { const x = d.data(), ci = n(x.codigoInterno), cb = n(x.codigo); if (ci && cb && !m[ci]) m[ci] = cb; }); return m; }
   });
 } catch (e) { window.__fbFail(e); }
 </script>
