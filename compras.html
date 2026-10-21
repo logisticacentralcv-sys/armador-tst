@@ -613,6 +613,73 @@ const ESTADO = {
   pausado: { t: 'Pausado', c: '', o: 5, d: 'Producto pausado manualmente' }
 };
 
+/* ================= Lead times estimados desde la hoja de recepciones ================= */
+// Salen de "Recepciones Depósito": días entre que se hizo el pedido y que llegó, de los pedidos que ya llegaron (estado "llegado" o
+// "remito pendiente"). Se descartan los que tienen la llegada anterior al pedido (error de carga), los "pendiente", "esperando fecha" y "reprogramado".
+// Por proveedor se usa la MEDIANA (no la distorsionan los pedidos que tardaron muchísimo). Lo que vos cambies a mano nunca se vuelve a pisar.
+const LT_HOJA = {"meta":{"generado":"2026-10-21","desde":"2026-05-25","hasta":"2026-10-21","recepciones":557,"pedidosEnLaHoja":668,"descartados":{"llegada anterior al pedido (error de carga)":81,"estado pendiente":12,"estado reprogramado":16,"estado esperando_fecha":2}},"filas":[["ACEITES LODE",[1,1,2,3,3,4,5]],["ADOBADO VINO",[0,3]],["ADOBADO VINOS",[0]],["AITOR BALBO (LOS HAROLDOS)",[3,3,3,5]],["AITOR IDER BALBO S A A C E I",[1,2]],["ALFAJORES JORGITO",[4,6,6]],["ALFAJORES JORGITO S A",[0,0]],["ALIMENTOS NATURALES MDP S.R.L.",[6]],["ALTA DISTRIBUCION S.A.",[0,0,0,0]],["ALTA DISTRIBUCION S.A.(HERGO BEBIDAS)",[0]],["ALTA DISTRIBUCIÓN (ALTA / HERGO AGUAS)",[0,1,1,1,1,1,2,2,2,2,3,4,6]],["ANTARES",[1]],["ASOCIACION ARGENTINA DE LOS AD",[0,0]],["ASOCIACION ARGENTINA DE LOS ADVENTISTAS (GRANIX)",[0,2,3,4,7,8]],["BODEGA ESMERALDA S.A. (CATENA ZAPATA)",[0,18,21]],["BODEGA FINCA CUADRO BENEGAS",[3]],["BODEGAS ESMERALDA SOCIEDAD ANONIMA S. A.",[0,32]],["BODEGAS Y VIÑEDOS LOPEZ",[2,2,2,2,3,5]],["BOUCHEE",[2]],["BOUCHEE BEBIDAS S.R.L.",[0,1,1,2,2,2,2,3,16]],["BOUCHEE BEBIDAS SRL",[3,3]],["CABRALES",[2]],["CABRALES S.A",[1,1,2,2,2,2,3]],["CABRALES SA",[0,0,0,0,1,2,7]],["CACHAFAZ",[0,7]],["CASTELL",[12]],["CASTELL S. A.",[0]],["CASTELL S.A.",[10,11,15]],["CELULOSA CAMPANA",[0]],["CELULOSA CAMPANA (CAMPANITA)",[4]],["CINTIA ELISABETH MARTINES (MIEL MARGARITAS)",[1,1,1,1,3,4,5,8]],["CIZAÑERA (LALANNE SEBASTIAN)",[1,3,4]],["CLX IMPORT SRL",[0]],["COMERCIAL DEL MAR S.A.",[0,0,0,1]],["COMERCIAL DEL MAR S.A. (QUILMES)",[1,1,2,3,4]],["COMPAÑIA DE ALIMENTOS CONQUEROR S,A,",[11]],["COMPAÑIA DE ALIMENTOS CONQUEROR S.A. (GUOLIS)",[10,14,22]],["COMPAÑIA INTRODUCTORA DE BS AS (DOS ANCLAS)",[3,6]],["CONURBANO DISTRIBUCION",[4]],["CONURBANO DISTRIBUCION SOCIEDA",[0,0]],["CONURBANO DISTRIBUCIÓN",[0,0,1,1,3,3,3,4,4,5,12]],["COOPERATIVA DE TRABAJO ALIANZA COMUN LIMITADA (CUNNINGTON)",[2,5,6,9,19]],["COPECA SOCIEDAD ANONIMA (PUGLISI)",[4,4,5]],["CUNNINGTON",[6]],["DANODIS - HERGO (RETIRO)",[1]],["DANODIS S.A (HERGO)",[0,0,0,1,1,1,1,1,1,2,2,2,3,3,3,3,6]],["DANODIS S.A.",[0,0,0,0,0,0,0,0,0,4,7]],["DANODIS S.A. (HERGO)",[2,2]],["DANODIS S.A.(HERGO ALMACEN)",[0,0]],["DE ESTEBAN MAXIMILIANO",[0]],["DE ESTEBAN MAXIMILIANO (CORPER)",[1,1,2,2,5]],["DIGITAL PAPER SUDAMERICANA SRL",[0]],["DISTRIBUCION Y PROFESIONALISMO",[0,0,0,1,3]],["DISTRIBUCION Y PROFESIONALISMO (NESTLE)",[0,1,2,2,2,3,3,4,4]],["DISTRIBUCION Y PROFESIONALISMO(NESTLE)",[4]],["DISTRIBUIDORA COCO",[3]],["DISTRIBUIDORA DUDILAC (SANCOR)",[1,1,1,1,5]],["DISTRIBUIDORA DUDILAC MAR DEL",[0,0,0]],["DISTRIBUIDORA KOKO",[0,1,1,3,3]],["DISTRIBUIDORA TAZZMANIA",[0,2,2,3,3,3,4,7]],["DISTRIBUIDORA UNO",[6]],["DISTRIBUIDORA WALLY",[1]],["DISTRIBUIDORA WALLY (MANAOS)",[0,2,4]],["DISTRIBUIDORA WALLY S. R. L.",[4]],["DISTRITINO MDQ S.A.",[0,3]],["DISTRITINO MDQ S.A. (BLACK/HERGO BEBIDAS)",[0,1,1,3,4,4]],["DOS ANCLAS",[6]],["DUDILAC",[2]],["EIRETE S.A (LA COLMENA)",[1,2,2,2,3]],["EMBALAJES FERNANDEZ SRL (MULYIENVASES)",[1]],["EME. PE. GRUP S.A. (PASINA MARCELO)",[2,5,6]],["ENSINCRO (CACHAFAZ)",[5,8,20]],["ESCORIHUELA GASCON",[1]],["FINCA CUADRO VENEGAS",[8]],["FOODYARG (VITALCAN)",[2,5]],["GERSTE S. A.",[1]],["GERSTE S.A",[0]],["GERSTE SA (CERVEZA BRISTOL)",[0,0]],["GESTION MORRIS (CAPUTO)",[4]],["GLOBAL FOODS S.A",[10]],["GOMEZ ALBERTO LUIS",[0]],["GOMEZ ALBERTO LUIS (LIETO DISTRIBUIDORA / SECCO)",[0,1,1,1,2,3,8]],["GRANGER",[3]],["GRANIX",[4]],["GRUPO PRIMUS",[1,1,2,2]],["KINFRA TANDEM S.R.L (MAKE)",[16]],["KOS FOOD SAS",[6,7,17]],["LA AGRICOLA - SANTA JULIA",[3]],["LA AGRICOLA S A",[0,0,6]],["LA AGRICOLA S.A (FAMILIA ZUCCARDI)",[0,2,3,3,3,3,4,5,14]],["LA CACHUERA (AMANDA)",[0,11,11]],["LA CACHUERA SA",[0]],["LA GLORIA DE LA PEREGRINA S.A",[2]],["LA GLORIA DE LA PEREGRINA S.A (MERMELADAS)",[1,2,3]],["LA GLORIA DE LA PEREGRINA S.A (Mermeladas) / CORPER",[1,2]],["LA GLORIA DE LA PEREGRINA S.A.",[0]],["LA GLORIA DE LA PEREGRINA S.A/ MIEL COLMENA DE CRISTAL / CORPER",[2]],["LA VIRGINIA",[3,5,9]],["LEONCIO ARIZU S A",[0]],["LEONZIO ARIZU S.A. (BODEGAS LUIGI BOSCA)",[5,6]],["LICENCIAS S.A (PUDDING)",[12,12,14]],["LIETO DISTRIBUIDORA",[0]],["LITORAL LOGISTICA S A (Pellet)",[17]],["LOGISMAR S.R.L. (LA GALLETERA)",[1,2,2,3,3]],["LOGISMAR SRL",[0,0,1]],["LOGISTICA LA SERENISIMA S.A.",[1,1,2,2,2,2,2,2,3,3,3,4]],["LOGISTICA LA SERENISIMA SA",[0,2,3]],["LOGISTICA TROKIN",[0]],["LOYDIS S.A.",[1,2,3,3]],["LOYDIS SOCIEDAD ANONIMA",[0,1]],["LUIGI BOSCA / LEONZIO ARIZU",[0]],["MAKE - YASH",[0]],["MAR DEL PLATA SODA (IVESS)",[0,1,1,1,1,1,2,3]],["MAR DEL PLATA SODA - IVESS",[2]],["MAR DEL PLATA SODA S A",[0,1]],["MARCELO FERRARI (ADOBADO VINOS)",[0,0]],["MARCELO PASINA - JONHSON",[3]],["MATFRAN MDQ SA",[0,0,0,0,1]],["MATFRAN S.A (DISTRIBUIDORA ATLANTICA)",[2,2,4]],["MDQ LOGISTICA Y SERVICIOS SRL",[0]],["MENOYO",[4,5,8]],["MERISANT S.A",[7]],["MIEL COLMENAL DE CRISTAL",[0]],["MIEL LAS MARGARITAS",[2]],["MILKAUT",[0]],["MILLAN S A",[0,11]],["MILLAN SA(LAUR)",[15,27]],["MOLINOS NUTRIRE SRL",[21]],["MOLINOS NUTRIRE SRL / LA ESPAÑOLA",[19]],["MONTENEVI",[6]],["MULTIENVASES",[0]],["NATURAL BRIDGE S.A. (NATURAL TRAIL)",[4,5]],["NATURAL BRIDGE S.A.S.",[9]],["NOCETI JUAN JOSE (PAPELERA LOS HERMANOS)",[0,3]],["NUTRECO ALIMENTOS S A",[5]],["NUTRECO, SIERRA DE LOS PADRES",[2,3,8]],["NUTRITIME (ENTRENUTS)",[1,1,2,9]],["NUTRITIME (NUÑEZ GONZALO MARTIN)",[1,6]],["PAPELERA SAN ANDRES (FELPITA)",[2,5,6]],["PAPELERA SAN ANDRES DE GILES SA S. A.",[0]],["PASINA MARCELO ALEJANDRO",[2,4]],["PEREGRINA",[6]],["PEREZ SAENZ SANTIAGO",[0,0]],["PIANTONI",[0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,3,3]],["PIANTONI HNOS SACIFI Y A",[0,0,0,0,1,1,2]],["PLUMIER S.R.L.",[0,0,4]],["PLUMIER S.R.L. (TOTAL MARK)",[0,0,1,1,1,4,4,4,4,4,5,5,6]],["PORTA HERMANOS S.A",[1,1,3]],["PORTA HNOS SA",[0,8]],["PRODUCTOS ALIMENTICIOS (DISTRIBUIDORA ATLANTICA)",[0,1,2,2,2,2,2,3,4,4]],["PRODUCTOS ALIMENTICIOS DISTRIB",[5]],["PROFIN DEL SUR S.A (MEDIA NARANJA) / VALEVIC",[6,8,10]],["PROFIN DEL SUR S.A.",[4,7]],["QUETZAL S.R.L (YERBA BALDO)",[5]],["RITA MARIA MARCELA JAN (SEISEME)",[4,5]],["S A ESTABLECIMIENTOS VITIVINICOLAS ESCORIHUELA",[0,1,1]],["S.A ESTABLECIMIENTOS VITIVINICOLAS ESCORIHUELA (LOLA MONTES/ BODEGA GASCON)",[1,1,1,1,2]],["SABORESAR S.R.L. (DEC)",[5,7]],["SAINT GOTARD (DISTRIBUIDORA AYMA)",[0,1,1,2,5,6]],["SALERNO RICARDO (MOSQUITA MUERTA)",[3,4]],["SALERNO RICARDO SERGIO / MOSQUITA MUERTA WINES",[2,2]],["SAN GREGORIO DISTRIBUCIONES S.A. (MONDELEZ)",[3,6,6,7,8]],["SANTIAGO PEREZ SAENZ (TIENDA SM)",[2,2,2,2,4,5,5]],["SAPHIRUS (DISTRIBUIDORA UNO)",[2,2,3,3,4,4]],["SEBASTIAN LALANE",[0]],["SECCO",[0]],["SEISEME",[0]],["SERENISIMA",[2]],["SGD SAN GREGORIO DISTRIBUCIONES S.A.",[0,5]],["SM 2224 S.A.S (SGM DISTRIBUIDORA)",[4]],["SOSA CARAMELO MIGUEL (REY VERDE)",[15]],["TAZZMANIA SOCIEDAD ANONIMA",[0,0,2,6]],["TERCER EPISODIO S.A.",[0,1]],["TERCER EPISODIO S.A. (PROCLEAN)",[5,6]],["TOSTI (MARCELO CUETO)",[5,8,9]],["VALEVIC S.A",[0]],["VIA SALICE MDP S.A.",[0,0,0,0,0,0,2,2,2,2,5]],["WINEROD SRL",[2]],["YASH (MAKE)",[0,0]],["distribuidora uno",[0]]]};
+const LT_STOP = new Set(['S', 'A', 'SA', 'SAS', 'SRL', 'R', 'L', 'SACIFI', 'SOCIEDAD', 'ANONIMA', 'LIMITADA', 'CIA', 'Y', 'E', 'DE', 'DEL', 'LA', 'LAS', 'LOS', 'EL', 'HNOS', 'DISTRIBUIDORA', 'DISTRIBUCION', 'DISTRIBUCIONES', 'DISTRIBUIDORES']);
+function ltTokens(s) {
+  const t = String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').split(' ').map(x => x === 'GROUP' ? 'GRUPO' : x).filter(x => x && !LT_STOP.has(x));
+  return [...new Set(t)];
+}
+// 3 = mismos nombres · 2 = uno contiene al otro (y lo compartido tiene alguna palabra distintiva) · 0 = no se parecen
+function ltRelacion(a, b) {
+  if (!a.length || !b.length) return 0;
+  const B = new Set(b), comun = a.filter(t => B.has(t));
+  if (comun.length === a.length && comun.length === b.length) return 3;
+  if (comun.length === Math.min(a.length, b.length) && comun.some(t => t.length >= 4)) return 2;
+  return 0;
+}
+const ltMediana = v => { const s = [...v].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+const ltPercentil = (v, p) => { const s = [...v].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.ceil(p * s.length) - 1)]; };
+// { proveedor: { lt, n, med, p75, nombres[] } } para los proveedores que tienen datos en la hoja. Cada nombre de la hoja se asigna a UN solo
+// proveedor; si dudaría entre varios no se asigna (queda sin estimar antes que mal estimado).
+function ltEstimar(proveedores, filasHoja) {
+  const provT = proveedores.map(p => ({ p, t: ltTokens(p) })), asign = new Map();
+  for (const [nombre, obs] of filasHoja) {
+    const t = ltTokens(nombre), rel = provT.map(x => ({ p: x.p, r: ltRelacion(t, x.t) })).filter(x => x.r > 0);
+    if (!rel.length) continue;
+    const mejor = Math.max(...rel.map(x => x.r)), cand = rel.filter(x => x.r === mejor);
+    if (cand.length !== 1) continue;
+    const e = asign.get(cand[0].p) || { obs: [], nombres: [] };
+    e.obs.push(...obs); e.nombres.push(nombre); asign.set(cand[0].p, e);
+  }
+  const out = {};
+  for (const [p, e] of asign) if (e.obs.length) { const med = ltMediana(e.obs); out[p] = { lt: Math.max(0, Math.ceil(med - 1e-9)), n: e.obs.length, med, p75: ltPercentil(e.obs, 0.75), nombres: e.nombres }; }
+  return out;
+}
+// Pone el lead time estimado en cada proveedor que no tocaste. Un proveedor es "tuyo" (manual) si cambiaste su lead time, o si ya lo tenías
+// configurado con un lead time distinto del de fábrica. Los estimados se actualizan solos si cambian los datos; los manuales jamás.
+function aplicarLeadTimesEstimados() {
+  const provs = [...new Set(S.master.map(m => m.prov))], est = ltEstimar(provs, LT_HOJA.filas);
+  let cambios = 0;
+  for (const p of provs) {
+    const pr = S.params.prov[p]; if (!pr) continue;
+    if (pr.ltOrigen === 'manual') continue;
+    if (pr.ltOrigen === undefined && pr.configurado && +pr.lt !== DEFAULT_PROV.lt) { pr.ltOrigen = 'manual'; cambios++; continue; }
+    const e = est[p]; if (!e) continue;
+    const info = { n: e.n, med: e.med, p75: e.p75, nombres: e.nombres };
+    if (pr.ltOrigen !== 'estimado' || pr.lt !== e.lt || JSON.stringify(pr.ltInfo) !== JSON.stringify(info)) { pr.lt = e.lt; pr.ltOrigen = 'estimado'; pr.ltInfo = info; cambios++; }
+  }
+  if (cambios) { invalidate(); saveParams(); }
+  return cambios;
+}
+function ltTexto(pr) {
+  if (pr.ltOrigen === 'estimado' && pr.ltInfo) { const i = pr.ltInfo; return `Estimado con ${i.n} ${i.n === 1 ? 'recepción' : 'recepciones'} de la hoja: lo típico es ${nf(i.med, i.med % 1 ? 1 : 0)} día${i.med === 1 ? '' : 's'} y 3 de cada 4 llegan en ${i.p75} o menos.${i.n < 3 ? ' Hay pocos datos: conviene revisarlo.' : ''} Si lo cambiás, queda como tuyo.`; }
+  if (pr.ltOrigen === 'manual') return 'Valor puesto por vos: no se modifica solo.';
+  return 'Valor por defecto: no hay recepciones registradas de este proveedor en la hoja.';
+}
+function ltCorto(pr) {
+  if (pr.ltOrigen === 'estimado' && pr.ltInfo) return `estimado · ${pr.ltInfo.n} recep.${pr.ltInfo.n < 3 ? ' (pocas)' : ''}`;
+  return pr.ltOrigen === 'manual' ? 'manual' : 'por defecto';
+}
+function ltResumen() {
+  const provs = [...new Set(S.master.map(m => m.prov))], g = k => provs.filter(p => S.params.prov[p] && S.params.prov[p].ltOrigen === k).length;
+  const est = g('estimado'), man = g('manual'), sin = provs.length - est - man, m = LT_HOJA.meta;
+  return `<b>Lead times.</b> Los marcados <i>estimado</i> salen de la hoja de recepciones (${nf(m.recepciones)} pedidos que ya llegaron, del ${m.desde.split('-').reverse().join('/')} al ${m.hasta.split('-').reverse().join('/')}): se usa la <b>mediana</b> de cada proveedor, para que unos pocos pedidos muy demorados no la distorsionen. ${nf(est)} proveedor${est === 1 ? '' : 'es'} estimado${est === 1 ? '' : 's'}${man ? `, ${nf(man)} puesto${man === 1 ? '' : 's'} por vos` : ''}${sin ? `, ${nf(sin)} sin datos en la hoja (siguen en ${DEFAULT_PROV.lt} días por defecto)` : ''}. En cuanto cambies uno queda como tuyo y no se vuelve a tocar.`;
+}
+
 /* ================= persistencia ================= */
 let saveT = null;
 function saveParams() {
@@ -982,7 +1049,7 @@ function viewHome(main) {
       <div class="flex"><div class="nm">${esc(x.p)}</div><span class="sp"></span>${x.urg ? `<span class="chip crit">${x.urg} urgente${x.urg > 1 ? 's' : ''}</span>` : ''}</div>
       <div class="big">${x.n}<small>${x.n === 1 ? 'producto a pedir' : 'productos a pedir'}</small></div>
       <div class="meter" title="Urgentes / a pedir / en orden / sobrestock"><i style="width:${w('urg')};background:var(--crit);animation-delay:${i * 60}ms"></i><i style="width:${w('pedir')};background:var(--accent);animation-delay:${i * 60 + 80}ms"></i><i style="width:${w('ok')};background:var(--ok);animation-delay:${i * 60 + 160}ms"></i><i style="width:${w('sobre')};background:var(--c4);animation-delay:${i * 60 + 240}ms"></i></div>
-      <div class="meta"><span class="chip ${cls === 'Largo' ? 'crit' : cls === 'Medio' ? 'warn' : 'ok'}">Lead time ${x.pr.lt} d</span><span class="chip">${CONF_LABEL[x.pr.conf]}</span>${x.pr.configurado ? '' : '<span class="chip warn">por defecto</span>'}</div>
+      <div class="meta"><span class="chip ${cls === 'Largo' ? 'crit' : cls === 'Medio' ? 'warn' : 'ok'}" title="${esc(ltTexto(x.pr))}">Lead time ${x.pr.lt} d${x.pr.ltOrigen === 'estimado' ? ' · est.' : ''}</span><span class="chip">${CONF_LABEL[x.pr.conf]}</span>${x.pr.configurado ? '' : '<span class="chip warn">por defecto</span>'}</div>
       <div class="foot"><span>${nf(x.cajas)} cajas${x.uni ? ' + ' + nf(x.uni) + ' u.' : ''}</span><span>${nf(x.kg)} kg</span></div></button>`;
   }).join('');
   main.innerHTML = `
@@ -1123,7 +1190,7 @@ function viewOrden(main) {
         <div class="fld"><label for="poPed">Fecha del pedido</label><input type="date" id="poPed" value="${dnToStr(pedDn)}"></div>
         <div class="fld"><label for="poDenv">Días hasta el envío</label><input type="number" id="poDenv" min="0" step="1" value="${denvP}" style="width:100px"></div>
         <div class="fld"><label>Primer envío</label><div style="padding:9px 0;font-weight:700">${dnLong(envDn)}</div></div>
-        <div class="fld"><label for="poLT">Lead time (días)</label><input type="number" id="poLT" min="0" step="1" value="${pr.lt}" style="width:100px"></div>
+        <div class="fld"><label for="poLT">Lead time (días)</label><input type="number" id="poLT" min="0" step="1" value="${pr.lt}" style="width:100px"><div class="hint" style="max-width:240px;margin-top:4px">${ltTexto(pr)}</div></div>
         <div class="fld"><label>Llega el proveedor</label><div style="padding:9px 0;font-weight:700">${dnLong(arr)}</div></div>
         <div class="fld"><label for="poFrec" title="Cada cuántos días enviás a sucursales">Frecuencia de envío (días)</label><input type="number" id="poFrec" min="1" step="1" value="${pr.frec !== undefined ? pr.frec : 7}" style="width:100px"></div>
         <div class="fld"><label for="poNenv" title="Cuántos envíos cubre cada pedido (por defecto; se cambia por producto)">Envíos a cubrir</label><input type="number" id="poNenv" min="0.5" step="0.5" value="${pr.nenv !== undefined ? pr.nenv : 1}" style="width:100px"></div>
@@ -1171,7 +1238,7 @@ function viewOrden(main) {
   $('#poDenv').onchange = e => { pr.denv = Math.max(0, Math.round(+e.target.value || 0)); pr.configurado = true; S.plan = []; saveParams(); viewOrden(main); };
   $('#poFrec').onchange = e => { pr.frec = Math.max(1, Math.round(+e.target.value || 1)); pr.configurado = true; S.plan = []; saveParams(); viewOrden(main); };
   $('#poNenv').onchange = e => { pr.nenv = Math.max(0.5, +e.target.value || 1); pr.configurado = true; S.plan = []; saveParams(); viewOrden(main); };
-  $('#poLT').onchange = e => { const v = Math.max(0, Math.round(+e.target.value || 0)); pr.lt = v; pr.configurado = true; S.plan = []; saveParams(); viewOrden(main); };
+  $('#poLT').onchange = e => { const v = Math.max(0, Math.round(+e.target.value || 0)); pr.lt = v; pr.ltOrigen = 'manual'; pr.configurado = true; S.plan = []; saveParams(); viewOrden(main); };
   const ps = $('#poSel'); if (ps) ps.onchange = e => { u.poSel = e.target.value; viewOrden(main); };
   $$('[data-graf]', main).forEach(b => b.onclick = e => { e.stopPropagation(); u.poSel = b.dataset.graf; viewOrden(main); const g = $('#poGraf'); if (g) g.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
   $$('[data-ana]', main).forEach(b => b.onclick = e => { e.stopPropagation(); u.anaProd = b.dataset.ana; u.tab = 'ana'; render(true); window.scrollTo({ top: 0 }); });
@@ -1391,7 +1458,7 @@ function viewProv(main) {
     const pr = S.params.prov[p], rr = rows.filter(r => r.m.prov === p), rec = g.recConf[pr.conf] || 0;
     const sugs = rr.filter(r => r.estado !== 'sinventas' && r.estado !== 'pausado').map(r => r.sugDays), med = median(sugs), cls = LTCLASS(pr.lt, g);
     return `<tr data-p="${esc(p)}"><td><b>${esc(p)}</b> ${pr.configurado ? '' : '<span class="chip warn" title="Todavía no editaste este proveedor">por defecto</span>'}</td><td class="n">${rr.length}</td>
-    <td class="n"><input class="ed" type="number" min="0" step="1" data-f="lt" value="${pr.lt}" aria-label="Lead time ${esc(p)}"></td>
+    <td class="n"><input class="ed" type="number" min="0" step="1" data-f="lt" value="${pr.lt}" aria-label="Lead time ${esc(p)}"><div class="hint" style="font-size:12px;margin-top:3px" title="${esc(ltTexto(pr))}">${ltCorto(pr)}</div></td>
     <td><span class="chip ${cls === 'Largo' ? 'crit' : cls === 'Medio' ? 'warn' : 'ok'}">${cls}</span></td>
     <td class="n"><input class="ed" type="number" min="0" step="1" data-f="denv" value="${pr.denv !== undefined ? pr.denv : 3}" aria-label="Días hasta el envío ${esc(p)}"></td>
     <td class="n"><input class="ed" type="number" min="1" step="1" data-f="frec" value="${pr.frec !== undefined ? pr.frec : 7}" aria-label="Frecuencia de envío ${esc(p)}"></td>
@@ -1405,6 +1472,7 @@ function viewProv(main) {
   main.innerHTML = `
   <section>${heroHead('Proveedores y parámetros', 'Cómo compra cada proveedor', 'El lead time y la confiabilidad de cada proveedor definen cuánto stock de seguridad conviene tener. Todo lo que cambies acá se recalcula al instante y queda guardado.')}</section>
   <div class="note"><b>Cómo se usa cada dato.</b> El <b>lead time</b> es lo que tarda el proveedor desde que hacés el pedido. Los <b>días hasta el envío</b> son los días que pasan hasta el primer envío a sucursales (hasta ese día el stock no se consume). La <b>frecuencia de envío</b> es cada cuántos días mandás a sucursales: cada envío se lleva esa cantidad de días de venta. El stock actual solo se descuenta cuando sale un envío, y solo los que salen hasta el día que llega el proveedor (ese día incluido). Los <b>envíos a cubrir</b> son cuántos envíos cubre cada pedido; juntos dan los <b>días a cubrir</b> (frecuencia × envíos), que cuentan desde que llega el proveedor en adelante. Cada producto puede tener su propio valor. El <b>stock de seguridad en días</b> (el tuyo más un recargo según qué tan seguido falla el proveedor) se suma a eso.<br><b>Sugerido por variabilidad:</b> es solo una referencia. Se calcula como z × σ × √(horizonte ÷ 7) ÷ venta diaria, donde σ es el desvío de las ventas semanales de la ventana. Mostramos la mediana de los productos del proveedor; vos decidís cuánto aplicar. La explicación completa está en la pestaña <a href="#" data-go="teoria">Teoría</a>.</div>
+  <div class="note plan">${ltResumen()}</div>
   <div class="tw" style="max-height:none"><table><thead><tr><th>Proveedor</th><th class="n">Productos</th><th class="n">Lead time (días)</th><th>Clase</th><th class="n" title="Días desde el pedido hasta el primer envío a sucursales. Por defecto de este proveedor; se puede cambiar en cada línea.">Días hasta el envío</th><th class="n" title="Cada cuántos días enviás a sucursales (7 = semanal). Por defecto de este proveedor; se cambia por producto en la orden de compra.">Frecuencia de envío (días)</th><th class="n" title="Cuántos envíos cubre cada pedido (1 = una semana si enviás semanal, 2 = dos semanas). Por defecto de este proveedor; se cambia por producto.">Envíos a cubrir</th><th>Confiabilidad</th><th class="n">Seguridad propia (días)</th><th class="n">Recargo</th><th class="n">Seguridad total</th><th class="n">Sugerido por variabilidad (días)</th><th class="n">Pedido mínimo (kg)</th></tr></thead><tbody>${prow}</tbody></table></div>
   <div class="grid2">
   <div class="card"><h3>Clasificación de proveedores</h3>
@@ -1437,7 +1505,7 @@ function viewProv(main) {
   bindN('gN', v => setG('N', v)); $('#gP').onchange = e => setG('pesos', e.target.value);
   bindN('gEs', v => setG('estac', clamp(v, 0, 100) / 100)); bindN('gTe', v => setG('tend', clamp(v, 0, 100) / 100)); bindN('gCl', v => setG('clip', Math.max(0, v)));
   $('#gPa').onchange = e => setG('parcial', e.target.checked); $('#gAd').onchange = e => setG('admin', e.target.checked);
-  $$('tr[data-p]', main).forEach(tr => $$('[data-f]', tr).forEach(inp => inp.onchange = () => { const pr = S.params.prov[tr.dataset.p], f = inp.dataset.f; pr[f] = f === 'conf' ? inp.value : f === 'frec' ? Math.max(1, +inp.value) : f === 'nenv' ? Math.max(0.5, +inp.value) : Math.max(0, +inp.value); pr.configurado = true; invalidate(); saveParams(); viewProv(main); }));
+  $$('tr[data-p]', main).forEach(tr => $$('[data-f]', tr).forEach(inp => inp.onchange = () => { const pr = S.params.prov[tr.dataset.p], f = inp.dataset.f; pr[f] = f === 'conf' ? inp.value : f === 'frec' ? Math.max(1, +inp.value) : f === 'nenv' ? Math.max(0.5, +inp.value) : Math.max(0, +inp.value); if (f === 'lt') pr.ltOrigen = 'manual'; pr.configurado = true; invalidate(); saveParams(); viewProv(main); }));
   $$('[data-apply]', main).forEach(b => b.onclick = () => { const pr = S.params.prov[b.dataset.apply]; pr.ss = Math.round(+b.dataset.med * 2) / 2; pr.configurado = true; invalidate(); saveParams(); viewProv(main); });
 }
 
@@ -1691,7 +1759,7 @@ function viewTeoria(main) {
       ['Frecuencia de envío', 'Cada cuántos días enviás a sucursales (7 = semanal, 3,5 = dos veces por semana). Valor por defecto del proveedor, editable en cada línea.'],
       ['Envíos a cubrir', 'Cuántos envíos cubre el pedido: 1 = una semana si enviás semanal, 2 = dos semanas. Depende del producto. Días a cubrir = frecuencia × envíos, contados desde que llega el proveedor en adelante.'],
       ['Días hasta el envío', 'Días entre el pedido y el primer envío a sucursales: si pedís un lunes y dice 3, el envío es el jueves. Valor por defecto del proveedor, editable en cada línea.'],
-      ['Lead time', 'Días desde el envío hasta que llega la mercadería. Se edita en la orden de compra y se guarda en el proveedor.'],
+      ['Lead time', 'Días desde que hacés el pedido hasta que llega la mercadería. Al principio salen estimados de la hoja de recepciones (mediana de los pedidos que ya llegaron). Se pueden editar en la orden de compra o en Proveedores, y lo que cambies no se vuelve a pisar.'],
       ['Ciclo de pedido', 'Cada cuántos días pensás volver a pedirle a ese proveedor. Cuanto más largo, más hay que comprar de una vez.'],
       ['Días de abastecimiento', 'Cuántos días de venta querés tener cubiertos desde que llega el pedido. Incluyen el colchón de seguridad: por defecto son ciclo + días de seguridad del proveedor, y los podés cambiar línea por línea en la orden de compra. Ejemplo: tenés 10 u., el proveedor tarda 7 días y vendés 1 por día; llegás con 3 u. Si querés 14 días de abastecimiento, pedís 14 − 3 = 11 u.'],
       ['Redondeo', `Se pide en cajas enteras (o unidades). Con redondeo hacia arriba y tolerancia de ${nf(g.tol * 100)}%, una necesidad de 2,1 cajas se pide como 2 y una de 2,2 como 3.`],
@@ -1883,6 +1951,7 @@ async function boot() {
     if (S.master.length) {
       if (!S.meta) { S.meta = metaVirtual(); S.sinVentas = true; S.ui.poOnly = false; } // todavía sin ventas: se ve el stock y los parámetros; el pronóstico llega con las ventas
       setup(); S.ready = true;
+      aplicarLeadTimesEstimados();
     } else { S.mm = {}; S.storeList = []; S.stores = new Set(); S.dow = [1 / 7, 1 / 7, 1 / 7, 1 / 7, 1 / 7, 1 / 7, 1 / 7]; }
   } catch (e) { $('#main').innerHTML = '<div class="note crit">Error al cargar los datos: ' + esc(e.message || e.code || e) + '</div>'; return; }
   S.ui.tab = tabInicial();
@@ -2112,6 +2181,7 @@ async function fbSyncStock(quiet) {
     S.master.forEach(m => { if (!S.dd[m.cod]) S.dd[m.cod] = {}; if (!S.params.prov[m.prov]) S.params.prov[m.prov] = { ...DEFAULT_PROV }; });
     S.stock = stockDe(prods);
     if (S.meta) { setup(); invalidate(); }
+    aplicarLeadTimesEstimados();
     if (!quiet) toast(`Stock actualizado: ${nf(S.stock.rows.length)} productos del depósito.`, 4000);
     render(false);
   } catch (e) { toast('No se pudo leer el stock de Firebase: ' + (e.message || e.code || e), 7000); }
