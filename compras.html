@@ -564,13 +564,20 @@ function buildPlan() {
     const nenv = pos0(ov.nenv) ? +ov.nenv : pos0(pr.nenv) ? +pr.nenv : 1, nenvManual = pos0(ov.nenv);
     const nManual = pos0(ov.dias);
     const N = nManual ? +ov.dias : frec * nenv, nEnv = N / frec;
+    // Los envíos salen cada "frecuencia" días desde el primer envío, y cada uno se lleva "frecuencia" días de venta.
+    // El stock actual se descuenta SOLO cuando sale un envío, y solo los que salen ANTES de que llegue el proveedor
+    // (2 envíos de 7 días = 14 días; 3 envíos de 3 días = 9 días). Ese descuento solo sirve para saber con cuánto stock
+    // teórico se llega. El pronóstico a cubrir empieza con el primer envío que sale desde la llegada, no antes.
     const gapE = Math.max(0, arrDn - envDn), A2 = Math.max(arrDn, envDn);
-    const D_N = demand(m.cod, envDn, N), daily = N > 0 ? D_N / N : 0;
+    const nPre = envDn >= arrDn ? 0 : Math.ceil(gapE / frec - 1e-9);      // envíos que salen antes de que llegue el proveedor
+    const diasPre = nPre * frec;                                           // días de venta que se llevan esos envíos
+    const startPost = Math.round(envDn + diasPre);                         // primer envío con la mercadería nueva (desde la llegada), en día entero
+    const D_N = demand(m.cod, startPost, N), daily = N > 0 ? D_N / N : 0;   // pronóstico: de la llegada en adelante
     const ss = ssDiasFor(m), SSu = ss.d * daily;
     const stockU = S.stockMap[m.cod] || 0, transitU = 0, pos = stockU;
-    const D_LT = demand(m.cod, envDn, gapE);
+    const D_LT = demand(m.cod, envDn, diasPre);                             // lo que se llevan los envíos previos a la llegada
     const stockArr = Math.max(0, pos - D_LT), falta = Math.max(0, D_LT - pos);
-    const Dafter = demand(m.cod, A2, Math.max(0, envDn + N - A2));
+    const Dafter = D_N;
     const target = Dafter + SSu;
     const need = Math.max(0, target - stockArr), needPU = need / pm;
     let sug = g.redondeo === 'techo' ? Math.ceil(needPU - (g.tol || 0) - 1e-9) : Math.round(needPU);
@@ -589,7 +596,7 @@ function buildPlan() {
     else estado = 'ok';
     const H = LT + N;
     const sugDays = daily > 0 ? (g.z * P.sd13 * Math.sqrt(Math.max(H, 1) / 7)) / daily : 0;
-    rows.push({ m, pr, P, ov, LT, R, H, N, nManual, frec, frecManual, nenv, nenvManual, nEnv, pedDn, denv, denvManual, envDn, arrDn, gapE, stockArr, falta, Dafter, D_N, pm, active, D_LT, daily, ssDias: ss.d, ssManual: ss.manual, SSu, target, stockU, transitU, pos, need, needPU, sug, fin, hasFinal, cover, estado, sugDays, wk4: [0, 1, 2, 3].reduce((s, k) => s + weekF(m.cod, S.lastIdx + 1 + k), 0) / 4, kg13: P.kg13 });
+    rows.push({ nPre, diasPre, startPost, m, pr, P, ov, LT, R, H, N, nManual, frec, frecManual, nenv, nenvManual, nEnv, pedDn, denv, denvManual, envDn, arrDn, gapE, stockArr, falta, Dafter, D_N, pm, active, D_LT, daily, ssDias: ss.d, ssManual: ss.manual, SSu, target, stockU, transitU, pos, need, needPU, sug, fin, hasFinal, cover, estado, sugDays, wk4: [0, 1, 2, 3].reduce((s, k) => s + weekF(m.cod, S.lastIdx + 1 + k), 0) / 4, kg13: P.kg13 });
   }
   const tot = rows.reduce((s, r) => s + r.kg13, 0); let acc = 0;
   [...rows].sort((a, b) => b.kg13 - a.kg13).forEach(r => { acc += r.kg13; r.abc = tot <= 0 ? 'C' : (acc - r.kg13) / tot < 0.8 ? 'A' : (acc - r.kg13) / tot < 0.95 ? 'B' : 'C'; });
@@ -784,7 +791,7 @@ function provSummary() {
 const pctHtml = (v, d = 1) => (v == null || !isFinite(v)) ? '<span class="muted">sin dato</span>' : `<span class="${v >= 0 ? 'pct-up' : 'pct-dn'}">${pctTxt(v, d)}</span>`;
 const nfu = v => nf(v, Math.abs(v) < 20 ? 1 : 0);
 const ulabel = r => unitLabel(r.m, 'compra');
-const covChip = (r, d) => d < r.gapE - 1e-9 ? 'crit' : d < r.N + r.ssDias - 1e-9 ? 'warn' : 'ok';
+const covChip = (r, d) => d < r.diasPre - 1e-9 ? 'crit' : d < r.N + r.ssDias - 1e-9 ? 'warn' : 'ok';
 
 /* ================= datos para el gráfico ================= */
 function notesFor(mode, xs) {
@@ -966,7 +973,7 @@ function viewHome(main) {
   if (!S.stock) notes.push('<div class="note warn"><b>No hay stock cargado.</b> Cargalo en la pestaña Datos; mientras tanto se asume stock 0.</div>');
   else if (rows.every(r => r.stockU === 0)) notes.push('<div class="note warn"><b>El stock cargado es 0 en todos los productos</b> (es el archivo de ejemplo), por eso se sugiere pedir todo. Cargá tu stock real en la pestaña Datos.</div>');
   const noConf = sum.filter(x => !x.pr.configurado).map(x => x.p);
-  if (noConf.length) notes.push(`<div class="note warn"><b>Proveedores con valores por defecto</b> (lead time 7 días, ciclo 7, seguridad 7): ${noConf.map(esc).join(', ')}. Ajustalos en <a href="#" data-go="prov">Proveedores</a>.</div>`);
+  if (noConf.length) notes.push(`<div class="note">Para modificar el lead time de un proveedor, andá a <a href="#" data-go="prov">Proveedores</a>.</div>`);
   const top = [...rows].filter(r => r.estado === 'urgente' || r.estado === 'pedir').sort((a, b) => ESTADO[a.estado].o - ESTADO[b.estado].o || a.cover - b.cover).slice(0, 6);
   const pcards = sum.map((x, i) => {
     const tot = x.rr.length || 1, w = k => (x[k] / tot * 100).toFixed(1) + '%', cls = LTCLASS(x.pr.lt, g);
@@ -1004,20 +1011,26 @@ function viewHome(main) {
 /* ================= Orden de compra ================= */
 const dnLong = n => DOWN[dowOf(n)] + ' ' + dnFmtS(n);
 function lineCalc(r) {
-  const orderU = r.fin * r.pm, e = Math.max(0, r.stockArr + orderU - r.Dafter), eDays = coverDays(r.m.cod, e, r.envDn + r.N);
+  const orderU = r.fin * r.pm, e = Math.max(0, r.stockArr + orderU - r.Dafter), eDays = coverDays(r.m.cod, e, r.startPost + r.N);
   const sup = coverDays(r.m.cod, r.falta > 1e-9 ? r.pos : r.pos + orderU, r.envDn), share = orderU > 0 ? Math.min(1, e / orderU) : 0;
-  return { sup, goal: r.N + r.ssDias, goalN: r.N, kg: orderU * (r.m.kgu || 0), dec: decOf(r), e, eDays, share };
+  return { sup, goal: r.diasPre + r.N + r.ssDias, goalN: r.diasPre + r.N, kg: orderU * (r.m.kgu || 0), dec: decOf(r), e, eDays, share };
 }
 /* gráfico: stock teórico desde el día del pedido */
 function stockSeries(r) {
-  const cod = r.m.cod, ord = r.fin * r.pm, K = Math.max(r.arrDn, r.envDn + r.N) - r.pedDn + 4, A2 = Math.max(r.arrDn, r.envDn), pts = [], noOrd = [];
-  const cons = d => d > r.envDn ? demand(cod, r.envDn, d - r.envDn) : 0;
+  const cod = r.m.cod, ord = r.fin * r.pm, pts = [], noOrd = [];
+  const K = Math.max(r.arrDn, r.startPost + r.N) - r.pedDn + 4;
+  // El stock solo baja cuando sale un envío (cada uno se lleva "frecuencia" días de venta); al llegar el proveedor sube el pedido.
+  const salidas = [];
+  for (let j = 0; j < r.nPre; j++) { const dn = Math.round(r.envDn + j * r.frec); salidas.push({ dn, u: demand(cod, dn, r.frec) }); }
+  for (let j = 0; r.N - j * r.frec > 1e-9; j++) { const dn = Math.round(r.startPost + j * r.frec); salidas.push({ dn, u: demand(cod, dn, Math.min(r.frec, r.N - j * r.frec)) }); }
+  let base = r.pos, con = r.pos;               // base: sin pedido · con: con el pedido
   for (let k = 0; k <= K; k++) {
-    const d = r.pedDn + k, base = Math.max(0, r.pos - cons(d));
-    noOrd.push([k, base]);
-    if (d < r.arrDn) pts.push([k, base]);
-    else if (d === r.arrDn) { pts.push([k, base]); pts.push([k, base + ord]); }
-    else pts.push([k, Math.max(0, r.stockArr + ord - (d > A2 ? demand(cod, A2, d - A2) : 0))]);
+    const d = r.pedDn + k, antesB = base, antesC = con;
+    if (d === r.arrDn) con += ord;             // llega el proveedor (los envíos de ese día ya usan la mercadería nueva)
+    for (const s of salidas) if (s.dn === d) { base = Math.max(0, base - s.u); con = Math.max(0, con - s.u); }
+    noOrd.push([k, antesB]); pts.push([k, antesC]);
+    if (base !== antesB) noOrd.push([k, base]);
+    if (con !== antesC) pts.push([k, con]);
   }
   return { pts, noOrd, K };
 }
@@ -1026,14 +1039,14 @@ function stockChartSvg(r) {
   const xs = k => L + k / sr.K * (W - L - Rr);
   const ymax = Math.max(1e-9, ...sr.pts.map(p => p[1] / pm), r.pos / pm) * 1.14, ys = v => T + (1 - v / ymax) * (H - T - B);
   const path = a => a.map((p, i) => (i ? 'L' : 'M') + xs(p[0]).toFixed(1) + ' ' + ys(p[1] / pm).toFixed(1)).join(' ');
-  const kE = r.envDn - r.pedDn, kA = r.arrDn - r.pedDn, kEnd = r.envDn + r.N - r.pedDn;
+  const kE = r.envDn - r.pedDn, kA = r.arrDn - r.pedDn, kS = r.startPost - r.pedDn, kEnd = r.startPost + r.N - r.pedDn;
   const nice = x => { const q = Math.pow(10, Math.floor(Math.log10(x))), f = x / q; return (f > 5 ? 10 : f > 2 ? 5 : f > 1 ? 2 : 1) * q; }, step = nice(ymax / 4), ticks = []; for (let v = 0; v <= ymax; v += step) ticks.push(v);
   const lab = (x, y, t, anchor, col, w) => `<text x="${x}" y="${y}" text-anchor="${anchor || 'middle'}" fill="${col || 'var(--ink2)'}" font-size="12" font-weight="${w || 600}">${t}</text>`;
   const vline = (k, col, dash) => `<line x1="${xs(k)}" x2="${xs(k)}" y1="${T}" y2="${H - B}" stroke="${col}" stroke-width="1.5" ${dash ? 'stroke-dasharray="4 4"' : ''}/>`;
   const eY = ys(c.e / pm), top = (r.stockArr + r.fin * pm) / pm;
-  const bottom = [[0, 'Pedido ' + dnLong(r.pedDn), 'var(--ink2)'], [kE, 'Envío ' + dnLong(r.envDn), 'var(--ink2)'], [kA, 'Llega el proveedor ' + dnLong(r.arrDn), 'var(--crit)'], [kEnd, 'Fin de cobertura ' + dnLong(r.envDn + r.N), 'var(--accent)']];
+  const bottom = [[0, 'Pedido ' + dnLong(r.pedDn), 'var(--ink2)'], [kE, 'Envío ' + dnLong(r.envDn), 'var(--ink2)'], [kA, 'Llega el proveedor ' + dnLong(r.arrDn), 'var(--crit)'], [kEnd, 'Fin de cobertura ' + dnLong(r.startPost + r.N), 'var(--accent)']];
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Evolución del stock teórico de ${esc(r.m.nombre)}" style="width:100%;height:auto;display:block">
-    <rect x="${xs(kE)}" y="${T}" width="${Math.max(0, xs(Math.min(kEnd, sr.K)) - xs(kE))}" height="${H - T - B}" fill="var(--accent)" opacity=".08"/>
+    <rect x="${xs(kS)}" y="${T}" width="${Math.max(0, xs(Math.min(kEnd, sr.K)) - xs(kS))}" height="${H - T - B}" fill="var(--accent)" opacity=".08"/>
     ${ticks.map(v => `<line x1="${L}" x2="${W - Rr}" y1="${ys(v)}" y2="${ys(v)}" stroke="var(--line)"/>${lab(L - 8, ys(v) + 4, nf(v, v < 10 && v % 1 ? 1 : 0), 'end', 'var(--muted)', 500)}`).join('')}
     <path d="${path(sr.noOrd)}" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="5 5" opacity=".7"/>
     <path d="${path(sr.pts)} L${xs(sr.K)} ${ys(0)} L${xs(0)} ${ys(0)} Z" fill="var(--ok)" opacity=".10"/>
@@ -1048,8 +1061,8 @@ function stockChartSvg(r) {
     ${lab(xs(kA) + 8, ys(top) - 9, 'Con el pedido ' + nf(top, dd), 'start', 'var(--ok)')}
     ${lab(xs(kA) - 8, ys(r.stockArr / pm) - 10, 'Llegás con ' + nf(r.stockArr / pm, dd), 'end', 'var(--crit)')}
     ${lab(xs(kEnd) + 10, eY - 10, 'Colchón ' + nf(c.e / pm, dd), 'start', 'var(--accent)')}
-    ${Array.from({ length: Math.max(1, Math.ceil(r.nEnv - 1e-9)) }, (_, j) => j).filter(j => j * r.frec < r.N - 1e-9).map(j => { const k = kE + j * r.frec; return `<line x1="${xs(k)}" x2="${xs(k)}" y1="${T}" y2="${H - B}" stroke="var(--accent)" stroke-width="1" stroke-dasharray="2 3" opacity=".7"/>${lab(xs(k) + 4, T + 32, 'Envío ' + (j + 1), 'start', 'var(--accent)', 600)}`; }).join('')}
-    ${lab(xs(kE) + 8, T + 14, 'días a cubrir: ' + nf(r.N, 0), 'start', 'var(--accent)', 600)}
+    ${[...Array.from({ length: r.nPre }, (_, j) => ({ k: kE + j * r.frec, n: j + 1, pre: true })), ...Array.from({ length: Math.max(1, Math.ceil(r.nEnv - 1e-9)) }, (_, j) => j).filter(j => j * r.frec < r.N - 1e-9).map(j => ({ k: kS + j * r.frec, n: r.nPre + j + 1, pre: false }))].map(e => `<line x1="${xs(e.k)}" x2="${xs(e.k)}" y1="${T}" y2="${H - B}" stroke="${e.pre ? 'var(--muted)' : 'var(--accent)'}" stroke-width="1" stroke-dasharray="2 3" opacity=".7"/>${lab(xs(e.k) + 4, T + 32, 'Envío ' + e.n, 'start', e.pre ? 'var(--muted)' : 'var(--accent)', 600)}`).join('')}
+    ${lab(xs(kS) + 8, T + 14, 'días a cubrir: ' + nf(r.N, 0), 'start', 'var(--accent)', 600)}
     ${bottom.map(([k, t, col], i) => `<line x1="${xs(k)}" x2="${xs(k)}" y1="${H - B}" y2="${H - B + 12 + i * 16 - 4}" stroke="${col}" opacity=".5"/>${lab(xs(k), H - B + 14 + i * 16, t, k > sr.K * .7 ? 'end' : k < sr.K * .15 ? 'start' : 'middle', col)}`).join('')}
   </svg>`;
 }
@@ -1062,7 +1075,10 @@ function stockPanelHtml(r, ul) {
     <div class="stat"><span class="k">Stock al fin de la cobertura</span><span class="v">${N(c.e)} <small>${ul}</small></span><span class="s">≈ ${c.e <= 0 ? '0' : c.eDays >= 400 ? '+365' : nf(c.eDays, 1)} días de venta</span></div>
     <div class="stat hl"><span class="k">Colchón sobre el pedido</span><span class="v">${nf(c.share * 100, 0)}%</span><span class="s">${r.fin > 0 ? 'del pedido queda como margen' : 'sin pedido'}</span></div>
   </div>
-  <div class="tw" style="max-height:none;margin-top:10px"><table><thead><tr><th>Envío</th><th>Fecha</th><th class="n">Cubre</th><th class="n">Venta esperada</th><th class="n">${ul}</th></tr></thead><tbody>${Array.from({ length: Math.max(1, Math.ceil(r.nEnv - 1e-9)) }, (_, j) => j).filter(j => j * r.frec < r.N - 1e-9).map(j => { const dd0 = Math.round(r.envDn + j * r.frec), days = Math.min(r.frec, r.N - j * r.frec), v = demand(r.m.cod, dd0, days); return `<tr><td>Envío ${j + 1}</td><td>${dnLong(dd0)}</td><td class="n">${nf(days, 0)} días</td><td class="n">${nf(v, 1)} u.</td><td class="n"><b>${nf(v / r.pm, d)}</b></td></tr>`; }).join('')}<tr><td colspan="2"><b>Total (${nf(r.nEnv, 1)} envíos)</b></td><td class="n"><b>${nf(r.N, 0)} días</b></td><td class="n"><b>${nf(r.D_N, 1)} u.</b></td><td class="n"><b>${nf(r.D_N / r.pm, d)}</b></td></tr></tbody></table></div>`;
+  <div class="tw" style="max-height:none;margin-top:10px"><table><thead><tr><th>Envío</th><th>Fecha</th><th>Sale de</th><th class="n">Cubre</th><th class="n">Venta esperada</th><th class="n">${ul}</th></tr></thead><tbody>${
+    Array.from({ length: r.nPre }, (_, j) => j).map(j => { const dd0 = Math.round(r.envDn + j * r.frec), v = demand(r.m.cod, dd0, r.frec); return `<tr><td>Envío ${j + 1}</td><td>${dnLong(dd0)}</td><td>stock actual</td><td class="n">${nf(r.frec, 0)} días</td><td class="n">${nf(v, 1)} u.</td><td class="n"><b>${nf(v / r.pm, d)}</b></td></tr>`; }).join('')}${
+    r.nPre ? `<tr><td colspan="3"><b>Descuento hasta la llegada (${r.nPre} ${r.nPre === 1 ? 'envío' : 'envíos'})</b></td><td class="n"><b>${nf(r.diasPre, 0)} días</b></td><td class="n"><b>${nf(r.D_LT, 1)} u.</b></td><td class="n"><b>${nf(r.D_LT / r.pm, d)}</b></td></tr>` : `<tr><td colspan="6" class="muted">Ningún envío sale antes de que llegue el proveedor: el stock actual no se descuenta.</td></tr>`}${
+    Array.from({ length: Math.max(1, Math.ceil(r.nEnv - 1e-9)) }, (_, j) => j).filter(j => j * r.frec < r.N - 1e-9).map(j => { const dd0 = Math.round(r.startPost + j * r.frec), days = Math.min(r.frec, r.N - j * r.frec), v = demand(r.m.cod, dd0, days); return `<tr><td>Envío ${r.nPre + j + 1}</td><td>${dnLong(dd0)}</td><td>este pedido</td><td class="n">${nf(days, 0)} días</td><td class="n">${nf(v, 1)} u.</td><td class="n"><b>${nf(v / r.pm, d)}</b></td></tr>`; }).join('')}<tr><td colspan="3"><b>A cubrir con el pedido (${nf(r.nEnv, 1)} envíos)</b></td><td class="n"><b>${nf(r.N, 0)} días</b></td><td class="n"><b>${nf(r.D_N, 1)} u.</b></td><td class="n"><b>${nf(r.D_N / r.pm, d)}</b></td></tr></tbody></table></div>`;
 }
 function viewOrden(main) {
   const u = S.ui, sum = provSummary();
@@ -1075,7 +1091,7 @@ function viewOrden(main) {
   const chips = sum.map(x => `<button class="pchip" aria-pressed="${x.p === u.poProv}" data-p="${esc(x.p)}">${x.urg ? '<span class="dot"></span>' : ''}${esc(x.p)}<span class="n">${x.n}</span></button>`).join('');
   const minCover = emit.length ? Math.min(...emit.map(r => lineCalc(r).sup)) : 0;
   const tr = lines.map(r => {
-    const c = lineCalc(r), e = ESTADO[r.estado], d = c.dec, ul = ulabel(r), sc = Math.max(c.goal, c.sup, 1) * 1.1, cc = c.sup >= c.goal - 0.5 ? 'var(--ok)' : c.sup >= r.N - 0.5 ? 'var(--accent)' : c.sup > 0 ? 'var(--warn,#d98a00)' : 'var(--crit)';
+    const c = lineCalc(r), e = ESTADO[r.estado], d = c.dec, ul = ulabel(r), sc = Math.max(c.goal, c.sup, 1) * 1.1, cc = c.sup >= c.goal - 0.5 ? 'var(--ok)' : c.sup >= c.goalN - 0.5 ? 'var(--accent)' : c.sup > 0 ? 'var(--warn,#d98a00)' : 'var(--crit)';
     const stk = r.m.xcaja ? `<b>${nf(r.stockU / r.pm, 1)}</b><span class="u">cajas</span><span class="sub">${nf(r.stockU, 0)} u.</span>` : `<b>${nf(r.stockU, 0)}</b><span class="u">u.</span><span class="sub">por unidad</span>`;
     return `<tr class="row" data-cod="${r.m.cod}">
       <td class="sticky1 wrap"><div class="pn">${esc(r.m.nombre)}<small>cód. ${esc(r.m.cod)} · ${r.m.xcaja ? 'caja de ' + r.m.ucaja + ' u.' : 'por unidad'} · <span class="chip ${r.abc === 'A' ? 'acc' : ''}" style="padding:0 8px;font-size:12px">${r.abc}</span> <span class="chip ${e.c}" style="padding:0 8px;font-size:12px" title="${esc(e.d)}">${e.t}</span> <span class="calc" data-calc>ver cálculo ›</span><span class="calc" data-graf="${r.m.cod}">gráfico ›</span><span class="calc" data-ana="${r.m.cod}">análisis ›</span></small></div></td>
@@ -1083,10 +1099,10 @@ function viewOrden(main) {
       <td class="n ed"><input class="ed" type="number" min="1" step="1" data-k="frec" data-cod="${r.m.cod}" value="${r.frecManual ? r.ov.frec : ''}" placeholder="${r.frec}" aria-label="Frecuencia de envío ${esc(r.m.nombre)}" style="width:58px"><span class="u">días</span><span class="sub">${r.frec === 7 ? 'semanal' : r.frec === 14 ? 'quincenal' : r.frec < 7 ? nf(7 / r.frec, 1) + ' por semana' : 'cada ' + r.frec + ' d'}</span></td>
       <td class="n ed"><input class="ed" type="number" min="0.5" step="0.5" data-k="nenv" data-cod="${r.m.cod}" value="${r.nenvManual ? r.ov.nenv : ''}" placeholder="${nf(r.nenv, 1)}" aria-label="Envíos a cubrir ${esc(r.m.nombre)}" style="width:58px"><span class="u">envíos</span><span class="sub">${r.nManual ? nf(r.nEnv, 1) + ' (por días)' : r.nenvManual ? 'manual' : 'por defecto'}</span></td>
       <td class="n ed"><input class="ed" type="number" min="1" step="1" data-k="dias" data-cod="${r.m.cod}" value="${r.nManual ? r.ov.dias : ''}" placeholder="${nf(r.N, 0)}" aria-label="Días a cubrir ${esc(r.m.nombre)}" style="width:62px"><span class="u">días</span><span class="sub">${r.nManual ? 'manual' : '= ' + nf(r.nEnv, 1) + ' × ' + r.frec}</span></td>
-      <td class="n"><b>${nf(r.D_N / r.pm, d)}</b><span class="u">${ul}</span><span class="sub">${r.m.xcaja ? nf(r.D_N, 0) + ' u. · ' : ''}${dnFmtS(r.envDn)} → ${dnFmtS(r.envDn + r.N - 1)}</span></td>
+      <td class="n"><b>${nf(r.D_N / r.pm, d)}</b><span class="u">${ul}</span><span class="sub">${r.m.xcaja ? nf(r.D_N, 0) + ' u. · ' : ''}${dnFmtS(r.startPost)} → ${dnFmtS(r.startPost + r.N - 1)}</span></td>
       <td class="n ed"><input class="ed" type="number" min="0" step="1" data-k="denv" data-cod="${r.m.cod}" value="${r.denvManual ? r.ov.denv : ''}" placeholder="${r.denv}" aria-label="Días hasta el envío ${esc(r.m.nombre)}" style="width:58px"><span class="u">días</span><span class="sub"><b>${dnLong(r.envDn)}</b></span></td>
       <td class="n"><b>${r.LT}</b><span class="u">días</span><span class="sub">llega ${dnLong(r.arrDn)}</span></td>
-      <td class="n"><b>${nf(r.stockArr / r.pm, d)}</b><span class="u">${ul}</span><span class="sub">${r.falta > 1e-9 ? '<span style="color:var(--crit)">faltan ' + nf(r.falta / r.pm, d) + ' antes</span>' : r.arrDn <= r.envDn ? 'llega antes del envío' : 'tras ' + r.gapE + ' d de venta'}</span></td>
+      <td class="n"><b>${nf(r.stockArr / r.pm, d)}</b><span class="u">${ul}</span><span class="sub">${r.falta > 1e-9 ? '<span style="color:var(--crit)">faltan ' + nf(r.falta / r.pm, d) + ' antes</span>' : r.nPre === 0 ? 'llega antes del 1.er envío' : 'tras ' + r.nPre + (r.nPre === 1 ? ' envío' : ' envíos') + ' × ' + nf(r.frec, r.frec % 1 ? 1 : 0) + ' d = ' + nf(r.diasPre, 0) + ' d'}</span></td>
       <td class="n ed"><input class="ed" type="number" min="0" step="0.5" data-k="ss" data-cod="${r.m.cod}" value="${r.ssManual ? r.ov.ss : ''}" placeholder="${nf(r.ssDias, 1)}" aria-label="Días de seguridad ${esc(r.m.nombre)}" style="width:62px"><span class="u">días</span><span class="sub"><b>${nf(r.SSu / r.pm, d)} ${ul}</b> · estad. ${nf(r.sugDays, 1)} d</span></td>
       <td class="n"><b>${nf(r.sug)}</b><span class="u">${ul}</span></td>
       <td class="n ed"><input class="ed" type="number" min="0" step="1" data-k="final" data-cod="${r.m.cod}" value="${r.hasFinal ? r.ov.final : ''}" placeholder="${r.sug}" aria-label="Pedido final ${esc(r.m.nombre)}"><span class="u">${ul}</span></td>
@@ -1122,11 +1138,11 @@ function viewOrden(main) {
       <th class="n " title="Lo que hay hoy en depósito según el stock cargado, en cajas y en unidades."><span class="t">Stock actual</span><span class="r">cajas y unidades</span></th>
       <th class="n ed" title="EDITABLE. Cada cuántos días enviás a sucursales (7 = semanal, 3,5 = dos por semana). Vacío = el valor del proveedor."><span class="t">Frecuencia de envío</span><span class="r">cada cuántos días</span></th>
       <th class="n ed" title="EDITABLE. Cuántos envíos cubre este pedido: 1 = una semana si enviás semanal, 2 = dos semanas. Vacío = el valor del proveedor."><span class="t">Envíos a cubrir</span><span class="r">cuántos envíos cubre</span></th>
-      <th class="n ed" title="Días de venta que cubre el pedido contados desde el día de envío en adelante = frecuencia × envíos. Si lo escribís directamente, manda tu número."><span class="t">Días a cubrir</span><span class="r">desde el envío en adelante</span></th>
-      <th class="n " title="Ventas esperadas durante los días a cubrir, empezando el día de envío. Debajo, el rango de fechas."><span class="t">Pronóstico</span><span class="r">ventas en esos días</span></th>
+      <th class="n ed" title="Días de venta que cubre el pedido, contados desde que llega el proveedor (desde el primer envío con la mercadería nueva) = frecuencia × envíos. Si lo escribís directamente, manda tu número."><span class="t">Días a cubrir</span><span class="r">desde que llega el proveedor</span></th>
+      <th class="n " title="Ventas esperadas durante los días a cubrir, empezando con el primer envío desde que llega el proveedor. Debajo, el rango de fechas."><span class="t">Pronóstico</span><span class="r">ventas en esos días</span></th>
       <th class="n ed" title="EDITABLE. Días que pasan desde el pedido hasta el primer envío a sucursales (3 = si pedís un lunes, el envío es el jueves). Hasta ese día el stock no se consume: ya está cubierto."><span class="t">Día de envío</span><span class="r">días desde el pedido</span></th>
       <th class="n " title="Días que tarda el proveedor desde que hacés el pedido. Debajo, el día en que llega."><span class="t">Lead time</span><span class="r">días hasta que llega</span></th>
-      <th class="n " title="Stock teórico en el momento en que llega el proveedor: stock actual menos la venta desde el día de envío hasta la llegada. No baja de 0."><span class="t">Stock al llegar</span><span class="r">a la llegada del proveedor</span></th>
+      <th class="n " title="Stock teórico en el momento en que llega el proveedor: stock actual menos lo que se llevan los envíos que salen antes de la llegada (cada envío se lleva la frecuencia en días de venta). No baja de 0."><span class="t">Stock al llegar</span><span class="r">a la llegada del proveedor</span></th>
       <th class="n ed" title="EDITABLE. Colchón en días de venta y su equivalente en cantidades. Vacío = lo del proveedor (días propios + recargo por confiabilidad). Debajo, lo que sugiere la estadística de variabilidad."><span class="t">Stock de seguridad</span><span class="r">días (editable) y cantidad</span></th>
       <th class="n " title="Lo que falta vender después de la llegada, más el stock de seguridad, menos el stock con el que llegás; redondeado a cajas o unidades."><span class="t">Pedido sugerido</span><span class="r">pronóstico + seguridad − stock</span></th>
       <th class="n ed" title="EDITABLE. Lo que realmente vas a pedir. Vacío = se usa el sugerido."><span class="t">Pedido final</span><span class="r">lo que se manda</span></th>
@@ -1146,7 +1162,7 @@ function viewOrden(main) {
   ${selR ? `<section class="card" id="poGraf"><div class="po-head"><div><div class="eyebrow">Cómo evoluciona el stock</div><h3 style="margin:2px 0 0">${esc(selR.m.nombre)}</h3></div><div class="fld"><label for="poSel">Producto</label><select id="poSel">${lines.map(x => `<option value="${x.m.cod}" ${x.m.cod === u.poSel ? 'selected' : ''}>${esc(x.m.nombre)}</option>`).join('')}</select></div></div>
     ${stockPanelHtml(selR, ulabel(selR))}
     <div class="stkc">${stockChartSvg(selR)}</div>
-    <div class="hint">Línea verde: stock teórico. Hasta el día de envío no baja: ese tramo ya está cubierto con lo mandado antes. Desde el envío baja con la venta pronosticada; cuando llega el proveedor suma el pedido. La zona celeste son los días a cubrir; el punto celeste es el stock que queda al terminarlos, que es el colchón. La línea gris punteada es lo que pasaría sin pedir nada.</div></section>` : ''}
+    <div class="hint">Línea verde: stock teórico. Hasta el primer envío no baja. El stock actual solo se descuenta cuando sale un envío, y cada envío se lleva la frecuencia en días de venta: los que salen antes de que llegue el proveedor (grises) te dejan con el stock con el que llegás. Cuando llega el proveedor suma el pedido, y el pronóstico a cubrir (zona celeste) empieza con el primer envío desde la llegada. El punto celeste es el stock que queda al terminar, que es el colchón. La línea gris punteada es lo que pasaría sin pedir nada.</div></section>` : ''}
   <section class="card"><h3>Órdenes emitidas a ${esc(cur.p)}</h3>${hist.length ? `<div class="tw" style="max-height:340px;margin-top:10px"><table><thead><tr><th>Orden</th><th>Fecha</th><th class="n">Líneas</th><th class="n">Cajas</th><th class="n">Kg</th><th>Llegada</th><th></th></tr></thead><tbody>${hist.map(o => `<tr><td class="mono-s">${esc(o.num)}</td><td>${dnFmt(strToDn(o.fecha))}</td><td class="n">${o.lines.length}</td><td class="n">${nf(o.tot.cajas)}</td><td class="n">${nf(o.tot.kg)}</td><td>${dnFmt(strToDn(o.llegada))}</td><td><button class="btn sm" data-dl="${esc(o.id)}">Descargar</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="muted small" style="margin-top:6px">Todavía no emitiste órdenes a este proveedor.</div>'}</section>`;
   $$('.pchip', main).forEach(b => b.onclick = () => { u.poProv = b.dataset.p; u.poAsk = false; viewOrden(main); });
   $('#poOnly').onchange = e => { u.poOnly = e.target.checked; viewOrden(main); };
@@ -1203,9 +1219,9 @@ function calcStepsHtml(r, withWeeks) {
       ${withWeeks ? `<div class="tw" style="margin-top:8px;max-height:none"><table><thead><tr><th>Semana</th><th class="n">Vendido</th><th class="n">Equivalente semana</th><th class="n">Usado</th><th class="n">Peso</th></tr></thead><tbody>${wkTbl || '<tr><td colspan="5" class="muted">Sin historia</td></tr>'}</tbody></table></div>` : ''}
       <div class="muted small" style="margin-top:4px">Tope de semanas atípicas: ${g.clip > 0 ? nf(g.clip, 1) + ' × la mediana de 13 semanas (' + nf(P.med, 1) + ') = ' + (isFinite(P.cap) ? nf(P.cap, 1) : 'no aplica') : 'desactivado'}.</div></div></li>
     <li><span class="b">2</span><div><b>Estacionalidad.</b> Modo: <b>${mode === 'grupo' ? 'grupo "' + esc(m.grupo) + '"' : mode === 'producto' ? 'propia del producto' : 'ninguna'}</b>, intensidad ${nf(g.estac * 100)}%. Factor de las próximas 8 semanas: <span class="mono">${sf.map(x => nf(x, 2)).join(' · ')}</span>. Compara las ventas de este mismo período del año pasado contra las de las semanas que hoy usamos como nivel.</div></li>
-    <li><span class="b">3</span><div><b>Fechas.</b> Pedido el <b>${dnLong(r.pedDn)}</b>. El primer envío a sucursales es ${r.denv} días después: <b>${dnLong(r.envDn)}</b>; hasta ese día el stock no se consume (ya está cubierto). El proveedor tarda ${r.LT} días: llega el <b>${dnLong(r.arrDn)}</b>${r.arrDn < r.envDn ? ', antes del envío' : ''}.</div></li>
-    <li><span class="b">4</span><div><b>Pronóstico del período.</b> Frecuencia de envío: cada <b>${r.frec}</b> días. Envíos a cubrir: <b>${nf(r.nEnv, 1)}</b>. Días a cubrir: <b>${nf(r.N, 0)}</b>${r.nManual ? ' (elegidos a mano)' : ` = ${nf(r.nEnv, 1)} × ${r.frec}`}, desde el envío: del ${dnFmt(r.envDn)} al ${dnFmt(r.envDn + r.N - 1)}. Venta pronosticada: <b class="mono">${nf(r.D_N, 1)} u.</b> (${nf(r.D_N / r.pm, 1)} ${ul}), unas ${nf(r.daily, 2)} u./día.</div></li>
-    <li><span class="b">5</span><div><b>Stock al llegar.</b> Stock actual <span class="mono">${nf(r.pos, 1)} u.</span>. Entre el envío y la llegada (${r.gapE} días) se venden <span class="mono">${nf(r.D_LT, 1)} u.</span> Llegás con <b class="mono">${nf(r.stockArr, 1)} u.</b>${r.falta > 1e-9 ? ` (te faltan ${nf(r.falta, 1)} u.: te quedás sin mercadería antes de que llegue)` : ''}.</div></li>
+    <li><span class="b">3</span><div><b>Fechas y envíos.</b> Pedido el <b>${dnLong(r.pedDn)}</b>. El primer envío a sucursales es ${r.denv} días después: <b>${dnLong(r.envDn)}</b>; hasta ese día el stock no se consume. Después sale un envío cada <b>${nf(r.frec, r.frec % 1 ? 1 : 0)}</b> días y cada uno se lleva ${nf(r.frec, r.frec % 1 ? 1 : 0)} días de venta. El proveedor tarda ${r.LT} días: llega el <b>${dnLong(r.arrDn)}</b>. ${r.nPre === 0 ? 'Ningún envío sale antes de la llegada.' : `Antes de que llegue salen <b>${r.nPre}</b> ${r.nPre === 1 ? 'envío' : 'envíos'}: ${nf(r.nPre, 0)} × ${nf(r.frec, r.frec % 1 ? 1 : 0)} = <b>${nf(r.diasPre, 0)} días</b> de venta que salen del stock actual.`}</div></li>
+    <li><span class="b">4</span><div><b>Pronóstico desde la llegada.</b> Envíos a cubrir: <b>${nf(r.nEnv, 1)}</b>. Días a cubrir: <b>${nf(r.N, 0)}</b>${r.nManual ? ' (elegidos a mano)' : ` = ${nf(r.nEnv, 1)} × ${r.frec}`}, empezando con el primer envío que sale desde la llegada: del ${dnFmt(r.startPost)} al ${dnFmt(r.startPost + r.N - 1)}. Venta pronosticada: <b class="mono">${nf(r.D_N, 1)} u.</b> (${nf(r.D_N / r.pm, 1)} ${ul}), unas ${nf(r.daily, 2)} u./día.</div></li>
+    <li><span class="b">5</span><div><b>Stock al llegar.</b> Stock actual <span class="mono">${nf(r.pos, 1)} u.</span>. Los ${nf(r.nPre, 0)} ${r.nPre === 1 ? 'envío' : 'envíos'} que salen antes de la llegada (${nf(r.diasPre, 0)} días de venta) se llevan <span class="mono">${nf(r.D_LT, 1)} u.</span> Llegás con <b class="mono">${nf(r.stockArr, 1)} u.</b>${r.falta > 1e-9 ? ` (te faltan ${nf(r.falta, 1)} u.: te quedás sin mercadería antes de que llegue)` : ''}.</div></li>
     <li><span class="b">6</span><div><b>Stock de seguridad.</b> ${nf(r.ssDias, 1)} días${r.ssManual ? ' (definidos a mano)' : ` = ${pr.ss} del proveedor + ${g.recConf[pr.conf]} por confiabilidad (${CONF_LABEL[pr.conf]})`} × ${nf(r.daily, 2)} u./día = <b class="mono">${nf(r.SSu, 1)} u.</b> (${nf(r.SSu / r.pm, 1)} ${ul}). Referencia estadística: con las últimas ${n13} semanas, σ = ${nf(P.sd13, 1)} y CV = ${nf(P.cv * 100)}%, z × σ × √(${nf(r.H, 0)}/7) = ${g.z} × ${nf(P.sd13, 1)} × ${nf(sq, 2)} = ${nf(g.z * P.sd13 * sq, 1)} u. ÷ ${nf(r.daily, 2)} u./día = <b class="mono">${nf(r.sugDays, 1)} días</b>.</div></li>
     <li><span class="b">7</span><div><b>Pedido.</b> Lo que falta vender después de que llega (${nf(r.Dafter, 1)} u.) + seguridad (${nf(r.SSu, 1)} u.) = objetivo <span class="mono">${nf(r.target, 1)} u.</span> Menos el stock al llegar (${nf(r.stockArr, 1)} u.) = <span class="mono">${nf(r.need, 1)} u.</span> = ${nf(r.needPU, 2)} ${ul} → sugerido <b>${nf(r.sug)} ${ul}</b> (${g.redondeo === 'techo' ? 'redondeo hacia arriba con tolerancia de ' + nf(g.tol * 100) + '%' : 'redondeo al más cercano'}).</div></li>
   </ol>`;
@@ -1387,7 +1403,7 @@ function viewProv(main) {
   }).join('');
   main.innerHTML = `
   <section>${heroHead('Proveedores y parámetros', 'Cómo compra cada proveedor', 'El lead time y la confiabilidad de cada proveedor definen cuánto stock de seguridad conviene tener. Todo lo que cambies acá se recalcula al instante y queda guardado.')}</section>
-  <div class="note"><b>Cómo se usa cada dato.</b> El <b>lead time</b> es lo que tarda el proveedor desde que hacés el pedido. Los <b>días hasta el envío</b> son los días que pasan hasta el primer envío a sucursales (hasta ese día el stock no se consume). La <b>frecuencia de envío</b> es cada cuántos días mandás a sucursales, y los <b>envíos a cubrir</b> cuántos envíos cubre cada pedido; juntos dan los <b>días a cubrir</b> (frecuencia × envíos), que cuentan desde el envío en adelante. Cada producto puede tener su propio valor. El <b>stock de seguridad en días</b> (el tuyo más un recargo según qué tan seguido falla el proveedor) se suma a eso.<br><b>Sugerido por variabilidad:</b> es solo una referencia. Se calcula como z × σ × √(horizonte ÷ 7) ÷ venta diaria, donde σ es el desvío de las ventas semanales de la ventana. Mostramos la mediana de los productos del proveedor; vos decidís cuánto aplicar. La explicación completa está en la pestaña <a href="#" data-go="teoria">Teoría</a>.</div>
+  <div class="note"><b>Cómo se usa cada dato.</b> El <b>lead time</b> es lo que tarda el proveedor desde que hacés el pedido. Los <b>días hasta el envío</b> son los días que pasan hasta el primer envío a sucursales (hasta ese día el stock no se consume). La <b>frecuencia de envío</b> es cada cuántos días mandás a sucursales: cada envío se lleva esa cantidad de días de venta. El stock actual solo se descuenta cuando sale un envío, y solo los que salen antes de que llegue el proveedor. Los <b>envíos a cubrir</b> son cuántos envíos cubre cada pedido; juntos dan los <b>días a cubrir</b> (frecuencia × envíos), que cuentan desde que llega el proveedor en adelante. Cada producto puede tener su propio valor. El <b>stock de seguridad en días</b> (el tuyo más un recargo según qué tan seguido falla el proveedor) se suma a eso.<br><b>Sugerido por variabilidad:</b> es solo una referencia. Se calcula como z × σ × √(horizonte ÷ 7) ÷ venta diaria, donde σ es el desvío de las ventas semanales de la ventana. Mostramos la mediana de los productos del proveedor; vos decidís cuánto aplicar. La explicación completa está en la pestaña <a href="#" data-go="teoria">Teoría</a>.</div>
   <div class="tw" style="max-height:none"><table><thead><tr><th>Proveedor</th><th class="n">Productos</th><th class="n">Lead time (días)</th><th>Clase</th><th class="n" title="Días desde el pedido hasta el primer envío a sucursales. Por defecto de este proveedor; se puede cambiar en cada línea.">Días hasta el envío</th><th class="n" title="Cada cuántos días enviás a sucursales (7 = semanal). Por defecto de este proveedor; se cambia por producto en la orden de compra.">Frecuencia de envío (días)</th><th class="n" title="Cuántos envíos cubre cada pedido (1 = una semana si enviás semanal, 2 = dos semanas). Por defecto de este proveedor; se cambia por producto.">Envíos a cubrir</th><th>Confiabilidad</th><th class="n">Seguridad propia (días)</th><th class="n">Recargo</th><th class="n">Seguridad total</th><th class="n">Sugerido por variabilidad (días)</th><th class="n">Pedido mínimo (kg)</th></tr></thead><tbody>${prow}</tbody></table></div>
   <div class="grid2">
   <div class="card"><h3>Clasificación de proveedores</h3>
@@ -1626,7 +1642,7 @@ function exampleHtml(cod) {
   const r = buildPlan().find(x => x.m.cod === cod); if (!r) return '';
   const e = ESTADO[r.estado], ul = ulabel(r);
   return `<div class="flex" style="margin-bottom:6px"><h4>${esc(r.m.nombre)}</h4><span class="chip ${e.c}">${e.t}</span><span class="chip">${esc(r.m.prov)}</span><span class="chip">${r.m.xcaja ? 'caja de ' + r.m.ucaja + ' u.' : 'por unidad'}</span></div>${calcStepsHtml(r, false)}
-  <div class="note" style="margin-top:14px"><b>Resultado:</b> pedir <b>${nf(r.sug)} ${ul}</b> (${nf(lineCalc(r).kg, 0)} kg). Con ese pedido el stock alcanza para <b>${lineCalc(r).sup >= 400 ? 'más de 365' : nf(lineCalc(r).sup, 0)} días</b> desde el envío (${dnFmt(r.envDn)}), contra una meta de ${nf(r.N, 0)} días a cubrir más ${nf(r.ssDias, 0)} de seguridad.</div>`;
+  <div class="note" style="margin-top:14px"><b>Resultado:</b> pedir <b>${nf(r.sug)} ${ul}</b> (${nf(lineCalc(r).kg, 0)} kg). Con ese pedido el stock alcanza para <b>${lineCalc(r).sup >= 400 ? 'más de 365' : nf(lineCalc(r).sup, 0)} días</b> desde el primer envío (${dnFmt(r.envDn)}), contra una meta de ${nf(r.diasPre + r.N, 0)} días (${nf(r.diasPre, 0)} hasta la llegada + ${nf(r.N, 0)} a cubrir) más ${nf(r.ssDias, 0)} de seguridad.</div>`;
 }
 function viewTeoria(main) {
   const g = S.params.g, rows = buildPlan(), u = S.ui;
@@ -1656,21 +1672,23 @@ function viewTeoria(main) {
       ['Tendencia', `Opcional (hoy ${nf(g.tend * 100)}%). Extrapola la pendiente de las últimas 13 semanas, amortiguada. Arranca en cero porque en las pruebas empeoraba el pronóstico.`],
       ['Perfil por día', 'Porcentaje de las ventas semanales que cae en cada día de la semana (lunes a domingo). Se calcula con las ventas diarias de semanas completas y se actualiza solo. Sirve para completar la semana en curso y para repartir el pronóstico por día.'],
       ['Factor manual', 'Un multiplicador por producto para anticipar algo que los datos no saben: una promoción, un lanzamiento, un faltante del proveedor.']])}`)}
-  ${sec('t-repo', 'La política de reposición', `<p>Tu depósito abastece a sucursales con envíos periódicos. Lo que ya está comprometido se cubre con lo que ya enviaste, por eso el stock empieza a consumirse recién el día del <b>primer envío</b> que va a servir este pedido. Desde ahí, el pedido tiene que cubrir los <b>días a cubrir</b> que elijas (por ejemplo 7 si un envío cubre una semana, 14 si tenés que cubrir dos envíos) más un colchón de seguridad por si el proveedor falla.</p>
+  ${sec('t-repo', 'La política de reposición', `<p>Tu depósito abastece a sucursales con envíos periódicos, y cada envío se lleva tantos días de venta como la <b>frecuencia</b> (si mandás cada 3 días, cada envío es para 3 días). El stock que tenés hoy no se consume por día: se descuenta <b>solo cuando sale un envío</b>. Mientras el proveedor no llega, los envíos que salen se llevan stock actual (si hasta que llega salen dos envíos de 7 días, se descuentan 14 días de venta); ese pronóstico sirve únicamente para saber con cuánto stock teórico llegás. Desde la llegada en adelante, el pedido tiene que cubrir los <b>días a cubrir</b> que elijas (7 si un envío cubre una semana, 14 si tenés que cubrir dos envíos) más un colchón de seguridad por si el proveedor falla.</p>
     <div class="formula"><b>fecha del pedido</b> = hoy
-<b>día de envío</b>     = pedido + días hasta el envío            (hasta ese día el stock no se consume)
+<b>1.er envío</b>        = pedido + días hasta el envío            (hasta ese día el stock no se consume)
 <b>llega el proveedor</b> = pedido + lead time
-<b>días a cubrir N</b>  = frecuencia de envío × envíos a cubrir
-<b>pronóstico</b>       = ventas desde el día de envío durante N días
-<b>stock al llegar</b>  = máx(0, stock − ventas desde el envío hasta la llegada)
-<b>seguridad SS</b>     = días de seguridad × (pronóstico ÷ N)
-<b>objetivo</b>         = ventas que quedan después de llegar + SS
-<b>necesidad</b>        = máx(0, objetivo − stock al llegar)
-<b>pedido</b>           = necesidad ÷ unidades por caja, redondeado</div>
+<b>envíos previos</b>    = los que salen antes de la llegada, uno cada frecuencia desde el 1.er envío
+<b>días descontados</b>  = envíos previos × frecuencia             (2 envíos de 7 = 14 días; 3 de 3 = 9 días)
+<b>stock al llegar</b>   = máx(0, stock − ventas de esos días)
+<b>días a cubrir N</b>   = frecuencia × envíos a cubrir
+<b>pronóstico</b>        = ventas de N días, desde el primer envío con la mercadería nueva
+<b>seguridad SS</b>      = días de seguridad × (pronóstico ÷ N)
+<b>objetivo</b>          = pronóstico + SS
+<b>necesidad</b>         = máx(0, objetivo − stock al llegar)
+<b>pedido</b>            = necesidad ÷ unidades por caja, redondeado</div>
     ${kv([
       ['Día de envío', 'El día en que mandás el pedido (por defecto, la fecha del stock). Se puede cambiar en la orden de compra: si el pedido sale el lunes, el stock se toma como el de ese día: cargá el stock actualizado.'],
       ['Frecuencia de envío', 'Cada cuántos días enviás a sucursales (7 = semanal, 3,5 = dos veces por semana). Valor por defecto del proveedor, editable en cada línea.'],
-      ['Envíos a cubrir', 'Cuántos envíos cubre el pedido: 1 = una semana si enviás semanal, 2 = dos semanas. Depende del producto. Días a cubrir = frecuencia × envíos, contados desde el día de envío en adelante.'],
+      ['Envíos a cubrir', 'Cuántos envíos cubre el pedido: 1 = una semana si enviás semanal, 2 = dos semanas. Depende del producto. Días a cubrir = frecuencia × envíos, contados desde que llega el proveedor en adelante.'],
       ['Días hasta el envío', 'Días entre el pedido y el primer envío a sucursales: si pedís un lunes y dice 3, el envío es el jueves. Valor por defecto del proveedor, editable en cada línea.'],
       ['Lead time', 'Días desde el envío hasta que llega la mercadería. Se edita en la orden de compra y se guarda en el proveedor.'],
       ['Ciclo de pedido', 'Cada cuántos días pensás volver a pedirle a ese proveedor. Cuanto más largo, más hay que comprar de una vez.'],
@@ -1705,11 +1723,11 @@ function viewTeoria(main) {
     ['Stock actual', 'Lo que hay en depósito según el stock cargado, en cajas y en unidades.'],
     ['Frecuencia de envío', 'Editable. Cada cuántos días enviás a sucursales. Vacío = valor del proveedor.'],
     ['Envíos a cubrir', 'Editable. Cuántos envíos cubre este pedido (1 = una semana si enviás semanal, 2 = dos). Vacío = valor del proveedor.'],
-    ['Días a cubrir', 'Frecuencia × envíos, contados desde el día de envío en adelante. Si lo escribís directamente, manda tu número.'],
-    ['Pronóstico', 'Ventas esperadas en esos días a cubrir, empezando el día de envío. Debajo, el rango de fechas.'],
+    ['Días a cubrir', 'Frecuencia × envíos, contados desde que llega el proveedor en adelante (desde el primer envío con la mercadería nueva). Si lo escribís directamente, manda tu número.'],
+    ['Pronóstico', 'Ventas esperadas en los días a cubrir, desde que llega el proveedor. Debajo, el rango de fechas. Lo que se vende antes de la llegada no se pronostica acá: solo sirve para calcular el stock al llegar.'],
     ['Día de envío', 'Editable. Días desde el pedido hasta el primer envío a sucursales y qué día de la semana cae. Hasta ese día el stock no se consume.'],
     ['Lead time', 'Días que tarda el proveedor desde el pedido, y qué día llega.'],
-    ['Stock al llegar', 'Stock teórico cuando llega el proveedor: stock actual menos la venta desde el envío hasta la llegada. Si es 0, te quedás sin mercadería antes de que llegue.'],
+    ['Stock al llegar', 'Stock teórico cuando llega el proveedor: stock actual menos lo que se llevan los envíos que salen antes de la llegada (cada envío, la frecuencia en días de venta). Si es 0, te quedás sin mercadería antes de que llegue.'],
     ['Stock de seguridad', 'Editable en días. Debajo, la cantidad equivalente y lo que sugiere la estadística de variabilidad.'],
     ['Pedido sugerido', 'Ventas que quedan después de la llegada + seguridad − stock al llegar, redondeado.'],
     ['Pedido final', 'Lo que realmente vas a pedir. Si lo dejás vacío se usa el sugerido; si lo escribís, manda tu número.'],
