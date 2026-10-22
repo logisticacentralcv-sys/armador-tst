@@ -1214,8 +1214,7 @@ function viewOrden(main) {
       <td class="n"><b>${nf(r.sug)}</b><span class="u">${ul}</span></td>
       <td class="n ed"><input class="ed" type="number" min="0" step="1" data-k="final" data-cod="${r.m.cod}" value="${r.hasFinal ? r.ov.final : ''}" placeholder="${r.sug}" aria-label="Pedido final ${esc(r.m.nombre)}"><span class="u">${ul}</span></td>
       <td class="n"><b>${nf(c.share * 100, 0)}%</b><span class="sub">${nf(c.e / r.pm, d)} ${ul}</span></td>
-      <td class="n"><div class="sup"><span class="num">${c.sup >= 400 ? '>365' : nf(c.sup, 0)} días</span><div class="cov"><i style="width:${Math.min(100, c.sup / sc * 100)}%;background:${cc}"></i><b style="left:${c.goal / sc * 100}%" title="Meta: ${nf(r.N, 0)} + ${nf(r.ssDias, 0)} de seguridad"></b></div><span class="sub">meta ${nf(r.N, 0)} + ${nf(r.ssDias, 0)} seg.</span></div></td>
-      <td class="n">${nf(c.kg, 0)}<span class="u">kg</span></td></tr>`;
+      <td class="n"><div class="sup"><span class="num">${c.sup >= 400 ? '>365' : nf(c.sup, 0)} días</span><div class="cov"><i style="width:${Math.min(100, c.sup / sc * 100)}%;background:${cc}"></i><b style="left:${c.goal / sc * 100}%" title="Meta: ${nf(r.N, 0)} + ${nf(r.ssDias, 0)} de seguridad"></b></div><span class="sub">meta ${nf(r.N, 0)} + ${nf(r.ssDias, 0)} seg.</span></div></td></tr>`;
   }).join('');
   if (!u.poSel || !lines.find(x => x.m.cod === u.poSel)) u.poSel = (emit[0] || lines[0] || { m: {} }).m.cod;
   const selR = lines.find(x => x.m.cod === u.poSel);
@@ -1269,8 +1268,8 @@ function viewOrden(main) {
       <th class="n ed" title="EDITABLE. Lo que realmente vas a pedir. Vacío = se usa el sugerido."><span class="t">Pedido final</span><span class="r">lo que se manda</span></th>
       <th class="n " title="Del pedido, qué porcentaje queda sin vender al terminar los días a cubrir. Es el stock de seguridad que estás pidiendo. Debajo, cuántas unidades son."><span class="t">Colchón</span><span class="r">% del pedido</span></th>
       <th class="n " title="Cuántos días duran el stock actual más este pedido, contados desde el día de envío. La marca negra de la barra es la meta: días a cubrir más seguridad."><span class="t">Cubre</span><span class="r">días desde el envío</span></th>
-      <th class="n " title="Pedido final × unidades por caja × kilos por unidad."><span class="t">Kilos</span><span class="r">del pedido final</span></th>
-    </tr></thead><tbody>${tr || '<tr><td colspan="15" class="muted">No hay productos para pedir a este proveedor con el stock actual.</td></tr>'}</tbody></table></div>
+      
+    </tr></thead><tbody>${tr || '<tr><td colspan="14" class="muted">No hay productos para pedir a este proveedor con el stock actual.</td></tr>'}</tbody></table></div>
     <div class="hint" style="margin-top:10px">Pasá el mouse por el título de cada columna para ver qué es. Las columnas con fondo celeste se editan. Para ver paso a paso cómo se calculó un producto, tocá la fila. <a href="#" id="goTeoria">Ver la teoría completa ›</a></div>
     <div class="bar" style="margin-top:18px">
       <div class="fld" style="flex:1;min-width:260px"><label for="poNote">Observaciones para el proveedor (opcional)</label><input type="text" id="poNote" value="${esc(u.poNote)}" placeholder="Ej.: entrega por la mañana"></div>
@@ -1321,10 +1320,10 @@ async function emitOrder(cur, emit) {
   exportOrder(o); toast('Orden ' + o.num + ' emitida.');
 }
 function exportOrder(o) {
-  const hdr = ['Código', 'Producto', 'Unidad de compra', 'Stock actual (unidad de compra)', 'Stock actual (u.)', 'Frecuencia de envío (días)', 'Envíos a cubrir', 'Días a cubrir', 'Pronóstico en esos días', 'Día de envío', 'Lead time (días)', 'Stock al llegar', 'Días de seguridad', 'Stock de seguridad', 'Pedido sugerido', 'Pedido', 'Colchón % del pedido', 'Cubre desde el envío (días)', 'Kilos'];
+  const hdr = ['Código', 'Producto', 'Unidad de compra', 'Stock actual (unidad de compra)', 'Stock actual (u.)', 'Frecuencia de envío (días)', 'Envíos a cubrir', 'Días a cubrir', 'Pronóstico en esos días', 'Día de envío', 'Lead time (días)', 'Stock al llegar', 'Días de seguridad', 'Stock de seguridad', 'Pedido sugerido', 'Pedido', 'Colchón % del pedido', 'Cubre desde el envío (días)'];
   const rows = [['ORDEN DE COMPRA', o.num + (o.borrador ? ' (borrador)' : '')], ['Proveedor', o.prov], ['Fecha del pedido', o.fecha], ['Primer envío', o.envio || ''], ['Llegada del proveedor', o.llegada], ['Observaciones', o.obs || ''], [], hdr,
-    ...o.lines.map(l => [l.cod, l.nombre, l.unidad, l.stock, l.stockU ?? '', l.frec ?? '', l.nEnv ?? '', l.nDias, l.pron, l.envio || '', l.lt, l.llega, l.ssDias, l.ss ?? '', l.sug, l.qty, l.colchon ?? '', l.dias >= 400 ? '>365' : l.dias, l.kg]), [],
-    ['TOTAL', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', o.tot.kg], ['Cajas', o.tot.cajas], ['Unidades sueltas', o.tot.unidades]];
+    ...o.lines.map(l => [l.cod, l.nombre, l.unidad, l.stock, l.stockU ?? '', l.frec ?? '', l.nEnv ?? '', l.nDias, l.pron, l.envio || '', l.lt, l.llega, l.ssDias, l.ss ?? '', l.sug, l.qty, l.colchon ?? '', l.dias >= 400 ? '>365' : l.dias]), [],
+    ['Cajas', o.tot.cajas], ['Unidades sueltas', o.tot.unidades]];
   saveXlsx((o.borrador ? 'borrador_' : '') + o.num + '_' + o.prov.replace(/\W+/g, '_') + '.xlsx', [['Orden', rows]]);
 }
 
@@ -2021,7 +2020,7 @@ function viewSolDetalle(main, s) {
     <td class="n"><b>${nf(l.llega, 1)}</b><span class="u">${esc(l.unidad)}</span><span class="sub">llega ${esc(o.llegada)}</span></td><td class="n"><b>${nf(l.sug)}</b><span class="u">${esc(l.unidad)}</span></td>
     <td class="n"><b>${nf(l.qty)}</b><span class="u">${esc(l.unidad)}</span></td>
     <td class="n ${edita ? 'ed' : ''}">${edita ? `<input class="ed solq" type="number" min="0" step="1" data-i="${i}" value="${l.qty}" aria-label="Cantidad final ${esc(l.nombre)}"><span class="u">${esc(l.unidad)}</span>` : `<b>${nf(((s.resolucion || {}).cambios || []).find(x => x.cod === l.cod) ? ((s.resolucion || {}).cambios.find(x => x.cod === l.cod)).a : l.qty)}</b><span class="u">${esc(l.unidad)}</span>`}</td>
-    <td class="n">${l.kg ? `<b>${nf(l.kg, 0)}</b><span class="u">kg</span>` : '<span class="muted">—</span>'}</td></tr>`).join('');
+    </tr>`).join('');
   const res = s.resolucion || {};
   const resHtml = s.estado === 'aprobada' ? `<div class="note ok" style="margin-top:14px"><b>Aprobada por ${esc(res.por)}</b> · ${fmtFechaHora(res.en)} · orden <b>${esc(res.orden)}</b>.${(res.cambios || []).length ? ' Cambios de Compras: ' + res.cambios.map(x => `${esc(x.nombre)} ${nf(x.de)} → ${nf(x.a)}`).join('; ') + '.' : ' Sin cambios.'}</div>`
     : s.estado === 'rechazada' ? `<div class="note crit" style="margin-top:14px"><b>Rechazada por ${esc(res.por)}</b> · ${fmtFechaHora(res.en)}: “${esc(res.motivo || '')}”</div>`
@@ -2029,7 +2028,7 @@ function viewSolDetalle(main, s) {
   main.innerHTML = `<section><div class="bar"><button class="btn sm" id="solVolver">← Solicitudes</button></div>${heroHead('Solicitud de compra', 'Pedido a ' + esc(s.prov), `Enviada por ${esc(s.por)} (${fmtFechaHora(s.en)}). Estos son los datos tal como los dejó Planificación.`)}</section>
   <section class="card"><div class="flex"><div class="bar" style="gap:14px 28px;flex-wrap:wrap"><div><div class="eyebrow">Fecha del pedido</div><b>${esc(o.fecha)}</b></div><div><div class="eyebrow">Primer envío</div><b>${esc(o.envio || '')}</b></div><div><div class="eyebrow">Lead time</div><b>${esc(o.lt)} días</b></div><div><div class="eyebrow">Llega el proveedor</div><b>${esc(o.llegada)}</b></div></div><span class="sp"></span><span class="chip ${e[1]}">${e[0]}</span></div>
     ${o.obs ? `<div class="muted small" style="margin-top:10px">Observaciones: ${esc(o.obs)}</div>` : ''}
-    <div class="tw" style="max-height:none;margin-top:16px"><table><thead><tr><th class="sticky1">Producto</th><th class="n">Stock actual</th><th class="n">Pronóstico</th><th class="n">Stock al llegar</th><th class="n">Pedido sugerido</th><th class="n">Pedido de Planificación</th><th class="n ${edita ? 'ed' : ''}">${edita ? 'Pedido final (Compras)' : 'Pedido final'}</th><th class="n">Kilos</th></tr></thead><tbody>${filas}</tbody></table></div>
+    <div class="tw" style="max-height:none;margin-top:16px"><table><thead><tr><th class="sticky1">Producto</th><th class="n">Stock actual</th><th class="n">Pronóstico</th><th class="n">Stock al llegar</th><th class="n">Pedido sugerido</th><th class="n">Pedido de Planificación</th><th class="n ${edita ? 'ed' : ''}">${edita ? 'Pedido final (Compras)' : 'Pedido final'}</th></tr></thead><tbody>${filas}</tbody></table></div>
     <div class="muted small" style="margin-top:10px" id="solTot"></div>
     ${resHtml}
     ${edita ? (u.solRech ? `<div class="bar" style="margin-top:16px;align-items:flex-end;flex-wrap:wrap"><div class="fld" style="flex:1;min-width:260px"><label for="solMot">Motivo del rechazo (lo ve Planificación)</label><input type="text" id="solMot" placeholder="Ej.: el proveedor no entrega esta semana"></div><button class="btn pri" id="solRechOk" style="background:var(--crit);border-color:var(--crit)">Confirmar rechazo</button><button class="btn" id="solRechNo">Cancelar</button></div>`
