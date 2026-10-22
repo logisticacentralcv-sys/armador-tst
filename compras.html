@@ -707,6 +707,7 @@ async function saveDays(cods, onp) {
   if (S.db.setMany) { await S.db.setMany(items, onp); return; }
   let i = 0; for (const [path, v] of items) { await S.db.doc(path).set(v); i++; onp && onp(i / items.length); }
 }
+async function saveCargas() { if (S.db) await S.db.doc('cfg/cargas').set({ items: S.cargas || [] }); }
 async function saveNotes() { if (S.db) await S.db.doc('cfg/notas').set({ items: S.notes }); }
 /* ================= series diarias y utilidades visuales ================= */
 function dailyFor(cods, o = {}) {
@@ -846,9 +847,9 @@ window.addEventListener('resize', () => { moveInd(); });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(moveInd);
 function renderStatus() {
   if (!S.ready) { $('#status').innerHTML = ''; return; }
-  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con carga de ventas por código interno (21/10)">v. 21/10 · código interno</span>`; return; }
+  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 22/10 · ventas por períodos</span>`; return; }
   const part = isPartial() ? `<span class="pill warn" title="La última semana tiene datos hasta el ${dnFmt(S.lastDn)}; se completa con el perfil por día de la semana">semana en curso parcial</span>` : '';
-  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con carga de ventas por código interno (21/10)">v. 21/10 · código interno</span>${part}`;
+  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 22/10 · ventas por períodos</span>${part}`;
 }
 function render(anim) {
   renderTabs(); renderStatus(); badgeSol();
@@ -1650,16 +1651,16 @@ function parseSalesMatriz(rows) {
 function parseSales(rows) {
   const mat = parseSalesMatriz(rows); if (mat) return mat;
   const cim = mapaCodigoInterno();
-  const hit = findCols(rows, { cod: /^cod/, suc: /sucursal/, qty: /cantidad/, fecha: /^fecha/ });
+  const hit = findCols(rows, { cod: /^cod/, 'desc?': /descripc/, suc: /sucursal/, qty: /cantidad/, fecha: /^fecha/ });
   if (!hit) throw new Error('No encontré las columnas "Cód. artículo", "Cantidad venta", "Desc. sucursal" y "Fecha". Revisá el encabezado.');
-  const { cod: ci, suc: si, qty: qi, fecha: fi } = hit.cols;
+  const { cod: ci, desc: di, suc: si, qty: qi, fecha: fi } = hit.cols;
   const agg = new Map(), ignored = new Map(), dayTot = new Map(); let minD = Infinity, maxD = -Infinity, n = 0, bad = 0;
   for (let r = hit.row + 1; r < rows.length; r++) {
     const row = rows[r], cm = String(row[ci] ?? '').match(/^\s*([A-Za-z0-9.]+)\s+-\s/), cod = normCod(cm ? cm[1] : row[ci]), d = parseDateAny(row[fi]), q = toNum(row[qi]);
     if (!cod || isNaN(d) || isNaN(q)) { bad++; continue; }
     const suc = normSuc(row[si]) || 'SIN SUCURSAL';
     const key = S.mm[cod] ? cod : cim[cod];
-    if (!key) { const o = ignored.get(cod) || { n: 0, q: 0, nombre: '' }; o.n++; o.q += q; ignored.set(cod, o); continue; }
+    if (!key) { const o = ignored.get(cod) || { n: 0, q: 0, nombre: di >= 0 ? String(row[di] ?? '').trim() : '' }; o.n++; o.q += q; ignored.set(cod, o); continue; }
     n++; if (d < minD) minD = d; if (d > maxD) maxD = d;
     let a = agg.get(key); if (!a) agg.set(key, a = new Map());
     let b = a.get(suc); if (!b) a.set(suc, b = new Map());
@@ -1671,28 +1672,54 @@ function parseSales(rows) {
 function planSalesImport(p) {
   const nDays = p.maxD - p.minD + 1, missing = []; for (let d = p.minD; d <= p.maxD; d++) if (!p.dayTot.has(d)) missing.push(d);
   const has = !!S.meta && !S.meta.virtual; // sin ventas todavía: no hay nada que reemplazar
-  return { ...p, nDays, missing, gap: has && p.minD > S.lastDn + 1 ? p.minD - S.lastDn - 1 : 0, overlap: has ? Math.max(0, Math.min(p.maxD, S.lastDn) - Math.max(p.minD, S.start) + 1) : 0, partialWeek: dowOf(p.maxD) < 6, shorter: has && p.maxD < S.lastDn };
+  return { ...p, nDays, missing, ...calcRangos(p), gap: has && p.minD > S.lastDn + 1 ? p.minD - S.lastDn - 1 : 0, overlap: has ? Math.max(0, Math.min(p.maxD, S.lastDn) - Math.max(p.minD, S.start) + 1) : 0, partialWeek: dowOf(p.maxD) < 6, shorter: has && p.maxD < S.lastDn };
 }
+/* ---- qué períodos hay cargados ---- */
+// Los períodos cubiertos por lo cargado, como [desde, hasta] en días. Sirven para distinguir "un día sin ventas" de "un día que nunca se cargó".
+function rangosCargados() {
+  if (!S.meta || S.meta.virtual) return [];
+  if (S.meta.rangos && S.meta.rangos.length) return S.meta.rangos.map(r => [strToDn(r[0]), strToDn(r[1])]);
+  return [[strToDn(S.meta.validFrom), S.lastDn]];   // cargas anteriores a esta versión: se asume un solo período seguido
+}
+function unirRangos(rs) {
+  const o = rs.map(r => [r[0], r[1]]).sort((a, b) => a[0] - b[0]), out = [];
+  for (const r of o) { const u = out[out.length - 1]; if (u && r[0] <= u[1] + 1) u[1] = Math.max(u[1], r[1]); else out.push(r); }
+  return out;
+}
+// Cómo quedarían los períodos al sumar este archivo, qué huecos habría entre ellos, y desde qué lunes se puede pronosticar
+// (solo cuenta el último período seguido: lo anterior a un hueco no se mezcla, porque los días que faltan no son días sin ventas).
+function calcRangos(p) {
+  const rangos = unirRangos([...rangosCargados(), [p.minD, p.maxD]]), huecos = [];
+  for (let i = 1; i < rangos.length; i++) huecos.push([rangos[i - 1][1] + 1, rangos[i][0] - 1]);
+  const ult = rangos[rangos.length - 1];
+  return { rangos, huecos, validFromDn: ult[0] + ((7 - dowOf(ult[0])) % 7) };
+}
+const fmtRango = r => r[0] === r[1] ? dnFmt(r[0]) : 'del ' + dnFmt(r[0]) + ' al ' + dnFmt(r[1]);
 async function commitSales(p, setProg) {
   const had = !!S.meta && !S.meta.virtual, p0 = p.minD - dowOf(p.minD);
   const oldStart = had ? S.start : p0, newStart = Math.min(oldStart, p0), newLast = Math.max(had ? S.lastDn : p.maxD, p.maxD);
   const newND = newLast - newStart + 1, off = oldStart - newStart, dd = {};
   for (const m of S.master) { dd[m.cod] = {}; const old = S.dd[m.cod] || {}; for (const s in old) { const a = new Float64Array(newND); a.set(old[s], off); dd[m.cod][s] = a; } }
-  const i0 = p.minD - newStart, i1 = p.maxD - newStart;
-  for (const c in dd) { if (!p.agg.has(c)) continue; for (const s in dd[c]) for (let i = i0; i <= i1; i++) dd[c][s][i] = 0; } // solo los productos que vienen en el archivo: así se pueden cargar las ventas por partes sin pisarse
-  for (const [cod, stores] of p.agg) for (const [s, days] of stores) { if (!dd[cod][s]) dd[cod][s] = new Float64Array(newND); for (const [d, q] of days) dd[cod][s][d - newStart] += q; }
-  const meta = Object.assign({}, had ? S.meta : {}), fm = p.minD + ((7 - dowOf(p.minD)) % 7);
+  // La celda (producto × sucursal × día) que viene en el archivo reemplaza a la que había; lo demás no se toca. Así se pueden cargar varios
+  // archivos en cualquier orden, y volver a cargar uno no duplica nada.
+  let unid = 0; const sucs = new Set();
+  for (const [cod, stores] of p.agg) for (const [s, days] of stores) { sucs.add(s); if (!dd[cod][s]) dd[cod][s] = new Float64Array(newND); for (const [d, q] of days) { dd[cod][s][d - newStart] = q; unid += q; } }
+  const meta = Object.assign({}, had ? S.meta : {}), r = calcRangos(p);
   meta.startWeek = dnToStr(newStart);
-  meta.validFrom = had ? dnToStr(Math.min(strToDn(S.meta.validFrom), fm)) : dnToStr(fm);
+  meta.validFrom = dnToStr(r.validFromDn);
   meta.lastDate = dnToStr(newLast);
+  meta.rangos = r.rangos.map(x => [dnToStr(x[0]), dnToStr(x[1])]);
   meta.updatedAt = dnToStr(todayDn());
   meta.lastImport = { desde: dnToStr(p.minD), hasta: dnToStr(p.maxD), filas: p.n, ignorados: [...p.ignored.keys()].slice(0, 60) };
+  const reg = { en: new Date().toISOString(), por: (S.user && S.user.nombre) || '', archivo: p.file || '', formato: p.matriz ? 'por día' : 'una fila por venta', desde: dnToStr(p.minD), hasta: dnToStr(p.maxD), filas: p.n, productos: p.agg.size, sucursales: sucs.size, unidades: Math.round(unid), ignorados: p.ignored.size };
+  S.cargas = [reg, ...(S.cargas || [])].slice(0, 200);
   S.meta = meta; S.dd = dd; S.sinVentas = false; setup(); S.ready = true; render();
   if (S.db) {
     // solo los productos con ventas (los que vienen en el archivo y los que ya tenían datos): el resto no necesita documento
     const aGuardar = S.master.map(m => m.cod).filter(c => p.agg.has(c) || Object.values(S.dd[c] || {}).some(a => a.some(x => x !== 0)));
     await saveDays(aGuardar, setProg);
     await saveMeta();   // el resumen al final: si se corta a mitad de camino, no queda apuntando a datos que no se guardaron
+    await saveCargas();
   }
 }
 function defaultGroup(prov, cod) { return prov || 'SIN PROVEEDOR'; }
@@ -1749,16 +1776,57 @@ function dataStatusHtml() {
   ${S.meta.lastImport ? `<div class="muted small">Última importación: ${S.meta.lastImport.desde} a ${S.meta.lastImport.hasta}, ${nf(S.meta.lastImport.filas)} filas de productos congelados.${S.meta.lastImport.ignorados && S.meta.lastImport.ignorados.length ? ' Se ignoraron ' + S.meta.lastImport.ignorados.length + ' códigos que no están en la base de congelados (ej. ' + S.meta.lastImport.ignorados.slice(0, 6).join(', ') + ').' : ''}</div>` : ''}
   ${notas.length ? `<details class="card"><summary style="cursor:pointer;font-weight:600">Datos de la base de productos que corregí o conviene revisar (${notas.length})</summary><ul class="plain small">${notas.map(m => `<li><b>${esc(m.nombre)}</b> (${esc(m.cod)}): ${esc(m.nota)}</li>`).join('')}</ul></details>` : ''}`;
 }
+/* ---- tarjeta "Ventas cargadas": qué hay en el sistema, y el historial de lo que se fue pegando ---- */
+function resumenSemanal(n) {
+  const rs = rangosCargados(), cubierto = dn => rs.some(r => dn >= r[0] && dn <= r[1]), nW = Math.ceil(S.nD / 7), out = [];
+  for (let w = Math.max(0, nW - n); w < nW; w++) {
+    const a = w * 7, b = Math.min(S.nD, a + 7); let dias = 0, prods = 0, u = 0;
+    for (let d = a; d < b; d++) if (cubierto(S.start + d)) dias++;
+    for (const c in S.dd) { let t = 0; for (const s in S.dd[c]) { const x = S.dd[c][s]; for (let d = a; d < b; d++) t += x[d]; } if (t) { prods++; u += t; } }
+    out.push({ lunes: S.start + a, dias, prods, u });
+  }
+  return out;
+}
+function ventasCargadasHtml() {
+  if (!S.meta || S.meta.virtual) return '<div class="card"><h3>Ventas cargadas</h3><div class="muted small" style="margin-top:6px">Todavía no hay ventas cargadas. Cuando cargues archivos vas a ver acá qué períodos hay, cuántos productos y el historial de cada carga.</div></div>';
+  const rs = rangosCargados(), huecos = []; for (let i = 1; i < rs.length; i++) huecos.push([rs[i - 1][1] + 1, rs[i][0] - 1]);
+  let conVentas = 0; for (const c in S.dd) if (Object.values(S.dd[c]).some(a => a.some(x => x !== 0))) conVentas++;
+  const sem = resumenSemanal(14).reverse(), cargas = S.cargas || [], fila = g => `<tr><td>${esc(fmtFechaHora(g.en))}</td><td>${esc(g.archivo || '—')}</td><td>${esc(g.formato || '')}</td><td>${fmtRango([strToDn(g.desde), strToDn(g.hasta)])}</td><td class="n">${nf(g.filas)}</td><td class="n">${nf(g.productos)}</td><td class="n">${nf(g.unidades)}</td><td class="n">${nf(g.ignorados)}</td><td>${esc(g.por || '')}</td></tr>`;
+  return `<div class="card"><div class="flex" style="justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><h3 style="margin:0">Ventas cargadas</h3>${puedeAprobar() ? '<button class="btn" id="bReset" style="color:var(--crit)">Reiniciar ventas…</button>' : '<span class="muted small">Solo Compras y Logística pueden reiniciar las ventas.</span>'}</div>
+    <div class="muted small" style="margin:8px 0">${nf(conVentas)} productos con ventas · ${nf(S.storeList.length)} sucursales · ${rs.map(fmtRango).join(' y ')}.</div>
+    ${huecos.length ? `<div class="note warn" style="margin:8px 0"><b>Faltan datos:</b> ${huecos.map(fmtRango).join(' y ')}. Esos días no se toman como cero: el pronóstico usa solo desde el <b>${dnFmt(S.start + 7 * S.vf)}</b> hasta que cargues lo que falta.</div>` : ''}
+    <h4 style="margin:14px 0 6px">Semana por semana (las últimas ${sem.length})</h4>
+    <div class="tw" style="max-height:none"><table><thead><tr><th>Semana del</th><th class="n">Días con datos</th><th class="n">Productos con ventas</th><th class="n">Unidades</th></tr></thead><tbody>${sem.map(s => `<tr><td>${dnFmt(s.lunes)}</td><td class="n">${s.dias} de 7${s.dias < 7 ? ' <span class="chip warn">incompleta</span>' : ''}</td><td class="n">${nf(s.prods)}</td><td class="n">${nf(s.u)}</td></tr>`).join('')}</tbody></table></div>
+    <h4 style="margin:16px 0 6px">Lo que fuiste cargando (${cargas.length})</h4>
+    ${cargas.length ? `<div class="tw" style="max-height:340px"><table><thead><tr><th>Cargado el</th><th>Archivo</th><th>Formato</th><th>Período</th><th class="n">Filas</th><th class="n">Productos</th><th class="n">Unidades</th><th class="n">Ignorados</th><th>Por</th></tr></thead><tbody>${cargas.map(fila).join('')}</tbody></table></div>` : '<div class="muted small">No hay historial: estas ventas se cargaron antes de que existiera este registro. Desde ahora cada archivo queda anotado.</div>'}</div>`;
+}
+async function reiniciarVentas() {
+  if (!puedeAprobar()) return;
+  let n = 0; for (const c in S.dd) if (Object.values(S.dd[c]).some(a => a.some(x => x !== 0))) n++;
+  if (!confirm(`¿Reiniciar las ventas?\n\nSe borran TODAS las ventas cargadas (${n} productos, del ${dnFmt((rangosCargados()[0] || [S.start])[0])} al ${dnFmt(S.lastDn)}) y el historial de cargas.\n\nNo se toca el stock, los proveedores, los lead times, las solicitudes ni las órdenes.\nDespués tenés que volver a cargar los archivos.`)) return;
+  const b = $('#bReset'); if (b) { b.disabled = true; b.textContent = 'Borrando…'; }
+  try {
+    if (S.db) {
+      const ids = (await S.db.collection('dias').get()).docs.map(d => d.id);
+      await S.db.deleteIds(ids, p => { if (b) b.textContent = 'Borrando… ' + Math.round(p * 100) + '%'; });
+      await S.db.doc('cfg/meta').delete(); await S.db.doc('cfg/cargas').delete();
+    }
+    S.cargas = []; S.dd = {}; S.master.forEach(m => { S.dd[m.cod] = {}; });
+    S.meta = metaVirtual(); S.sinVentas = true; S.ui.poOnly = false; setup(); S.ready = true; invalidate(); render();
+    toast('Ventas reiniciadas. Ya podés cargar los archivos de nuevo.');
+  } catch (e) { toast('Error al reiniciar: ' + (e.message || e.code || e), 10000); if (b) { b.disabled = false; b.textContent = 'Reiniciar ventas…'; } }
+}
 function viewDatos(main, empty) {
   const stDate = S.stock ? S.stock.date : dnToStr(todayDn()), nk = Object.keys(S.notes || {}).sort().reverse();
   main.innerHTML = `
   <section>${heroHead('Datos', 'Cargá y actualizá la información', 'El stock y el catálogo se leen de tu Firebase. Las ventas las pegás desde Excel una vez por semana. Todo lo que configurás queda guardado en Firebase.')}</section>
   ${S.sinVentas ? '<div class="note"><b>Falta un solo paso:</b> pegá las ventas (abajo). El catálogo, los proveedores y el stock ya se leen solos del depósito.</div>' : ''}
   ${dataStatusHtml()}
+  ${ventasCargadasHtml()}
   <div class="grid2">
     <div class="card"><h3>1. Ventas</h3>
-      <div class="muted small" style="margin:6px 0 12px">Subí el export “Resumen de ventas por artículo” (Excel o CSV) con una fila por producto, sucursal y día. Los <b>días</b> que vengan en el archivo reemplazan a los ya cargados; los demás se conservan. Podés subir todo el año o solo las últimas semanas.</div>
-      <div class="drop" id="dzV"><div class="dz-msg">Arrastrá el archivo acá o elegilo</div><input type="file" accept=".xlsx,.xls,.csv,.txt,.tsv" aria-label="Archivo de ventas" style="margin-top:8px"></div><div class="hint" style="margin-top:6px">Acepta el export por día (una columna “Kg Vendidos” por fecha, con el artículo como “código - nombre”, que se cruza por <b>código interno</b>) y el detalle largo (una fila por venta). Si el sistema avisa que el export superó el volumen permitido, exportalo por partes y cargá cada parte: se suman sin pisarse.</div>
+      <div class="muted small" style="margin:6px 0 12px">Subí el export “Resumen de ventas por artículo” (Excel o CSV). <b>Lee estas columnas:</b> <b>Cód. artículo</b> (el código interno), <b>Cantidad venta</b>, <b>Desc. sucursal</b> y <b>Fecha</b>. <b>Descripción</b> y <b>Nombre proveedor</b> se ignoran: el proveedor sale de tu Firebase. Se saltean las filas de totales. <b>Podés cargar varios archivos, uno después del otro y en cualquier orden:</b> lo que trae cada uno reemplaza a lo ya cargado para esos mismos productos, sucursales y días, y lo demás no se toca. Repetir un archivo no duplica nada.</div>
+      <div class="drop" id="dzV"><div class="dz-msg">Arrastrá el archivo acá o elegilo</div><input type="file" accept=".xlsx,.xls,.csv,.txt,.tsv" aria-label="Archivo de ventas" style="margin-top:8px"></div><div class="hint" style="margin-top:6px">También acepta el export por día (una columna “Kg Vendidos” por fecha). Si el sistema avisa que el export superó el volumen permitido, exportalo por partes y cargá cada parte.</div>
       <details style="margin-top:10px"><summary class="small" style="cursor:pointer">O pegar desde Excel</summary><textarea id="pV" placeholder="Cód. artículo\tDescripción\tCantidad venta\tDesc. sucursal\tFecha"></textarea><button class="btn sm" id="bPV" style="margin-top:6px">Leer texto pegado</button></details>
       <div id="pendV" style="margin-top:12px"></div></div>
     ${fbCardHtml()}
@@ -1777,11 +1845,12 @@ function viewDatos(main, empty) {
   dropZone('dzM', onMasterRows, 'Arrastrá el CSV acá o elegilo');
   $('#bBk').onclick = () => { const dias = {}; S.master.forEach(m => dias[m.cod] = ddToPlain(m.cod)); saveFile('backup_compras_' + dnToStr(todayDn()) + '.json', JSON.stringify({ meta: S.meta, master: S.master, params: S.params, stock: S.stock, notas: S.notes, ordenes: S.orders, dias })); };
   $$('[data-delnote]', main).forEach(b => b.onclick = () => { delete S.notes[b.dataset.delnote]; saveNotes(); viewDatos(main); });
+  if ($('#bReset')) $('#bReset').onclick = reiniciarVentas;
   fbBind(); renderPending();
 }
 function renderPending() {
   const v = PEND.ventas, s = PEND.stock, m = PEND.master;
-  if ($('#pendV')) $('#pendV').innerHTML = v ? `<div class="note"><b>${esc(v.file)}</b>: ${nf(v.n)} filas de ventas del ${dnFmt(v.minD)} al ${dnFmt(v.maxD)} (${nf(v.nDays)} días${v.partialWeek ? ', la última semana incompleta: hasta ' + DOWN[dowOf(v.maxD)] : ''}).${v.ignored.size ? ` ${nf(v.ignored.size)} códigos no están en el catálogo y se ignoran${ignoradosTop(v)}.` : ''}${v.bad ? ` ${v.bad} filas sin dato válido (totales o vacías) se saltean.` : ''}${v.overlap ? `<br>Reemplaza esos ${nf(v.overlap)} días solo para los ${nf(v.agg.size)} productos que vienen en el archivo; los demás no se tocan.` : ''}${v.gap ? `<br><b>Atención:</b> faltan ${v.gap} días entre lo ya cargado (hasta el ${dnFmt(S.lastDn)}) y este archivo; quedarán en cero.` : ''}${v.missing.length ? `<br><b>Atención:</b> ${v.missing.length} días del rango no tienen ninguna venta en el archivo (ej. ${v.missing.slice(0, 4).map(dnFmtS).join(', ')}).` : ''}${v.shorter ? '<br><b>Atención:</b> el archivo termina antes de la última fecha cargada (' + dnFmt(S.lastDn) + ').' : ''}${v.ciDesdePedidos ? `<br>Los productos de Firebase no traían el código interno: lo tomé de los pedidos (${nf(v.ciDesdePedidos)} productos).` : ''}${v.truncado ? `<br><b>⚠ Archivo incompleto:</b> trae el aviso “Exported data exceeded the allowed volume”: el sistema cortó la exportación y faltan datos${v.familias && v.familias.length ? ` (las familias llegan hasta ${esc(v.familias[v.familias.length - 1])})` : ''}. Exportalo por partes —por familia o con menos días— y cargá cada parte: se suman sin pisarse.` : ''}${v.maxD < todayDn() - 7 ? `<br><b>Ojo:</b> las ventas llegan hasta el ${dnFmt(v.maxD)}, hace ${todayDn() - v.maxD} días: el pronóstico parte de datos viejos. Cargá también las ventas más recientes.` : ''}</div><div class="flex" style="margin-top:8px"><button class="btn pri" id="okV">Confirmar y guardar</button><button class="btn" id="noV">Cancelar</button></div><div class="pbar" id="pbV" style="margin-top:8px;display:none"><i></i></div>` : '';
+  if ($('#pendV')) $('#pendV').innerHTML = v ? `<div class="note"><b>${esc(v.file)}</b>: ${nf(v.n)} filas de ventas del ${dnFmt(v.minD)} al ${dnFmt(v.maxD)} (${nf(v.nDays)} días${v.partialWeek ? ', la última semana incompleta: hasta ' + DOWN[dowOf(v.maxD)] : ''}).${v.ignored.size ? ` ${nf(v.ignored.size)} códigos no están en el catálogo y se ignoran${ignoradosTop(v)}.` : ''}${v.bad ? ` ${v.bad} filas sin dato válido (totales o vacías) se saltean.` : ''}${v.overlap ? `<br>Hay ${nf(v.overlap)} días en común con lo ya cargado: los datos de este archivo reemplazan a los anteriores para esos mismos productos, sucursales y días; lo demás no se toca.` : ''}${v.huecos && v.huecos.length ? `<br><b>Atención:</b> con este archivo quedarían sin datos ${v.huecos.map(fmtRango).join(' y ')}. Esos días no se toman como cero: mientras falten, el pronóstico usa solo desde el ${dnFmt(v.validFromDn)}. Cargá también ese período cuando lo tengas.` : ''}${v.missing.length ? `<br><b>Atención:</b> ${v.missing.length} días del rango no tienen ninguna venta en el archivo (ej. ${v.missing.slice(0, 4).map(dnFmtS).join(', ')}).` : ''}${v.shorter && !(v.huecos && v.huecos.length) ? '<br>Este archivo termina antes de la última fecha cargada (' + dnFmt(S.lastDn) + '): se suma a lo que ya hay.' : ''}${v.ciDesdePedidos ? `<br>Los productos de Firebase no traían el código interno: lo tomé de los pedidos (${nf(v.ciDesdePedidos)} productos).` : ''}${v.truncado ? `<br><b>⚠ Archivo incompleto:</b> trae el aviso “Exported data exceeded the allowed volume”: el sistema cortó la exportación y faltan datos${v.familias && v.familias.length ? ` (las familias llegan hasta ${esc(v.familias[v.familias.length - 1])})` : ''}. Exportalo por partes —por familia o con menos días— y cargá cada parte: se suman sin pisarse.` : ''}${v.maxD < todayDn() - 7 ? `<br><b>Ojo:</b> las ventas llegan hasta el ${dnFmt(v.maxD)}, hace ${todayDn() - v.maxD} días: el pronóstico parte de datos viejos. Cargá también las ventas más recientes.` : ''}</div><div class="flex" style="margin-top:8px"><button class="btn pri" id="okV">Confirmar y guardar</button><button class="btn" id="noV">Cancelar</button></div><div class="pbar" id="pbV" style="margin-top:8px;display:none"><i></i></div>` : '';
   if ($('#pendS')) $('#pendS').innerHTML = s ? (() => { const keep = { stock: S.stock, map: S.stockMap, mis: S.stockMissing, unk: S.stockUnknown, dn: S.stockDn }; S.stock = s.data; buildStock(); const info = { unk: S.stockUnknown.slice(), mis: S.stockMissing.length, n: Object.keys(S.stockMap).length, zero: Object.values(S.stockMap).every(x => x === 0) }; S.stock = keep.stock; S.stockMap = keep.map; S.stockMissing = keep.mis; S.stockUnknown = keep.unk; S.stockDn = keep.dn; return `<div class="note"><b>${esc(s.file)}</b>: ${s.data.rows.length} filas, ${info.n} productos reconocidos.${info.unk.length ? ` <b>Códigos que no están en la base:</b> ${info.unk.slice(0, 8).map(esc).join(', ')}.` : ''}${info.mis ? ` ${info.mis} productos de la base no están en el archivo (se toman con stock 0).` : ''}${info.zero ? ' <b>Todas las cantidades son 0.</b>' : ''}</div><div class="flex" style="margin-top:8px"><button class="btn pri" id="okS">Usar este stock</button><button class="btn" id="noS">Cancelar</button></div>`; })() : '';
   if ($('#pendM')) $('#pendM').innerHTML = m ? `<div class="note"><b>${esc(m.file)}</b>: ${m.items.length} productos, ${[...new Set(m.items.map(x => x.prov))].length} proveedores. ${m.items.filter(x => !S.mm[x.cod]).length} códigos nuevos.</div><div class="flex" style="margin-top:8px"><button class="btn pri" id="okM">Reemplazar base de productos</button><button class="btn" id="noM">Cancelar</button></div>` : '';
   $('#okV') && ($('#okV').onclick = async () => { const bar = $('#pbV'); bar.style.display = ''; $('#okV').disabled = true; $('#okV').textContent = 'Guardando…'; try { await commitSales(v, p => { bar.firstChild.style.width = Math.round(p * 100) + '%'; $('#okV').textContent = 'Guardando… ' + Math.round(p * 100) + '%'; }); PEND.ventas = null; toast('Ventas guardadas. Datos hasta el ' + dnFmt(S.lastDn) + '.'); render(); } catch (e) { toast('Error al guardar: ' + (e.message || e.code || e) + '. Si la pantalla ya muestra las ventas, no se guardaron: volvé a cargar el archivo.', 12000); $('#okV').disabled = false; $('#okV').textContent = 'Confirmar y guardar'; } });
@@ -1826,7 +1895,7 @@ function viewTeoria(main) {
     <ol class="plain"><li><b>Mide el nivel de ventas actual</b> de cada producto a partir de las últimas semanas.</li><li><b>Lo ajusta por estacionalidad</b> comparando con el mismo período del año anterior.</li><li><b>Lo reparte por día de la semana</b> y lo proyecta desde la fecha del stock.</li><li><b>Calcula con cuánto stock llegás cuando llega el proveedor</b> (stock de hoy menos lo que se vende hasta entonces).</li><li><b>Pide lo que falta</b> para cubrir los días de abastecimiento que elegiste, contados desde la llegada, redondeado a cajas o unidades.</li></ol>
     <p>Nada es una caja negra. <b>Dónde ver los cálculos:</b> en la Orden de compra, pasá el mouse por el título de cada columna para ver qué es, y tocá cualquier fila (o “ver cálculo”) para ver los 6 pasos de ese producto con sus números. Acá, abajo de todo, hay el mismo cálculo con un producto de ejemplo, y cada sección explica una fórmula.</p>`)}
   ${sec('t-datos', 'Datos de entrada', kv([
-    ['Ventas diarias', 'Se acepta el export por día (una columna de “Kg Vendidos” por fecha, un renglón por artículo y sucursal) o el detalle largo (una fila por producto, sucursal y día). Se guardan día por día; las semanas, los promedios y los perfiles se calculan a partir de ahí. Los días del archivo nuevo reemplazan a los ya cargados, pero solo para los productos que vienen en ese archivo: podés volver a subir la misma semana sin duplicar, y cargar las ventas por partes (por familia, por ejemplo) sin que una parte pise a la otra.'],
+    ['Ventas diarias', 'Cada archivo que cargás se suma a lo anterior: las celdas (producto × sucursal × día) que trae reemplazan a las ya cargadas, y lo demás no se toca. El módulo recuerda qué períodos cargaste; los días que nunca cargaste no se toman como cero. Se acepta el export por día (una columna de “Kg Vendidos” por fecha, un renglón por artículo y sucursal) o el detalle largo (una fila por producto, sucursal y día). Se guardan día por día; las semanas, los promedios y los perfiles se calculan a partir de ahí. Los días del archivo nuevo reemplazan a los ya cargados, pero solo para los productos que vienen en ese archivo: podés volver a subir la misma semana sin duplicar, y cargar las ventas por partes (por familia, por ejemplo) sin que una parte pise a la otra.'],
     ['Códigos ajenos', 'Los productos se identifican por su código interno (el “33145” de “33145 - ACEITE OLIVA…”), que se cruza con el campo código interno de cada producto de Firebase; también se aceptan códigos de barras. Los que no están en el catálogo se ignoran (el aviso muestra los de más venta). Las filas de totales o sin fecha se saltean. Las devoluciones (cantidades negativas) se restan.'],
     ['Base de productos', 'Define proveedor, si se compra por caja, unidades por caja y kilos por unidad. El proveedor de cada producto sale siempre de esta base.'],
     ['Stock', 'Cantidad física por producto, en cajas o en unidades. Se convierte a unidades de venta y, si un código aparece dos veces, se suma. Las ventas se proyectan desde la fecha del stock.'],
@@ -2042,6 +2111,7 @@ async function boot() {
     S.meta = meA.exists ? JSON.parse(JSON.stringify(meA.data())) : null;
     S.stock = stockDe(prods);
     S.notes = nA.exists ? JSON.parse(JSON.stringify(nA.data().items || {})) : {};
+    S.cargas = []; try { const cg = await S.db.doc('cfg/cargas').get(); if (cg.exists) S.cargas = JSON.parse(JSON.stringify(cg.data().items || [])); } catch (e) { /* sin historial */ }
     S.dd = {}; ds.docs.forEach(d => { const x = d.data(); S.dd[x.cod] = JSON.parse(JSON.stringify(x.s || {})); });
     S.master.forEach(m => { if (!S.dd[m.cod]) S.dd[m.cod] = {}; }); // productos nuevos (o sin ventas): serie vacía
     S.orders = os.docs.map(d => JSON.parse(JSON.stringify(d.data()))).sort((a, b) => (b.fecha + b.num).localeCompare(a.fecha + a.num));
@@ -2350,6 +2420,7 @@ try {
       set: async v => { const c = JSON.parse(JSON.stringify(v)); c._col = path.split('/')[0]; await setDoc(doc(fs, COL, idOf(path)), c); },
       delete: async () => deleteDoc(doc(fs, COL, idOf(path)))
     }),
+    deleteIds: async (ids, onp) => { const N = 400; for (let i = 0; i < ids.length; i += N) { const b = writeBatch(fs); ids.slice(i, i + N).forEach(id => b.delete(doc(fs, COL, id))); await b.commit(); onp && onp(Math.min(ids.length, i + N) / ids.length); } },
     // varios documentos de una sola vez: lotes de 100 (el límite de Firebase es 500 por lote)
     setMany: async (items, onp) => { const N = 100; for (let i = 0; i < items.length; i += N) { const b = writeBatch(fs); items.slice(i, i + N).forEach(([path, v]) => { const c = JSON.parse(JSON.stringify(v)); c._col = path.split('/')[0]; b.set(doc(fs, COL, idOf(path)), c); }); await b.commit(); onp && onp(Math.min(items.length, i + N) / items.length); } },
     collection: name => ({ get: async () => { const s = await getDocs(query(collection(fs, COL), where('_col', '==', name))); return { docs: s.docs.map(d => ({ id: d.id, data: () => d.data() })) }; } })
