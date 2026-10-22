@@ -217,6 +217,32 @@ th.g1{border-top:4px solid var(--c6)}th.g2{border-top:4px solid var(--c4)}th.g3{
 .sup .num{font-family:var(--f-mono);font-weight:600;font-size:17px}
 .sup .cov{width:140px;min-width:0}
 .provrow{display:flex;gap:10px;flex-wrap:wrap}
+.pp-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0 4px;position:relative;z-index:30}   /* por encima de los bloques de abajo: si no, el desplegable queda tapado */
+.pp{position:relative;min-width:0;max-width:100%}
+.pp-btn{display:inline-flex;align-items:center;gap:10px;min-width:min(420px,100%);max-width:100%;border:1.5px solid var(--line);background:var(--surface);border-radius:14px;padding:11px 16px;font-weight:700;font-size:16px;text-align:left;transition:border-color .2s,box-shadow .2s}
+.pp-btn:hover{border-color:var(--accent)}
+.pp-btn[aria-expanded="true"]{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+.pp-sel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-flex;align-items:center;gap:8px}
+.pp-car{color:var(--muted);font-size:13px}
+.pp .n{font-family:var(--f-mono);font-size:13px;border-radius:99px;padding:1px 9px;background:var(--bg2);color:var(--ink2);font-weight:600}
+.pp .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--crit);flex:none}
+.pp-pop{position:absolute;z-index:40;top:calc(100% + 8px);left:0;width:min(520px,92vw);background:var(--surface);border:1.5px solid var(--line);border-radius:18px;box-shadow:0 24px 60px rgba(0,0,0,.18);padding:12px}
+.pp-pop[hidden],.pp-it[hidden],.pp-empty[hidden]{display:none}
+.pp-q{width:100%;margin-bottom:8px}
+.pp-list{max-height:min(360px,55vh);overflow:auto;display:flex;flex-direction:column;gap:2px}
+.pp-it{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:9px 12px;border-radius:10px;border:0;background:none;font-size:15px;font-weight:600}
+.pp-it:hover,.pp-it.act{background:var(--bg2)}
+.pp-it[aria-selected="true"]{background:var(--accent-soft);color:var(--accent)}
+.pp-nm{flex:1;min-width:0}
+.pp-empty{padding:14px;color:var(--muted);font-size:14px}
+.pp-nav{width:44px;height:44px;padding:0!important;display:inline-grid;place-items:center;border-radius:12px;font-size:14px}
+.pp-nav:disabled{opacity:.4;cursor:default}
+.st-bar{display:flex;gap:10px 14px;align-items:center;flex-wrap:wrap;margin:10px 0;position:relative;z-index:30}
+.st-bar input[type=text]{min-width:min(280px,100%)}
+.st-t th.n{font-family:var(--f-body);letter-spacing:0;text-transform:none;font-size:13px;font-weight:700;color:var(--ink)}
+.st-t td.n{font-family:var(--f-body);font-size:14px;font-weight:500;white-space:nowrap}
+.st-t td.n b{font-weight:700}
+.st-t .sub{display:block;font-size:11.5px;color:var(--muted)}
 .pchip{display:inline-flex;gap:10px;align-items:center;border:1.5px solid var(--line);background:var(--surface);border-radius:999px;padding:9px 18px;font-weight:600;font-size:15.5px;transition:all .25s var(--ease)}
 .pchip:hover{border-color:var(--accent);transform:translateY(-2px)}
 .pchip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
@@ -827,7 +853,7 @@ const vmult = (m, u) => unitMult(m, u);
 const decOf = r => r.pm > 1 ? 1 : 0;
 const storeColor = s => `var(--c${(Math.max(0, S.storeList.indexOf(s)) % 10) + 1})`;
 
-const TABS = [['home', 'Panorama'], ['orden', 'Orden de compra'], ['sol', 'Solicitudes'], ['tend', 'Tendencias'], ['fc', 'Pronóstico'], ['ana', 'Análisis'], ['prov', 'Proveedores'], ['cat', 'Catálogo'], ['datos', 'Datos'], ['teoria', 'Teoría']];
+const TABS = [['home', 'Panorama'], ['orden', 'Orden de compra'], ['stock', 'Stock'], ['sol', 'Solicitudes'], ['tend', 'Tendencias'], ['fc', 'Pronóstico'], ['ana', 'Análisis'], ['prov', 'Proveedores'], ['cat', 'Catálogo'], ['datos', 'Datos'], ['teoria', 'Teoría']];
 function renderTabs() {
   const nav = $('#tabs');
   if (!nav.dataset.built) {
@@ -847,16 +873,16 @@ window.addEventListener('resize', () => { moveInd(); });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(moveInd);
 function renderStatus() {
   if (!S.ready) { $('#status').innerHTML = ''; return; }
-  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 22/10 · varios archivos</span>`; return; }
+  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 22/10 · stock y buscador</span>`; return; }
   const part = isPartial() ? `<span class="pill warn" title="La última semana tiene datos hasta el ${dnFmt(S.lastDn)}; se completa con el perfil por día de la semana">semana en curso parcial</span>` : '';
-  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 22/10 · varios archivos</span>${part}`;
+  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 22/10 · stock y buscador</span>${part}`;
 }
 function render(anim) {
   renderTabs(); renderStatus(); badgeSol();
   const main = $('#main');
   if (S.ui.tab === 'cat') { viewCat(main); countUp(main); return; }
   if (!S.ready || !S.master.length || !S.meta) { main.innerHTML = ''; viewDatos(main, true); return; }
-  ({ home: viewHome, orden: viewOrden, sol: viewSol, tend: viewTend, fc: viewFc, ana: viewAna, prov: viewProv, cat: viewCat, datos: viewDatos, teoria: viewTeoria })[S.ui.tab](main);
+  ({ home: viewHome, orden: viewOrden, stock: viewStock, sol: viewSol, tend: viewTend, fc: viewFc, ana: viewAna, prov: viewProv, cat: viewCat, datos: viewDatos, teoria: viewTeoria })[S.ui.tab](main);
   if (S.meta && S.meta.virtual && S.ui.tab !== 'datos') { main.insertAdjacentHTML('afterbegin', '<div class="note warn"><b>Todavía no hay ventas cargadas.</b> Ves el stock y los parámetros de cada proveedor; el pronóstico y el pedido sugerido se calculan cuando pegás las ventas en <a href="#" id="irDatos" style="font-weight:700">Datos</a>.</div>'); const g = $('#irDatos'); if (g) g.onclick = e => { e.preventDefault(); S.ui.tab = 'datos'; render(true); window.scrollTo({ top: 0 }); }; }
   if (anim) [...main.children].forEach((el, i) => { el.classList.add('rise'); el.style.setProperty('--i', i); });
   countUp(main);
@@ -1162,6 +1188,93 @@ function stockPanelHtml(r, ul) {
     r.nPre ? `<tr><td colspan="3"><b>Descuento hasta la llegada (${r.nPre} ${r.nPre === 1 ? 'envío' : 'envíos'})</b></td><td class="n"><b>${nf(r.diasPre, 0)} días</b></td><td class="n"><b>${nf(r.D_LT, 1)} u.</b></td><td class="n"><b>${nf(r.D_LT / r.pm, d)}</b></td></tr>` : `<tr><td colspan="6" class="muted">Ningún envío sale hasta que llega el proveedor: el stock actual no se descuenta.</td></tr>`}${
     Array.from({ length: Math.max(1, Math.ceil(r.nEnv - 1e-9)) }, (_, j) => j).filter(j => j * r.frec < r.N - 1e-9).map(j => { const dd0 = Math.round(r.startPost + j * r.frec), days = Math.min(r.frec, r.N - j * r.frec), v = demand(r.m.cod, dd0, days); return `<tr><td>Envío ${r.nPre + j + 1}</td><td>${dnLong(dd0)}</td><td>este pedido</td><td class="n">${nf(days, 0)} días</td><td class="n">${nf(v, 1)} u.</td><td class="n"><b>${nf(v / r.pm, d)}</b></td></tr>`; }).join('')}<tr><td colspan="3"><b>A cubrir con el pedido (${nf(r.nEnv, 1)} envíos)</b></td><td class="n"><b>${nf(r.N, 0)} días</b></td><td class="n"><b>${nf(r.D_N, 1)} u.</b></td><td class="n"><b>${nf(r.D_N / r.pm, d)}</b></td></tr></tbody></table></div>`;
 }
+/* ================= selector de proveedor con buscador ================= */
+const sinAcentos = s => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+// items: [{ p, label?, n?, urg? }]; sel: proveedor elegido ('' = todos). Un botón que abre una lista con buscador (sirve para 80 proveedores).
+function provPickerHtml(id, items, sel, vacio) {
+  const cur = items.find(x => x.p === sel);
+  const nombre = x => x.label || x.p;
+  return `<div class="pp" id="${id}"><button type="button" class="pp-btn" aria-haspopup="listbox" aria-expanded="false"><span class="pp-sel">${cur ? (cur.urg ? '<span class="dot"></span>' : '') + esc(nombre(cur)) : esc(vacio || 'Elegí un proveedor')}</span>${cur && cur.n != null ? `<span class="n">${cur.n}</span>` : ''}<span class="pp-car">▾</span></button>
+    <div class="pp-pop" hidden><input type="text" class="pp-q" placeholder="Buscar proveedor…" aria-label="Buscar proveedor" autocomplete="off">
+      <div class="pp-list" role="listbox">${items.map(x => `<button type="button" role="option" class="pp-it" data-p="${esc(x.p)}" data-l="${esc(nombre(x))}" aria-selected="${x.p === sel}">${x.urg ? '<span class="dot"></span>' : ''}<span class="pp-nm">${esc(nombre(x))}</span>${x.n != null ? `<span class="n">${x.n}</span>` : ''}</button>`).join('')}</div>
+      <div class="pp-empty" hidden>Ningún proveedor coincide</div></div></div>`;
+}
+function provPickerBind(id, onPick) {
+  const el = $('#' + id); if (!el) return;
+  const btn = $('.pp-btn', el), pop = $('.pp-pop', el), q = $('.pp-q', el), vacio = $('.pp-empty', el), items = $$('.pp-it', el);
+  let act = -1;
+  const visibles = () => items.filter(x => !x.hidden);
+  const marcar = i => { const v = visibles(); v.forEach(x => x.classList.remove('act')); act = Math.max(-1, Math.min(i, v.length - 1)); if (v[act]) { v[act].classList.add('act'); v[act].scrollIntoView({ block: 'nearest' }); } };
+  const filtrar = () => { const t = sinAcentos(q.value).split(/\s+/).filter(Boolean); items.forEach(x => { const n = sinAcentos(x.dataset.l); x.hidden = !t.every(w => n.includes(w)); }); vacio.hidden = visibles().length > 0; marcar(visibles().length ? 0 : -1); };
+  const cerrar = () => { pop.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+  const abrir = () => { pop.hidden = false; btn.setAttribute('aria-expanded', 'true'); q.value = ''; filtrar(); q.focus(); const s = items.find(x => x.getAttribute('aria-selected') === 'true'); if (s) s.scrollIntoView({ block: 'nearest' }); };
+  btn.onclick = () => pop.hidden ? abrir() : cerrar();
+  q.oninput = filtrar;
+  q.onkeydown = e => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); marcar(act + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); marcar(act - 1); }
+    else if (e.key === 'Enter') { e.preventDefault(); const v = visibles()[Math.max(act, 0)]; if (v) { cerrar(); onPick(v.dataset.p); } }
+    else if (e.key === 'Escape') { cerrar(); btn.focus(); }
+  };
+  items.forEach(x => x.onclick = () => { cerrar(); onPick(x.dataset.p); });
+  document.addEventListener('mousedown', function fuera(e) { if (!document.contains(el)) { document.removeEventListener('mousedown', fuera); return; } if (!el.contains(e.target)) cerrar(); });
+}
+
+/* ================= pestaña Stock ================= */
+function stockRows() {
+  const plan = buildPlan(), by = {}; plan.forEach(r => { by[r.m.cod] = r; });
+  const pos = {}; ((typeof FBC !== 'undefined' && FBC.prods) || []).forEach(p => { pos[normCod(p.cod)] = p.pos || ''; });
+  return S.master.filter(m => m.prov).map(m => {
+    const r = by[m.cod], u = S.stockMap[m.cod] || 0, sem = r ? r.wk4 : 0;
+    return { m, u, caj: m.xcaja && m.ucaja ? u / m.ucaja : null, pos: pos[m.cod] || '', sem, dias: sem > 0 ? u / (sem / 7) : null, estado: r ? r.estado : 'sinventas' };
+  });
+}
+const diasTxt = d => d == null ? '<span class="muted">sin ventas</span>' : d > 365 ? 'más de 365 d' : nf(d, 0) + ' d';
+function viewStock(main) {
+  const u = S.ui; u.stProv = u.stProv || ''; u.stQ = u.stQ || ''; u.stF = u.stF || 'todos'; u.stOrd = u.stOrd || 'prov'; u.stN = u.stN || 150;
+  const all = stockRows(), q = sinAcentos(u.stQ).split(/\s+/).filter(Boolean);
+  const provs = [...new Set(all.map(x => x.m.prov))].sort();
+  const items = [{ p: '', label: 'Todos los proveedores', n: all.length }, ...provs.map(p => ({ p, n: all.filter(x => x.m.prov === p).length }))];
+  const base = all.filter(x => (!u.stProv || x.m.prov === u.stProv) && (!q.length || q.every(w => sinAcentos(x.m.nombre + ' ' + x.m.cod + ' ' + (x.m.ci || '') + ' ' + x.m.prov).includes(w))));
+  const cnt = { todos: base.length, con: base.filter(x => x.u > 0).length, sin: base.filter(x => x.u <= 0).length, urg: base.filter(x => x.estado === 'urgente').length };
+  const rows = base.filter(x => u.stF === 'todos' || (u.stF === 'con' && x.u > 0) || (u.stF === 'sin' && x.u <= 0) || (u.stF === 'urg' && x.estado === 'urgente'));
+  const cmp = { prov: (a, b) => a.m.prov.localeCompare(b.m.prov) || a.m.nombre.localeCompare(b.m.nombre), nombre: (a, b) => a.m.nombre.localeCompare(b.m.nombre),
+    cob: (a, b) => (a.dias == null) - (b.dias == null) || (a.dias ?? 0) - (b.dias ?? 0) || a.m.nombre.localeCompare(b.m.nombre), stock: (a, b) => b.u - a.u || a.m.nombre.localeCompare(b.m.nombre) }[u.stOrd];
+  rows.sort(cmp);
+  const unidades = rows.reduce((s, x) => s + Math.max(0, x.u), 0), cajas = rows.reduce((s, x) => s + (x.caj && x.caj > 0 ? x.caj : 0), 0);
+  const shown = rows.slice(0, u.stN), conVentas = !(S.meta && S.meta.virtual);
+  const tr = shown.map(x => {
+    const e = ESTADO[x.estado] || ESTADO.sinventas, stk = x.u <= 0 ? '<span class="chip crit">sin stock</span>' : x.caj != null ? `<b>${nf(x.caj, 1)}</b><span class="u">cajas</span><span class="sub">${nf(x.u, 0)} u.</span>` : `<b>${nf(x.u, 0)}</b><span class="u">u.</span>`;
+    return `<tr class="row" data-cod="${esc(x.m.cod)}"><td class="sticky1 wrap"><div class="pn">${esc(x.m.nombre)}<small>cód. ${esc(x.m.cod)}${x.m.ci ? ' · int. ' + esc(x.m.ci) : ''}</small></div></td><td>${esc(x.m.prov)}</td><td>${esc(x.pos) || '<span class="muted">—</span>'}</td><td class="n">${stk}</td>${conVentas ? `<td class="n">${x.sem > 0 ? nf(x.sem, x.sem < 20 ? 1 : 0) + ' u.' : '<span class="muted">—</span>'}</td><td class="n">${diasTxt(x.dias)}</td><td><span class="chip ${e.c}">${e.t}</span></td>` : ''}</tr>`;
+  }).join('');
+  const chip = (k, t, n) => `<button class="chipb" data-stf="${k}" aria-pressed="${u.stF === k}">${t} <b>${nf(n)}</b></button>`;
+  main.innerHTML = `
+  <section>${heroHead('Stock', 'Qué hay en el depósito', `Se lee de tu Firebase (stock del ${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}). Buscá por producto, código o proveedor${conVentas ? '; la cobertura sale de las ventas pronosticadas' : ''}.`)}</section>
+  <section class="card">
+    <div class="st-bar">${provPickerHtml('ppStock', items, u.stProv, 'Todos los proveedores')}<input type="text" id="stQ" placeholder="Buscar producto, código o proveedor…" aria-label="Buscar" value="${esc(u.stQ)}">
+      <select id="stOrd" aria-label="Ordenar"><option value="prov" ${u.stOrd === 'prov' ? 'selected' : ''}>Ordenar: proveedor y nombre</option><option value="nombre" ${u.stOrd === 'nombre' ? 'selected' : ''}>Ordenar: nombre</option>${conVentas ? `<option value="cob" ${u.stOrd === 'cob' ? 'selected' : ''}>Ordenar: menor cobertura primero</option>` : ''}<option value="stock" ${u.stOrd === 'stock' ? 'selected' : ''}>Ordenar: más stock primero</option></select></div>
+    <div class="st-bar">${chip('todos', 'Todos', cnt.todos)}${chip('con', 'Con stock', cnt.con)}${chip('sin', 'Sin stock', cnt.sin)}${conVentas ? chip('urg', 'Urgentes', cnt.urg) : ''}
+      <span style="flex:1"></span><button class="btn" id="stSync" title="Vuelve a leer el stock de Firebase">Actualizar stock</button><button class="btn" id="stCsv" ${rows.length ? '' : 'disabled'}>Descargar CSV</button></div>
+    <div class="stats s"><div class="stat"><div class="v">${nf(rows.length)}</div><div class="l">productos${u.stProv ? ' de ' + esc(u.stProv) : ''}</div></div><div class="stat"><div class="v">${nf(unidades)}</div><div class="l">unidades en stock</div></div><div class="stat"><div class="v">${nf(cajas, 0)}</div><div class="l">cajas (de los que se compran por caja)</div></div></div>
+    ${rows.length ? `<div class="tw st-t" style="max-height:none"><table><thead><tr><th class="sticky1">Producto</th><th>Proveedor</th><th>Posición</th><th class="n">Stock</th>${conVentas ? '<th class="n" title="Venta semanal pronosticada">Venta por semana</th><th class="n" title="Días que dura el stock al ritmo de la venta pronosticada">Cobertura</th><th>Estado</th>' : ''}</tr></thead><tbody>${tr}</tbody></table></div>
+      <div class="flex" style="margin-top:12px;align-items:center;gap:12px"><span class="muted small">Mostrando ${nf(shown.length)} de ${nf(rows.length)}. Tocá un producto para ver cómo se calcula.</span>${rows.length > shown.length ? `<button class="btn" id="stMas">Mostrar ${Math.min(150, rows.length - shown.length)} más</button>` : ''}</div>` : '<div class="note" style="margin-top:12px">Ningún producto coincide con la búsqueda.</div>'}
+  </section>`;
+  const re = () => viewStock(main);
+  provPickerBind('ppStock', p => { u.stProv = p; u.stN = 150; re(); });
+  $('#stQ').oninput = e => { u.stQ = e.target.value; u.stN = 150; clearTimeout(viewStock._t); viewStock._t = setTimeout(() => { re(); const i = $('#stQ'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250); };
+  $('#stOrd').onchange = e => { u.stOrd = e.target.value; re(); };
+  $$('[data-stf]', main).forEach(b => b.onclick = () => { u.stF = b.dataset.stf; u.stN = 150; re(); });
+  if ($('#stMas')) $('#stMas').onclick = () => { u.stN += 150; re(); };
+  $('#stSync').onclick = async () => { $('#stSync').disabled = true; $('#stSync').textContent = 'Leyendo…'; await fbSyncStock(false); };
+  $('#stCsv').onclick = () => {
+    const cel = v => { const s = String(v ?? ''); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    const lin = [['Proveedor', 'Código', 'Código interno', 'Producto', 'Posición', 'Stock (unidades)', 'Stock (cajas)', 'Venta por semana', 'Cobertura (días)', 'Estado']]
+      .concat(rows.map(x => [x.m.prov, x.m.cod, x.m.ci || '', x.m.nombre, x.pos, nf(x.u, 0), x.caj != null ? nf(x.caj, 1) : '', conVentas && x.sem > 0 ? nf(x.sem, 1) : '', conVentas && x.dias != null ? nf(Math.min(x.dias, 999), 0) : '', conVentas ? (ESTADO[x.estado] || ESTADO.sinventas).t : '']));
+    saveFile('stock_' + dnToStr(todayDn()) + '.csv', '\ufeff' + lin.map(l => l.map(cel).join(';')).join('\r\n'));
+  };
+  $$('tr.row', main).forEach(tr => tr.onclick = () => openDetail(tr.dataset.cod));
+}
+
 function viewOrden(main) {
   const u = S.ui, sum = provSummary();
   if (!u.poProv || !sum.find(x => x.p === u.poProv)) { const first = [...sum].sort((a, b) => b.urg - a.urg || b.n - a.n)[0]; u.poProv = first ? first.p : ''; }
@@ -1170,7 +1283,14 @@ function viewOrden(main) {
   const lines = cur.rr.filter(r => !u.poOnly || r.fin > 0 || r.estado === 'urgente').sort((a, b) => ESTADO[a.estado].o - ESTADO[b.estado].o || a.cover - b.cover || a.m.nombre.localeCompare(b.m.nombre));
   const emit = cur.rr.filter(r => r.fin > 0);
   const kgSS = emit.reduce((s, r) => s + lineCalc(r).share * r.fin * r.pm * (r.m.kgu || 0), 0), kg = emit.reduce((s, r) => s + r.fin * r.pm * (r.m.kgu || 0), 0), moqBad = (+pr.moq || 0) > 0 && kg < +pr.moq;
-  const chips = sum.map(x => `<button class="pchip" aria-pressed="${x.p === u.poProv}" data-p="${esc(x.p)}">${x.urg ? '<span class="dot"></span>' : ''}${esc(x.p)}<span class="n">${x.n}</span></button>`).join('');
+  const solo = !!u.ppSolo, lista = sum.filter(x => !solo || x.n > 0 || x.urg || x.p === u.poProv), idxP = lista.findIndex(x => x.p === u.poProv), nUrg = sum.filter(x => x.urg).length;
+  const barra = `<div class="pp-bar" role="group" aria-label="Proveedor">
+    <button type="button" class="btn pp-nav" id="ppPrev" title="Proveedor anterior" aria-label="Proveedor anterior" ${idxP <= 0 ? 'disabled' : ''}>◀</button>
+    ${provPickerHtml('ppOrden', lista, u.poProv)}
+    <button type="button" class="btn pp-nav" id="ppNext" title="Proveedor siguiente" aria-label="Proveedor siguiente" ${idxP < 0 || idxP >= lista.length - 1 ? 'disabled' : ''}>▶</button>
+    <label class="chipb"><input type="checkbox" id="ppSolo" ${solo ? 'checked' : ''}> Solo con productos a pedir</label>
+    <button type="button" class="btn" id="ppStock" title="Ver el stock de este proveedor">Ver su stock</button>
+    <span class="muted small">${lista.length} de ${sum.length} proveedores${nUrg ? ' · <span style="color:var(--crit)">' + nUrg + ' con urgentes</span>' : ''}</span></div>`;
   const minCover = emit.length ? Math.min(...emit.map(r => lineCalc(r).sup)) : 0;
   const tr = lines.map(r => {
     const c = lineCalc(r), e = ESTADO[r.estado], d = c.dec, ul = ulabel(r), sc = Math.max(c.goal, c.sup, 1) * 1.1, cc = c.sup >= c.goal - 0.5 ? 'var(--ok)' : c.sup >= c.goalN - 0.5 ? 'var(--accent)' : c.sup > 0 ? 'var(--warn,#d98a00)' : 'var(--crit)';
@@ -1197,7 +1317,7 @@ function viewOrden(main) {
   const hist = S.orders.filter(o => o.prov === u.poProv).slice(0, 8);
   main.innerHTML = `
   <section>${heroHead('Orden de compra · borrador', 'Pedido a ' + esc(cur.p), `Stock de hoy, ventas esperadas desde el día de envío, con cuánto stock llega el proveedor y cuánto pedir para cubrir los días que elijas más el stock de seguridad.`)}</section>
-  <div class="provrow" role="group" aria-label="Proveedor">${chips}</div>
+  ${barra}
   <section class="card">
     <div class="po-head">
       <div class="po-titulo"><div class="eyebrow">Proveedor</div><h2>${esc(cur.p)}</h2>
@@ -1260,7 +1380,11 @@ function viewOrden(main) {
     <div class="stkc">${stockChartSvg(selR)}</div>
     <div class="hint">Línea verde: stock teórico. Hasta el primer envío no baja. El stock actual solo se descuenta cuando sale un envío, y cada envío se lleva la frecuencia en días de venta: los que salen hasta el día que llega el proveedor (grises, incluido el de ese día: la mercadería que llega todavía no cuenta para ese envío) te dejan con el stock con el que llegás. Cuando llega el proveedor suma el pedido, y el pronóstico a cubrir (zona celeste) empieza con el primer envío después de la llegada. El punto celeste es el stock que queda al terminar, que es el colchón. La línea gris punteada es lo que pasaría sin pedir nada.</div></section>` : ''}
   <section class="card"><h3>Órdenes emitidas a ${esc(cur.p)}</h3>${hist.length ? `<div class="tw" style="max-height:340px;margin-top:10px"><table><thead><tr><th>Orden</th><th>Fecha</th><th class="n">Líneas</th><th class="n">Cajas</th><th class="n">Kg</th><th>Llegada</th><th></th></tr></thead><tbody>${hist.map(o => `<tr><td class="mono-s">${esc(o.num)}</td><td>${dnFmt(strToDn(o.fecha))}</td><td class="n">${o.lines.length}</td><td class="n">${nf(o.tot.cajas)}</td><td class="n">${nf(o.tot.kg)}</td><td>${dnFmt(strToDn(o.llegada))}</td><td><button class="btn sm" data-dl="${esc(o.id)}">Descargar</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="muted small" style="margin-top:6px">Todavía no emitiste órdenes a este proveedor.</div>'}</section>`;
-  $$('.pchip', main).forEach(b => b.onclick = () => { u.poProv = b.dataset.p; u.poAsk = false; viewOrden(main); });
+  provPickerBind('ppOrden', p => { u.poProv = p; u.poAsk = false; viewOrden(main); });
+  const irAProv = d => { const k = lista[idxP + d]; if (k) { u.poProv = k.p; u.poAsk = false; viewOrden(main); } };
+  $('#ppPrev').onclick = () => irAProv(-1); $('#ppNext').onclick = () => irAProv(1);
+  $('#ppSolo').onchange = e => { u.ppSolo = e.target.checked; viewOrden(main); };
+  $('#ppStock').onclick = () => { u.stProv = u.poProv; u.stQ = ''; u.stF = 'todos'; u.stN = 150; S.ui.tab = 'stock'; render(true); window.scrollTo({ top: 0 }); };
   $('#poOnly').onchange = e => { u.poOnly = e.target.checked; viewOrden(main); };
   $('#poPed').onchange = e => { u.pedidoDn = e.target.value ? strToDn(e.target.value) : undefined; S.plan = []; viewOrden(main); };
   $('#poDenv').onchange = e => { pr.denv = Math.max(0, Math.round(+e.target.value || 0)); pr.configurado = true; S.plan = []; saveParams(); viewOrden(main); };
@@ -1501,6 +1625,7 @@ function viewProv(main) {
   <section>${heroHead('Proveedores y parámetros', 'Cómo compra cada proveedor', 'El lead time y la confiabilidad de cada proveedor definen cuánto stock de seguridad conviene tener. Todo lo que cambies acá se recalcula al instante y queda guardado.')}</section>
   <div class="note"><b>Cómo se usa cada dato.</b> El <b>lead time</b> es lo que tarda el proveedor desde que hacés el pedido. Los <b>días hasta el envío</b> son los días que pasan hasta el primer envío a sucursales (hasta ese día el stock no se consume). La <b>frecuencia de envío</b> es cada cuántos días mandás a sucursales: cada envío se lleva esa cantidad de días de venta. El stock actual solo se descuenta cuando sale un envío, y solo los que salen hasta el día que llega el proveedor (ese día incluido). Los <b>envíos a cubrir</b> son cuántos envíos cubre cada pedido; juntos dan los <b>días a cubrir</b> (frecuencia × envíos), que cuentan desde que llega el proveedor en adelante. Cada producto puede tener su propio valor. El <b>stock de seguridad en días</b> (el tuyo más un recargo según qué tan seguido falla el proveedor) se suma a eso.<br><b>Sugerido por variabilidad:</b> es solo una referencia. Se calcula como z × σ × √(horizonte ÷ 7) ÷ venta diaria, donde σ es el desvío de las ventas semanales de la ventana. Mostramos la mediana de los productos del proveedor; vos decidís cuánto aplicar. La explicación completa está en la pestaña <a href="#" data-go="teoria">Teoría</a>.</div>
   <div class="note plan">${ltResumen()}</div>
+  <div class="pp-bar" style="margin:10px 0"><input type="text" id="pvQ" placeholder="Buscar proveedor…" aria-label="Buscar proveedor" value="${esc(S.ui.pvQ || '')}" style="min-width:280px"><label class="chipb"><input type="checkbox" id="pvDef" ${S.ui.pvDef ? 'checked' : ''}> Solo los que usan valores por defecto</label><span class="muted small" id="pvCnt"></span></div>
   <div class="tw" style="max-height:none"><table><thead><tr><th>Proveedor</th><th class="n">Productos</th><th class="n">Lead time (días)</th><th>Clase</th><th class="n" title="Días desde el pedido hasta el primer envío a sucursales. Por defecto de este proveedor; se puede cambiar en cada línea.">Días hasta el envío</th><th class="n" title="Cada cuántos días enviás a sucursales (7 = semanal). Por defecto de este proveedor; se cambia por producto en la orden de compra.">Frecuencia de envío (días)</th><th class="n" title="Cuántos envíos cubre cada pedido (1 = una semana si enviás semanal, 2 = dos semanas). Por defecto de este proveedor; se cambia por producto.">Envíos a cubrir</th><th>Confiabilidad</th><th class="n">Seguridad propia (días)</th><th class="n">Recargo</th><th class="n">Seguridad total</th><th class="n">Sugerido por variabilidad (días)</th><th class="n">Pedido mínimo (kg)</th></tr></thead><tbody>${prow}</tbody></table></div>
   <div class="grid2">
   <div class="card"><h3>Clasificación de proveedores</h3>
@@ -1533,6 +1658,10 @@ function viewProv(main) {
   bindN('gN', v => setG('N', v)); $('#gP').onchange = e => setG('pesos', e.target.value);
   bindN('gEs', v => setG('estac', clamp(v, 0, 100) / 100)); bindN('gTe', v => setG('tend', clamp(v, 0, 100) / 100)); bindN('gCl', v => setG('clip', Math.max(0, v)));
   $('#gPa').onchange = e => setG('parcial', e.target.checked); $('#gAd').onchange = e => setG('admin', e.target.checked);
+  const filtrarProv = () => { const t = sinAcentos(S.ui.pvQ || '').split(/\s+/).filter(Boolean); let n = 0; const trs = $$('tr[data-p]', main); trs.forEach(tr => { const ok = t.every(w => sinAcentos(tr.dataset.p).includes(w)) && (!S.ui.pvDef || !!$('.chip.warn', tr)); tr.style.display = ok ? '' : 'none'; if (ok) n++; }); $('#pvCnt').textContent = n === trs.length ? trs.length + ' proveedores' : n + ' de ' + trs.length + ' proveedores'; };
+  $('#pvQ').oninput = e => { S.ui.pvQ = e.target.value; filtrarProv(); };
+  $('#pvDef').onchange = e => { S.ui.pvDef = e.target.checked; filtrarProv(); };
+  filtrarProv();
   $$('tr[data-p]', main).forEach(tr => $$('[data-f]', tr).forEach(inp => inp.onchange = () => { const pr = S.params.prov[tr.dataset.p], f = inp.dataset.f; pr[f] = f === 'conf' ? inp.value : f === 'frec' ? Math.max(1, +inp.value) : f === 'nenv' ? Math.max(0.5, +inp.value) : Math.max(0, +inp.value); if (f === 'lt') pr.ltOrigen = 'manual'; pr.configurado = true; invalidate(); saveParams(); viewProv(main); }));
   $$('[data-apply]', main).forEach(b => b.onclick = () => { const pr = S.params.prov[b.dataset.apply]; pr.ss = Math.round(+b.dataset.med * 2) / 2; pr.configurado = true; invalidate(); saveParams(); viewProv(main); });
 }
@@ -2510,12 +2639,12 @@ try {
   window.__acceso = acceso;
   // Catálogo (productos con proveedor), unidades por caja (del conteo) y stock del depósito. Se guarda unos minutos en el navegador
   // para no volver a leer miles de productos cada vez que se abre la pantalla; "Actualizar stock ahora" fuerza la lectura.
-  const CLAVE_CAT = 'compras_catalogo_v2', VIDA_CAT = 10 * 60 * 1000;
+  const CLAVE_CAT = 'compras_catalogo_v3', VIDA_CAT = 10 * 60 * 1000;
   const loadCatalogo = async (forzar) => {
     try { const c = JSON.parse(sessionStorage.getItem(CLAVE_CAT) || 'null'); if (!forzar && c && Date.now() - c.t < VIDA_CAT) return c.d; } catch (e) { /* sin caché */ }
     const [sp, sb] = await Promise.all([getDocs(collection(fs, 'productos')), getDocs(collection(fs, 'bultos'))]);
     const caja = {}; sb.docs.forEach(d => { const x = d.data(), base = String(x.codigoBase || '').trim(), u = Number(x.unidadesPorBulto); if (base && u > 0) caja[base] = u; });
-    const d = sp.docs.map(x => { const v = x.data(), u = Number(v.unidadesPorBulto); return { cod: x.id, nombre: v.producto || '', stock: Number(v.stockTotal) || 0, prov: v.proveedor || '', ci: String(v.codigoInterno ?? '').trim(), ucaja: u > 0 ? u : (caja[x.id] || null) }; });
+    const d = sp.docs.map(x => { const v = x.data(), u = Number(v.unidadesPorBulto); return { cod: x.id, nombre: v.producto || '', stock: Number(v.stockTotal) || 0, prov: v.proveedor || '', ci: String(v.codigoInterno ?? '').trim(), pos: String(v.posicionPrincipal ?? '').trim(), ucaja: u > 0 ? u : (caja[x.id] || null) }; });
     try { sessionStorage.setItem(CLAVE_CAT, JSON.stringify({ t: Date.now(), d })); } catch (e) { /* si no entra, igual funciona */ }
     return d;
   };
