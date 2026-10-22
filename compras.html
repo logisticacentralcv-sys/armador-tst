@@ -224,6 +224,18 @@ ul.plain,ol.plain{margin:6px 0 0;padding-left:22px}ul.plain li,ol.plain li{margi
 .po-t .sup,.po-t .sup .cov{min-width:96px}.po-t .sup .cov{width:96px}
 .po-t .u{font-size:10.5px;margin-left:2px}
 .po-t .sticky1{min-width:170px;max-width:210px}
+/* con 12 columnas la tabla puede ser más grande y legible */
+.po-t th,.po-t td{padding:12px 7px}
+.po-t th{font-size:12px}
+.po-t td.n{font-size:15px}
+.po-t input.ed{width:70px;padding:7px 8px;font-size:15px}
+.po-t .u{font-size:12px;margin-left:4px}
+.po-t .sub{font-size:12px}
+.po-t td.n .sub{max-width:140px}
+.po-t .sup,.po-t .sup .cov{min-width:124px}.po-t .sup .cov{width:124px}
+.po-t .sticky1{min-width:190px;max-width:290px}
+.po-t th:nth-child(4),.po-t td:nth-child(4){min-width:98px}
+.po-t th:nth-child(6),.po-t td:nth-child(6){min-width:94px}
 .po-card{padding-left:16px;padding-right:16px}
 /* Pronóstico: los nombres de proveedor y de grupo se parten en vez de ensanchar la columna */
 .fc-t td:nth-child(2),.fc-t td:nth-child(3){white-space:normal;max-width:140px;font-size:12.5px;line-height:1.2}
@@ -1203,9 +1215,7 @@ function viewOrden(main) {
     return `<tr class="row" data-cod="${r.m.cod}">
       <td class="sticky1 wrap"><div class="pn">${esc(r.m.nombre)}<small>cód. ${esc(r.m.cod)} · ${r.m.xcaja ? 'caja de ' + r.m.ucaja + ' u.' : 'por unidad'} · <span class="chip ${r.abc === 'A' ? 'acc' : ''}" style="padding:0 8px;font-size:12px">${r.abc}</span> <span class="chip ${e.c}" style="padding:0 8px;font-size:12px" title="${esc(e.d)}">${e.t}</span> <span class="calc" data-calc>ver cálculo ›</span><span class="calc" data-graf="${r.m.cod}">gráfico ›</span><span class="calc" data-ana="${r.m.cod}">análisis ›</span></small></div></td>
       <td class="n">${stk}</td>
-      <td class="n ed"><input class="ed" type="number" min="1" step="1" data-k="frec" data-cod="${r.m.cod}" value="${r.frecManual ? r.ov.frec : ''}" placeholder="${r.frec}" aria-label="Frecuencia de envío ${esc(r.m.nombre)}" style="width:58px"><span class="u">días</span><span class="sub">${r.frec === 7 ? 'semanal' : r.frec === 14 ? 'quincenal' : r.frec < 7 ? nf(7 / r.frec, 1) + ' por semana' : 'cada ' + r.frec + ' d'}</span></td>
-      <td class="n ed"><input class="ed" type="number" min="0.5" step="0.5" data-k="nenv" data-cod="${r.m.cod}" value="${r.nenvManual ? r.ov.nenv : ''}" placeholder="${nf(r.nenv, 1)}" aria-label="Envíos a cubrir ${esc(r.m.nombre)}" style="width:58px"><span class="u">envíos</span><span class="sub">${r.nManual ? nf(r.nEnv, 1) + ' (por días)' : r.nenvManual ? 'manual' : 'por defecto'}</span></td>
-      <td class="n ed"><input class="ed" type="number" min="1" step="1" data-k="dias" data-cod="${r.m.cod}" value="${r.nManual ? r.ov.dias : ''}" placeholder="${nf(r.N, 0)}" aria-label="Días a cubrir ${esc(r.m.nombre)}" style="width:62px"><span class="u">días</span><span class="sub">${r.nManual ? 'manual' : '= ' + nf(r.nEnv, 1) + ' × ' + r.frec}</span></td>
+      <td class="n ed"><input class="ed" type="number" min="1" step="1" data-k="dias" data-cod="${r.m.cod}" value="${r.nManual ? r.ov.dias : ''}" placeholder="${nf(r.N, 0)}" aria-label="Días a cubrir ${esc(r.m.nombre)}" style="width:62px"><span class="u">días</span><span class="sub">${r.nManual ? 'manual' : nf(r.nEnv, r.nEnv % 1 ? 1 : 0) + (r.nEnv === 1 ? ' envío' : ' envíos') + ' × ' + nf(r.frec, r.frec % 1 ? 1 : 0) + ' d'}</span></td>
       <td class="n"><b>${nf(r.D_N / r.pm, d)}</b><span class="u">${ul}</span><span class="sub">${r.m.xcaja ? nf(r.D_N, 0) + ' u. · ' : ''}${dnFmtS(r.startPost)} → ${dnFmtS(r.startPost + r.N - 1)}</span></td>
       <td class="n ed"><input class="ed" type="number" min="0" step="1" data-k="denv" data-cod="${r.m.cod}" value="${r.denvManual ? r.ov.denv : ''}" placeholder="${r.denv}" aria-label="Días hasta el envío ${esc(r.m.nombre)}" style="width:58px"><span class="u">días</span><span class="sub"><b>${dnLong(r.envDn)}</b></span></td>
       <td class="n"><b>${r.LT}</b><span class="u">días</span><span class="sub">llega ${dnLong(r.arrDn)}</span></td>
@@ -1245,7 +1255,7 @@ function viewOrden(main) {
           <div class="fld"><label for="poDenv">Días hasta el envío</label><input type="number" id="poDenv" min="0" step="1" value="${denvP}"></div>
           <div class="fld dato"><label>Primer envío</label><div class="v">${dnLong(envDn)}</div></div>
           <div class="fld"><label for="poFrec" title="Cada cuántos días enviás a sucursales">Frecuencia de envío (días)</label><input type="number" id="poFrec" min="1" step="1" value="${pr.frec !== undefined ? pr.frec : 7}"></div>
-          <div class="fld"><label for="poNenv" title="Cuántos envíos cubre cada pedido (por defecto; se cambia por producto)">Envíos a cubrir</label><input type="number" id="poNenv" min="0.5" step="0.5" value="${pr.nenv !== undefined ? pr.nenv : 1}"></div>
+          <div class="fld"><label for="poNenv" title="Cuántos envíos cubre cada pedido. Los días a cubrir son frecuencia × envíos; en la tabla se ajustan producto por producto">Envíos a cubrir</label><input type="number" id="poNenv" min="0.5" step="0.5" value="${pr.nenv !== undefined ? pr.nenv : 1}"></div>
         </div>
         <div class="hint po-nota">Cada envío lleva a las sucursales tantos días de venta como la frecuencia. Los días a cubrir son frecuencia × envíos, y se pueden cambiar producto por producto en la tabla.</div>
       </div>
@@ -1256,9 +1266,7 @@ function viewOrden(main) {
     <div class="tw po-t" style="max-height:none"><table><thead><tr>
       <th class="sticky1" title="Producto, código, cómo se compra, clase ABC y estado. Tocá la fila para ver cómo se calculó.">Producto</th>
       <th class="n " title="Lo que hay hoy en depósito según el stock cargado, en cajas y en unidades."><span class="t">Stock actual</span><span class="r">cajas y unidades</span></th>
-      <th class="n ed" title="EDITABLE. Cada cuántos días enviás a sucursales (7 = semanal, 3,5 = dos por semana). Vacío = el valor del proveedor."><span class="t">Frecuencia de envío</span><span class="r">cada cuántos días</span></th>
-      <th class="n ed" title="EDITABLE. Cuántos envíos cubre este pedido: 1 = una semana si enviás semanal, 2 = dos semanas. Vacío = el valor del proveedor."><span class="t">Envíos a cubrir</span><span class="r">cuántos envíos cubre</span></th>
-      <th class="n ed" title="Días de venta que cubre el pedido, contados desde que llega el proveedor (desde el primer envío con la mercadería nueva) = frecuencia × envíos. Si lo escribís directamente, manda tu número."><span class="t">Días a cubrir</span><span class="r">desde que llega el proveedor</span></th>
+      <th class="n ed" title="Días de venta que cubre el pedido, contados desde que llega el proveedor (desde el primer envío con la mercadería nueva) = frecuencia × envíos. Si lo escribís directamente, manda tu número."><span class="t">Días a cubrir</span><span class="r">desde el 1.er envío tras la llegada</span></th>
       <th class="n " title="Ventas esperadas durante los días a cubrir, empezando con el primer envío después de que llega el proveedor. Debajo, el rango de fechas."><span class="t">Pronóstico</span><span class="r">ventas en esos días</span></th>
       <th class="n ed" title="EDITABLE. Días que pasan desde el pedido hasta el primer envío a sucursales (3 = si pedís un lunes, el envío es el jueves). Hasta ese día el stock no se consume: ya está cubierto."><span class="t">Día de envío</span><span class="r">días desde el pedido</span></th>
       <th class="n " title="Días que tarda el proveedor desde que hacés el pedido. Debajo, el día en que llega."><span class="t">Lead time</span><span class="r">días hasta que llega</span></th>
@@ -1269,7 +1277,7 @@ function viewOrden(main) {
       <th class="n " title="Del pedido, qué porcentaje queda sin vender al terminar los días a cubrir. Es el stock de seguridad que estás pidiendo. Debajo, cuántas unidades son."><span class="t">Colchón</span><span class="r">% del pedido</span></th>
       <th class="n " title="Cuántos días duran el stock actual más este pedido, contados desde el día de envío. La marca negra de la barra es la meta: días a cubrir más seguridad."><span class="t">Cubre</span><span class="r">días desde el envío</span></th>
       
-    </tr></thead><tbody>${tr || '<tr><td colspan="14" class="muted">No hay productos para pedir a este proveedor con el stock actual.</td></tr>'}</tbody></table></div>
+    </tr></thead><tbody>${tr || '<tr><td colspan="12" class="muted">No hay productos para pedir a este proveedor con el stock actual.</td></tr>'}</tbody></table></div>
     <div class="hint" style="margin-top:10px">Pasá el mouse por el título de cada columna para ver qué es. Las columnas con fondo celeste se editan. Para ver paso a paso cómo se calculó un producto, tocá la fila. <a href="#" id="goTeoria">Ver la teoría completa ›</a></div>
     <div class="bar" style="margin-top:18px">
       <div class="fld" style="flex:1;min-width:260px"><label for="poNote">Observaciones para el proveedor (opcional)</label><input type="text" id="poNote" value="${esc(u.poNote)}" placeholder="Ej.: entrega por la mañana"></div>
@@ -1523,9 +1531,9 @@ function viewProv(main) {
   }).join('');
   main.innerHTML = `
   <section>${heroHead('Proveedores y parámetros', 'Cómo compra cada proveedor', 'El lead time y la confiabilidad de cada proveedor definen cuánto stock de seguridad conviene tener. Todo lo que cambies acá se recalcula al instante y queda guardado.')}</section>
-  <div class="note"><b>Cómo se usa cada dato.</b> El <b>lead time</b> es lo que tarda el proveedor desde que hacés el pedido. Los <b>días hasta el envío</b> son los días que pasan hasta el primer envío a sucursales (hasta ese día el stock no se consume). La <b>frecuencia de envío</b> es cada cuántos días mandás a sucursales: cada envío se lleva esa cantidad de días de venta. El stock actual solo se descuenta cuando sale un envío, y solo los que salen hasta el día que llega el proveedor (ese día incluido). Los <b>envíos a cubrir</b> son cuántos envíos cubre cada pedido; juntos dan los <b>días a cubrir</b> (frecuencia × envíos), que cuentan desde que llega el proveedor en adelante. Cada producto puede tener su propio valor. El <b>stock de seguridad en días</b> (el tuyo más un recargo según qué tan seguido falla el proveedor) se suma a eso.<br><b>Sugerido por variabilidad:</b> es solo una referencia. Se calcula como z × σ × √(horizonte ÷ 7) ÷ venta diaria, donde σ es el desvío de las ventas semanales de la ventana. Mostramos la mediana de los productos del proveedor; vos decidís cuánto aplicar. La explicación completa está en la pestaña <a href="#" data-go="teoria">Teoría</a>.</div>
+  <div class="note"><b>Cómo se usa cada dato.</b> El <b>lead time</b> es lo que tarda el proveedor desde que hacés el pedido. Los <b>días hasta el envío</b> son los días que pasan hasta el primer envío a sucursales (hasta ese día el stock no se consume). La <b>frecuencia de envío</b> es cada cuántos días mandás a sucursales: cada envío se lleva esa cantidad de días de venta. El stock actual solo se descuenta cuando sale un envío, y solo los que salen hasta el día que llega el proveedor (ese día incluido). Los <b>envíos a cubrir</b> son cuántos envíos cubre cada pedido; juntos dan los <b>días a cubrir</b> (frecuencia × envíos), que cuentan desde que llega el proveedor en adelante. Los días a cubrir se pueden ajustar producto por producto en la orden de compra. El <b>stock de seguridad en días</b> (el tuyo más un recargo según qué tan seguido falla el proveedor) se suma a eso.<br><b>Sugerido por variabilidad:</b> es solo una referencia. Se calcula como z × σ × √(horizonte ÷ 7) ÷ venta diaria, donde σ es el desvío de las ventas semanales de la ventana. Mostramos la mediana de los productos del proveedor; vos decidís cuánto aplicar. La explicación completa está en la pestaña <a href="#" data-go="teoria">Teoría</a>.</div>
   <div class="note plan">${ltResumen()}</div>
-  <div class="tw" style="max-height:none"><table><thead><tr><th>Proveedor</th><th class="n">Productos</th><th class="n">Lead time (días)</th><th>Clase</th><th class="n" title="Días desde el pedido hasta el primer envío a sucursales. Por defecto de este proveedor; se puede cambiar en cada línea.">Días hasta el envío</th><th class="n" title="Cada cuántos días enviás a sucursales (7 = semanal). Por defecto de este proveedor; se cambia por producto en la orden de compra.">Frecuencia de envío (días)</th><th class="n" title="Cuántos envíos cubre cada pedido (1 = una semana si enviás semanal, 2 = dos semanas). Por defecto de este proveedor; se cambia por producto.">Envíos a cubrir</th><th>Confiabilidad</th><th class="n">Seguridad propia (días)</th><th class="n">Recargo</th><th class="n">Seguridad total</th><th class="n">Sugerido por variabilidad (días)</th><th class="n">Pedido mínimo (kg)</th></tr></thead><tbody>${prow}</tbody></table></div>
+  <div class="tw" style="max-height:none"><table><thead><tr><th>Proveedor</th><th class="n">Productos</th><th class="n">Lead time (días)</th><th>Clase</th><th class="n" title="Días desde el pedido hasta el primer envío a sucursales. Por defecto de este proveedor; se puede cambiar en cada línea.">Días hasta el envío</th><th class="n" title="Cada cuántos días enviás a sucursales (7 = semanal). Se cambia en la orden de compra de este proveedor.">Frecuencia de envío (días)</th><th class="n" title="Cuántos envíos cubre cada pedido (1 = una semana si enviás semanal, 2 = dos semanas). Se cambia en la orden de compra de este proveedor.">Envíos a cubrir</th><th>Confiabilidad</th><th class="n">Seguridad propia (días)</th><th class="n">Recargo</th><th class="n">Seguridad total</th><th class="n">Sugerido por variabilidad (días)</th><th class="n">Pedido mínimo (kg)</th></tr></thead><tbody>${prow}</tbody></table></div>
   <div class="grid2">
   <div class="card"><h3>Clasificación de proveedores</h3>
     <div class="bar" style="margin-top:10px">${num('gLtC', 'Lead time corto hasta (días)', g.ltCorto, 1)}${num('gLtM', 'Medio hasta (días)', g.ltMedio, 1)}</div>
@@ -1876,9 +1884,9 @@ function viewTeoria(main) {
 <b>pedido</b>            = necesidad ÷ unidades por caja, redondeado</div>
     ${kv([
       ['Día de envío', 'El día en que mandás el pedido (por defecto, la fecha del stock). Se puede cambiar en la orden de compra: si el pedido sale el lunes, el stock se toma como el de ese día: cargá el stock actualizado.'],
-      ['Frecuencia de envío', 'Cada cuántos días enviás a sucursales (7 = semanal, 3,5 = dos veces por semana). Valor por defecto del proveedor, editable en cada línea.'],
-      ['Envíos a cubrir', 'Cuántos envíos cubre el pedido: 1 = una semana si enviás semanal, 2 = dos semanas. Depende del producto. Días a cubrir = frecuencia × envíos, contados desde que llega el proveedor en adelante.'],
-      ['Días hasta el envío', 'Días entre el pedido y el primer envío a sucursales: si pedís un lunes y dice 3, el envío es el jueves. Valor por defecto del proveedor, editable en cada línea.'],
+      ['Frecuencia de envío', 'Cada cuántos días enviás a sucursales (7 = semanal, 3,5 = dos veces por semana). Valor del proveedor: se cambia en su orden de compra o acá en Proveedores.'],
+      ['Envíos a cubrir', 'Cuántos envíos cubre el pedido: 1 = una semana si enviás semanal, 2 = dos semanas. Días a cubrir = frecuencia × envíos, contados desde que llega el proveedor en adelante.'],
+      ['Días hasta el envío', 'Días entre el pedido y el primer envío a sucursales: si pedís un lunes y dice 3, el envío es el jueves. Valor del proveedor: se cambia en su orden de compra o acá en Proveedores.'],
       ['Lead time', 'Días desde que hacés el pedido hasta que llega la mercadería. Al principio salen estimados de la hoja de recepciones (mediana de los pedidos que ya llegaron). Se pueden editar en la orden de compra o en Proveedores, y lo que cambies no se vuelve a pisar.'],
       ['Ciclo de pedido', 'Cada cuántos días pensás volver a pedirle a ese proveedor. Cuanto más largo, más hay que comprar de una vez.'],
       ['Días de abastecimiento', 'Cuántos días de venta querés tener cubiertos desde que llega el pedido. Incluyen el colchón de seguridad: por defecto son ciclo + días de seguridad del proveedor, y los podés cambiar línea por línea en la orden de compra. Ejemplo: tenés 10 u., el proveedor tarda 7 días y vendés 1 por día; llegás con 3 u. Si querés 14 días de abastecimiento, pedís 14 − 3 = 11 u.'],
@@ -1910,8 +1918,6 @@ function viewTeoria(main) {
     ['Producto', 'Nombre, código, cómo se compra (caja o unidad), clase ABC y estado.'],
     ['Stock actual', 'Lo que hay en depósito según el stock cargado, en la unidad de compra.'],
     ['Stock actual', 'Lo que hay en depósito según el stock cargado, en cajas y en unidades.'],
-    ['Frecuencia de envío', 'Editable. Cada cuántos días enviás a sucursales. Vacío = valor del proveedor.'],
-    ['Envíos a cubrir', 'Editable. Cuántos envíos cubre este pedido (1 = una semana si enviás semanal, 2 = dos). Vacío = valor del proveedor.'],
     ['Días a cubrir', 'Frecuencia × envíos, contados desde que llega el proveedor en adelante (desde el primer envío con la mercadería nueva). Si lo escribís directamente, manda tu número.'],
     ['Pronóstico', 'Ventas esperadas en los días a cubrir, desde que llega el proveedor. Debajo, el rango de fechas. Lo que se vende hasta la llegada no se pronostica acá: solo sirve para calcular el stock al llegar.'],
     ['Día de envío', 'Editable. Días desde el pedido hasta el primer envío a sucursales y qué día de la semana cae. Hasta ese día el stock no se consume.'],
