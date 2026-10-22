@@ -19,7 +19,7 @@
 html{scroll-behavior:smooth}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.5;margin:0}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:60;background:var(--bg)}
-.app{padding-left:max(18px,env(safe-area-inset-left,0px));padding-right:max(18px,env(safe-area-inset-right,0px));padding-block:0 80px;max-width:1560px;margin:0 auto}
+.app{padding-left:max(18px,env(safe-area-inset-left,0px));padding-right:max(18px,env(safe-area-inset-right,0px));padding-block:0 80px;max-width:1800px;margin:0 auto}
 h1,h2,h3,h4{font-family:var(--f-head);margin:0;letter-spacing:-.02em;text-wrap:balance;line-height:1.05}
 h1{font-weight:800;font-size:clamp(34px,6vw,68px)}
 h2{font-weight:700;font-size:clamp(26px,3.6vw,40px)}
@@ -175,7 +175,7 @@ ul.plain,ol.plain{margin:6px 0 0;padding-left:22px}ul.plain li,ol.plain li{margi
 .formula b{color:var(--accent)}
 .kv{display:grid;grid-template-columns:minmax(150px,220px) 1fr;gap:10px 22px;font-size:15.5px}
 .kv dt{font-weight:700;font-family:var(--f-head);font-size:17px}.kv dd{margin:0;color:var(--ink2)}
-@media (max-width:900px){.po-params{grid-template-columns:1fr}.hero,.po-head,.insp,.theory{grid-template-columns:1fr}.toc{position:static;flex-direction:row;flex-wrap:wrap}.kv{grid-template-columns:1fr}}
+@media (max-width:900px){.po-params{grid-template-columns:minmax(0,1fr)}.hero,.po-head,.insp,.theory{grid-template-columns:minmax(0,1fr)}.toc{position:static;flex-direction:row;flex-wrap:wrap}.kv{grid-template-columns:1fr}}
 @media (max-width:640px){.po-meta{grid-template-columns:repeat(2,minmax(0,1fr))}.po-fila input[type=date]{width:100%}.card{padding:18px;border-radius:18px}.tab{padding:8px 14px;font-size:14px}th,td{padding:12px 12px}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-delay:0ms!important;transition-duration:.01ms!important}html{scroll-behavior:auto}}
 
@@ -204,6 +204,34 @@ ul.plain,ol.plain{margin:6px 0 0;padding-left:22px}ul.plain li,ol.plain li{margi
 .po-t input.ed{width:70px;padding:6px 8px}
 .po-t .sup{min-width:120px}.po-t .sup .cov{width:120px}
 .po-t .pn small{white-space:normal}
+/* ---- tablas compactas: entran en pantalla sin scroll lateral ---- */
+.tw th{white-space:normal;line-height:1.2;vertical-align:bottom;padding:11px 5px;letter-spacing:.03em;font-size:11.5px}
+.tw td{padding:10px 5px}
+.tw th.n,.tw td.n{font-size:14px}
+.tw td:first-child,.tw th:first-child{white-space:normal}
+.tw input.ed{width:58px;padding:6px 6px}
+.tw select{max-width:118px;font-size:13px;padding:6px 6px}
+.tw .hint{white-space:normal;font-size:12px;line-height:1.25}
+.tw td:last-child:not(.n){white-space:normal}
+.tw td .chip{display:inline-block;margin:2px 4px 2px 0;white-space:nowrap}
+.po-t th,.po-t td{padding:9px 5px}
+.po-t input.ed{width:54px;padding:5px 6px}
+.po-t .sticky1{min-width:190px;max-width:230px}
+.po-t td.n{font-size:13px}
+.po-t th,.po-t td{padding:9px 4px}
+.po-t .sub{white-space:normal;line-height:1.2}
+.po-t td.n .sub{display:block;max-width:104px;margin-left:auto}
+.po-t .sup,.po-t .sup .cov{min-width:96px}.po-t .sup .cov{width:96px}
+.po-t .u{font-size:10.5px;margin-left:2px}
+.po-t .sticky1{min-width:170px;max-width:210px}
+.po-card{padding-left:16px;padding-right:16px}
+/* Pronóstico: los nombres de proveedor y de grupo se parten en vez de ensanchar la columna */
+.fc-t td:nth-child(2),.fc-t td:nth-child(3){white-space:normal;max-width:140px;font-size:12.5px;line-height:1.2}
+.fc-t td:nth-child(3) select{max-width:136px}
+.fc-t th,.fc-t td{padding:8px 3px}
+.fc-t th.n{font-size:10.5px;letter-spacing:.02em}
+.fc-t td.n{font-size:13px}
+.fc-t .sticky1{min-width:150px;max-width:190px;white-space:normal}
 .hero .stat .v{font-size:clamp(34px,4.4vw,62px)}
 .hero{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 .hero .stats{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
@@ -269,7 +297,7 @@ h1{font-size:clamp(26px,3.2vw,36px)!important;font-weight:800!important;letter-s
 h2{letter-spacing:-.01em}
 .hero .stat .v{font-size:clamp(28px,3.4vw,44px)!important}
 .barra-app{position:sticky;top:0;z-index:60;background:linear-gradient(135deg,#1e3a8a 0%,#2563eb 62%,#3b82f6 100%);color:#fff;padding:10px 0;box-shadow:0 4px 18px rgba(30,64,175,.3)}
-.barra-fila{max-width:1560px;margin:0 auto;padding:0 max(18px,env(safe-area-inset-left,0px));display:flex;align-items:center;gap:12px;min-height:48px}
+.barra-fila{max-width:1800px;margin:0 auto;padding:0 max(18px,env(safe-area-inset-left,0px));display:flex;align-items:center;gap:12px;min-height:48px}
 .barra-volver{flex-shrink:0;width:44px;height:44px;border-radius:50%;border:2px solid rgba(255,255,255,.6);background:rgba(255,255,255,.22);color:#fff;display:grid;place-items:center;text-decoration:none}
 .barra-volver svg{width:22px;height:22px;display:block;margin-left:-2px}
 .barra-titulo{flex:1;min-width:0}
@@ -1195,7 +1223,7 @@ function viewOrden(main) {
   main.innerHTML = `
   <section>${heroHead('Orden de compra · borrador', 'Pedido a ' + esc(cur.p), `Stock de hoy, ventas esperadas desde el día de envío, con cuánto stock llega el proveedor y cuánto pedir para cubrir los días que elijas más el stock de seguridad.`)}</section>
   <div class="provrow" role="group" aria-label="Proveedor">${chips}</div>
-  <section class="card">
+  <section class="card po-card">
     <div class="po-head">
       <div class="po-titulo"><div class="eyebrow">Proveedor</div><h2>${esc(cur.p)}</h2>
         <div class="muted small po-estado">Stock cargado al ${dnFmt(from)}${pedDn > from ? ' (se asume sin cambios hasta el envío)' : ''}. ${CONF_LABEL[pr.conf]}${pr.configurado ? '' : ' · <span class="chip warn">valores por defecto</span>'}</div>
@@ -1463,7 +1491,7 @@ function viewFc(main) {
     <span class="sp"></span><button class="btn" id="fExp">Exportar a Excel</button>
   </div>
   <div class="note small"><b>Cómo leer esto.</b> Pronóstico semanal = nivel actual (promedio ponderado de las últimas ${g.N} semanas) × factor estacional (intensidad ${nf(g.estac * 100)}%)${g.tend > 0 ? ' × tendencia' : ''}. La columna Variab. (CV) es el desvío de las ventas semanales dividido por su promedio: cuanto más alta, más irregular el producto.</div>
-  <div class="tw"><table><thead><tr><th class="sticky1">Producto</th><th>Proveedor</th><th>Estacionalidad</th><th class="n">Nivel (u./sem)</th><th class="n" title="Coeficiente de variación semanal de las últimas 13 semanas">Variab. (CV)</th><th class="n">Tendencia 13s</th>${ts.map(t => `<th class="n">${dnFmtS(S.start + 7 * t)}</th>`).join('')}<th class="n">Total ${n} sem</th></tr></thead><tbody>
+  <div class="tw fc-t"><table><thead><tr><th class="sticky1">Producto</th><th>Proveedor</th><th>Estacionalidad</th><th class="n">Nivel (u./sem)</th><th class="n" title="Coeficiente de variación semanal de las últimas 13 semanas">Variab. (CV)</th><th class="n">Tendencia 13s</th>${ts.map(t => `<th class="n">${dnFmtS(S.start + 7 * t)}</th>`).join('')}<th class="n">Total ${n} sem</th></tr></thead><tbody>
   ${rows.map(r => { const m = r.m, P = r.P, vm = vmult(m, unit), mode = (S.params.prod[m.cod] || {}).est || 'grupo'; let tot = 0; const cells = ts.map(t => { const f = weekF(m.cod, t), s = seasFactor(m.cod, t); tot += f * vm; return `<td class="n" style="${heat(s)}">${u.pShow === 'fac' ? nf(s, 2) : nf(f * vm, unit === 'compra' ? 1 : 0)}</td>`; }).join(''); return `<tr class="row" data-cod="${m.cod}"><td class="sticky1 pname" title="${esc(m.nombre)}">${esc(m.nombre)}</td><td>${esc(m.prov)}</td><td class="muted small">${mode === 'grupo' ? esc(m.grupo) : mode}</td><td class="n">${nf(P.L * vm, unit === 'compra' ? 1 : 0)}</td><td class="n">${nf(P.cv * 100)}%</td><td class="n">${pct(P.rel, 1)}</td>${cells}<td class="n"><b>${nf(tot, unit === 'compra' ? 1 : 0)}</b></td></tr>`; }).join('')}
   </tbody></table></div>`;
   if ($('#dfProd')) { $('#dfProd').onchange = e => { u.dfProd = e.target.value; viewFc(main); }; $('#dfN').onchange = e => { u.dfN = +e.target.value; viewFc(main); }; }
