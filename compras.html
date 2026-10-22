@@ -847,9 +847,9 @@ window.addEventListener('resize', () => { moveInd(); });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(moveInd);
 function renderStatus() {
   if (!S.ready) { $('#status').innerHTML = ''; return; }
-  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 22/10 · ventas por períodos</span>`; return; }
+  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 22/10 · varios archivos</span>`; return; }
   const part = isPartial() ? `<span class="pill warn" title="La última semana tiene datos hasta el ${dnFmt(S.lastDn)}; se completa con el perfil por día de la semana">semana en curso parcial</span>` : '';
-  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 22/10 · ventas por períodos</span>${part}`;
+  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 22/10 · varios archivos</span>${part}`;
 }
 function render(anim) {
   renderTabs(); renderStatus(); badgeSol();
@@ -1670,15 +1670,17 @@ function parseSales(rows) {
   return { agg, ignored, minD, maxD, n, bad, dayTot };
 }
 function planSalesImport(p) {
-  const nDays = p.maxD - p.minD + 1, missing = []; for (let d = p.minD; d <= p.maxD; d++) if (!p.dayTot.has(d)) missing.push(d);
+  const nuevos = p.rangosNuevos || [[p.minD, p.maxD]], nDays = nuevos.reduce((a, r) => a + (r[1] - r[0] + 1), 0), missing = [];
+  for (const r of nuevos) for (let d = r[0]; d <= r[1]; d++) if (!p.dayTot.has(d)) missing.push(d);
   const has = !!S.meta && !S.meta.virtual; // sin ventas todavía: no hay nada que reemplazar
-  return { ...p, nDays, missing, ...calcRangos(p), gap: has && p.minD > S.lastDn + 1 ? p.minD - S.lastDn - 1 : 0, overlap: has ? Math.max(0, Math.min(p.maxD, S.lastDn) - Math.max(p.minD, S.start) + 1) : 0, partialWeek: dowOf(p.maxD) < 6, shorter: has && p.maxD < S.lastDn };
+  let overlap = 0; for (const a of nuevos) for (const b of rangosCargados()) overlap += Math.max(0, Math.min(a[1], b[1]) - Math.max(a[0], b[0]) + 1);
+  return { ...p, nDays, missing, ...calcRangos(p), overlap: has ? overlap : 0, partialWeek: dowOf(p.maxD) < 6, shorter: has && p.maxD < S.lastDn };
 }
 /* ---- qué períodos hay cargados ---- */
 // Los períodos cubiertos por lo cargado, como [desde, hasta] en días. Sirven para distinguir "un día sin ventas" de "un día que nunca se cargó".
 function rangosCargados() {
   if (!S.meta || S.meta.virtual) return [];
-  if (S.meta.rangos && S.meta.rangos.length) return S.meta.rangos.map(r => [strToDn(r[0]), strToDn(r[1])]);
+  if (S.meta.rangos && S.meta.rangos.length) return S.meta.rangos.map(r => Array.isArray(r) ? [strToDn(r[0]), strToDn(r[1])] : [strToDn(r.d), strToDn(r.h)]);
   return [[strToDn(S.meta.validFrom), S.lastDn]];   // cargas anteriores a esta versión: se asume un solo período seguido
 }
 function unirRangos(rs) {
@@ -1689,12 +1691,19 @@ function unirRangos(rs) {
 // Cómo quedarían los períodos al sumar este archivo, qué huecos habría entre ellos, y desde qué lunes se puede pronosticar
 // (solo cuenta el último período seguido: lo anterior a un hueco no se mezcla, porque los días que faltan no son días sin ventas).
 function calcRangos(p) {
-  const rangos = unirRangos([...rangosCargados(), [p.minD, p.maxD]]), huecos = [];
+  const rangos = unirRangos([...rangosCargados(), ...(p.rangosNuevos || [[p.minD, p.maxD]])]), huecos = [];
   for (let i = 1; i < rangos.length; i++) huecos.push([rangos[i - 1][1] + 1, rangos[i][0] - 1]);
   const ult = rangos[rangos.length - 1];
   return { rangos, huecos, validFromDn: ult[0] + ((7 - dowOf(ult[0])) % 7) };
 }
 const fmtRango = r => r[0] === r[1] ? dnFmt(r[0]) : 'del ' + dnFmt(r[0]) + ' al ' + dnFmt(r[1]);
+// Firebase rechaza listas dentro de listas, valores indefinidos y documentos de más de 1 MB. Se revisa ANTES de guardar nada,
+// para que una carga no quede a medias por un dato inválido.
+function validarParaFirebase(v, nombre, ruta = '') {
+  if (v === undefined) throw new Error(`el dato "${ruta}" de ${nombre} está indefinido`);
+  if (Array.isArray(v)) v.forEach(x => { if (Array.isArray(x)) throw new Error(`${nombre} tiene listas dentro de listas (${ruta})`); validarParaFirebase(x, nombre, ruta + '[]'); });
+  else if (v && typeof v === 'object') for (const k in v) validarParaFirebase(v[k], nombre, ruta + '.' + k);
+}
 async function commitSales(p, setProg) {
   const had = !!S.meta && !S.meta.virtual, p0 = p.minD - dowOf(p.minD);
   const oldStart = had ? S.start : p0, newStart = Math.min(oldStart, p0), newLast = Math.max(had ? S.lastDn : p.maxD, p.maxD);
@@ -1708,18 +1717,27 @@ async function commitSales(p, setProg) {
   meta.startWeek = dnToStr(newStart);
   meta.validFrom = dnToStr(r.validFromDn);
   meta.lastDate = dnToStr(newLast);
-  meta.rangos = r.rangos.map(x => [dnToStr(x[0]), dnToStr(x[1])]);
+  meta.rangos = r.rangos.map(x => ({ d: dnToStr(x[0]), h: dnToStr(x[1]) }));   // Firebase no acepta listas dentro de listas
   meta.updatedAt = dnToStr(todayDn());
   meta.lastImport = { desde: dnToStr(p.minD), hasta: dnToStr(p.maxD), filas: p.n, ignorados: [...p.ignored.keys()].slice(0, 60) };
-  const reg = { en: new Date().toISOString(), por: (S.user && S.user.nombre) || '', archivo: p.file || '', formato: p.matriz ? 'por día' : 'una fila por venta', desde: dnToStr(p.minD), hasta: dnToStr(p.maxD), filas: p.n, productos: p.agg.size, sucursales: sucs.size, unidades: Math.round(unid), ignorados: p.ignored.size };
-  S.cargas = [reg, ...(S.cargas || [])].slice(0, 200);
+  const en = new Date().toISOString(), por = (S.user && S.user.nombre) || '';
+  const partes = p.partes || [{ file: p.file, minD: p.minD, maxD: p.maxD, n: p.n, productos: p.agg.size, sucursales: sucs.size, unidades: Math.round(unid), ignorados: p.ignored.size, matriz: !!p.matriz }];
+  const regs = partes.map(x => ({ en, por, archivo: x.file || '', formato: x.matriz ? 'por día' : 'una fila por venta', desde: dnToStr(x.minD), hasta: dnToStr(x.maxD), filas: x.n, productos: x.productos, sucursales: x.sucursales, unidades: x.unidades, ignorados: x.ignorados }));
+  validarParaFirebase(meta, 'el resumen de ventas'); validarParaFirebase(regs, 'el historial de cargas');   // antes de tocar nada
+  const cargasNuevas = [...regs.slice().reverse(), ...(S.cargas || [])].slice(0, 200);
+  const previo = { meta: S.meta, dd: S.dd, cargas: S.cargas, sinVentas: S.sinVentas };
   S.meta = meta; S.dd = dd; S.sinVentas = false; setup(); S.ready = true; render();
-  if (S.db) {
-    // solo los productos con ventas (los que vienen en el archivo y los que ya tenían datos): el resto no necesita documento
-    const aGuardar = S.master.map(m => m.cod).filter(c => p.agg.has(c) || Object.values(S.dd[c] || {}).some(a => a.some(x => x !== 0)));
-    await saveDays(aGuardar, setProg);
-    await saveMeta();   // el resumen al final: si se corta a mitad de camino, no queda apuntando a datos que no se guardaron
-    await saveCargas();
+  try {
+    if (S.db) {
+      // solo los productos con ventas (los que vienen en el archivo y los que ya tenían datos): el resto no necesita documento
+      const aGuardar = S.master.map(m => m.cod).filter(c => p.agg.has(c) || Object.values(S.dd[c] || {}).some(a => a.some(x => x !== 0)));
+      await saveDays(aGuardar, setProg);
+      await saveMeta();   // el resumen al final: si se corta a mitad de camino, no queda apuntando a datos que no se guardaron
+      S.cargas = cargasNuevas; await saveCargas();
+    } else S.cargas = cargasNuevas;
+  } catch (e) {
+    S.meta = previo.meta; S.dd = previo.dd; S.cargas = previo.cargas; S.sinVentas = previo.sinVentas; setup(); S.ready = true; render();   // la pantalla vuelve a lo que de verdad está guardado
+    throw e;
   }
 }
 function defaultGroup(prov, cod) { return prov || 'SIN PROVEEDOR'; }
@@ -1749,7 +1767,7 @@ function parseStock(rows) {
   if (!out.length) throw new Error('El archivo de stock no tiene filas válidas.');
   return out;
 }
-const PEND = { ventas: null, stock: null, master: null };
+const PEND = { ventas: null, stock: null, master: null, cola: [] };
 function dropZone(id, onRows, label) {
   const el = $('#' + id); if (!el) return;
   const run = async file => { try { el.classList.remove('over'); el.querySelector('.dz-msg').textContent = 'Leyendo ' + file.name + '…'; await new Promise(r => setTimeout(r, 30)); const rows = await readFileRows(file); await onRows(rows, file.name); el.querySelector('.dz-msg').textContent = label; } catch (e) { el.querySelector('.dz-msg').textContent = label; toast(e.message || String(e), 7000); } };
@@ -1757,6 +1775,23 @@ function dropZone(id, onRows, label) {
   el.addEventListener('dragleave', () => el.classList.remove('over'));
   el.addEventListener('drop', e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) run(f); });
   const inp = el.querySelector('input[type=file]'); inp.onchange = () => { if (inp.files[0]) run(inp.files[0]); inp.value = ''; };
+}
+function dropZoneMulti(id, onRows, label) {
+  const el = $('#' + id); if (!el) return;
+  const msg = el.querySelector('.dz-msg');
+  const run = async files => {
+    el.classList.remove('over'); const errores = [];
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      try { msg.textContent = 'Leyendo ' + (files.length > 1 ? (i + 1) + ' de ' + files.length + ': ' : '') + f.name + '…'; await new Promise(r => setTimeout(r, 30)); const rows = await readFileRows(f); await onRows(rows, f.name); }
+      catch (e) { errores.push(f.name + ': ' + (e.message || e)); }
+    }
+    msg.textContent = label; if (errores.length) toast(errores.join('\n'), 9000);
+  };
+  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('over'); });
+  el.addEventListener('dragleave', () => el.classList.remove('over'));
+  el.addEventListener('drop', e => { e.preventDefault(); const fs = [...e.dataTransfer.files]; if (fs.length) run(fs); });
+  const inp = el.querySelector('input[type=file]'); inp.multiple = true; inp.onchange = () => { const fs = [...inp.files]; inp.value = ''; if (fs.length) run(fs); };
 }
 function pasteBox(id, btnId, onRows) {
   const b = $('#' + btnId); if (!b) return;
@@ -1825,8 +1860,8 @@ function viewDatos(main, empty) {
   ${ventasCargadasHtml()}
   <div class="grid2">
     <div class="card"><h3>1. Ventas</h3>
-      <div class="muted small" style="margin:6px 0 12px">Subí el export “Resumen de ventas por artículo” (Excel o CSV). <b>Lee estas columnas:</b> <b>Cód. artículo</b> (el código interno), <b>Cantidad venta</b>, <b>Desc. sucursal</b> y <b>Fecha</b>. <b>Descripción</b> y <b>Nombre proveedor</b> se ignoran: el proveedor sale de tu Firebase. Se saltean las filas de totales. <b>Podés cargar varios archivos, uno después del otro y en cualquier orden:</b> lo que trae cada uno reemplaza a lo ya cargado para esos mismos productos, sucursales y días, y lo demás no se toca. Repetir un archivo no duplica nada.</div>
-      <div class="drop" id="dzV"><div class="dz-msg">Arrastrá el archivo acá o elegilo</div><input type="file" accept=".xlsx,.xls,.csv,.txt,.tsv" aria-label="Archivo de ventas" style="margin-top:8px"></div><div class="hint" style="margin-top:6px">También acepta el export por día (una columna “Kg Vendidos” por fecha). Si el sistema avisa que el export superó el volumen permitido, exportalo por partes y cargá cada parte.</div>
+      <div class="muted small" style="margin:6px 0 12px">Subí el export “Resumen de ventas por artículo” (Excel o CSV). <b>Lee estas columnas:</b> <b>Cód. artículo</b> (el código interno), <b>Cantidad venta</b>, <b>Desc. sucursal</b> y <b>Fecha</b>. <b>Descripción</b> y <b>Nombre proveedor</b> se ignoran: el proveedor sale de tu Firebase. Se saltean las filas de totales. <b>Podés elegir varios archivos de una vez, o ir sumándolos de a uno:</b> quedan en una lista y se guardan todos juntos con un solo botón. El orden no importa: lo que trae cada uno reemplaza a lo ya cargado para esos mismos productos, sucursales y días, y lo demás no se toca. Repetir un archivo no duplica nada.</div>
+      <div class="drop" id="dzV"><div class="dz-msg">Arrastrá los archivos acá o elegilos (podés elegir varios)</div><input type="file" accept=".xlsx,.xls,.csv,.txt,.tsv" aria-label="Archivo de ventas" style="margin-top:8px"></div><div class="hint" style="margin-top:6px">También acepta el export por día (una columna “Kg Vendidos” por fecha). Si el sistema avisa que el export superó el volumen permitido, exportalo por partes y cargá cada parte.</div>
       <details style="margin-top:10px"><summary class="small" style="cursor:pointer">O pegar desde Excel</summary><textarea id="pV" placeholder="Cód. artículo\tDescripción\tCantidad venta\tDesc. sucursal\tFecha"></textarea><button class="btn sm" id="bPV" style="margin-top:6px">Leer texto pegado</button></details>
       <div id="pendV" style="margin-top:12px"></div></div>
     ${fbCardHtml()}
@@ -1841,7 +1876,7 @@ function viewDatos(main, empty) {
   </div>
   ${nk.length ? `<div class="card"><h3>Anotaciones de días (${nk.length})</h3><div class="muted small" style="margin:6px 0 10px">Las escribís desde el gráfico, al tocar un día. Acá podés repasarlas o borrarlas.</div><div class="tw" style="max-height:300px"><table><thead><tr><th>Día</th><th>Nota</th><th></th></tr></thead><tbody>${nk.map(k => `<tr><td>${dayLabel(strToDn(k))}</td><td class="wrap">${esc(S.notes[k])}</td><td><button class="btn sm" data-delnote="${k}">Borrar</button></td></tr>`).join('')}</tbody></table></div></div>` : ''}`;
   if (!S.ready && !S.master.length) $('#dzV').style.opacity = .6;
-  dropZone('dzV', onSalesRows, 'Arrastrá el archivo acá o elegilo'); pasteBox('pV', 'bPV', onSalesRows);
+  dropZoneMulti('dzV', onSalesRows, 'Arrastrá los archivos acá o elegilos (podés elegir varios)'); pasteBox('pV', 'bPV', onSalesRows);
   dropZone('dzM', onMasterRows, 'Arrastrá el CSV acá o elegilo');
   $('#bBk').onclick = () => { const dias = {}; S.master.forEach(m => dias[m.cod] = ddToPlain(m.cod)); saveFile('backup_compras_' + dnToStr(todayDn()) + '.json', JSON.stringify({ meta: S.meta, master: S.master, params: S.params, stock: S.stock, notas: S.notes, ordenes: S.orders, dias })); };
   $$('[data-delnote]', main).forEach(b => b.onclick = () => { delete S.notes[b.dataset.delnote]; saveNotes(); viewDatos(main); });
@@ -1850,17 +1885,43 @@ function viewDatos(main, empty) {
 }
 function renderPending() {
   const v = PEND.ventas, s = PEND.stock, m = PEND.master;
-  if ($('#pendV')) $('#pendV').innerHTML = v ? `<div class="note"><b>${esc(v.file)}</b>: ${nf(v.n)} filas de ventas del ${dnFmt(v.minD)} al ${dnFmt(v.maxD)} (${nf(v.nDays)} días${v.partialWeek ? ', la última semana incompleta: hasta ' + DOWN[dowOf(v.maxD)] : ''}).${v.ignored.size ? ` ${nf(v.ignored.size)} códigos no están en el catálogo y se ignoran${ignoradosTop(v)}.` : ''}${v.bad ? ` ${v.bad} filas sin dato válido (totales o vacías) se saltean.` : ''}${v.overlap ? `<br>Hay ${nf(v.overlap)} días en común con lo ya cargado: los datos de este archivo reemplazan a los anteriores para esos mismos productos, sucursales y días; lo demás no se toca.` : ''}${v.huecos && v.huecos.length ? `<br><b>Atención:</b> con este archivo quedarían sin datos ${v.huecos.map(fmtRango).join(' y ')}. Esos días no se toman como cero: mientras falten, el pronóstico usa solo desde el ${dnFmt(v.validFromDn)}. Cargá también ese período cuando lo tengas.` : ''}${v.missing.length ? `<br><b>Atención:</b> ${v.missing.length} días del rango no tienen ninguna venta en el archivo (ej. ${v.missing.slice(0, 4).map(dnFmtS).join(', ')}).` : ''}${v.shorter && !(v.huecos && v.huecos.length) ? '<br>Este archivo termina antes de la última fecha cargada (' + dnFmt(S.lastDn) + '): se suma a lo que ya hay.' : ''}${v.ciDesdePedidos ? `<br>Los productos de Firebase no traían el código interno: lo tomé de los pedidos (${nf(v.ciDesdePedidos)} productos).` : ''}${v.truncado ? `<br><b>⚠ Archivo incompleto:</b> trae el aviso “Exported data exceeded the allowed volume”: el sistema cortó la exportación y faltan datos${v.familias && v.familias.length ? ` (las familias llegan hasta ${esc(v.familias[v.familias.length - 1])})` : ''}. Exportalo por partes —por familia o con menos días— y cargá cada parte: se suman sin pisarse.` : ''}${v.maxD < todayDn() - 7 ? `<br><b>Ojo:</b> las ventas llegan hasta el ${dnFmt(v.maxD)}, hace ${todayDn() - v.maxD} días: el pronóstico parte de datos viejos. Cargá también las ventas más recientes.` : ''}</div><div class="flex" style="margin-top:8px"><button class="btn pri" id="okV">Confirmar y guardar</button><button class="btn" id="noV">Cancelar</button></div><div class="pbar" id="pbV" style="margin-top:8px;display:none"><i></i></div>` : '';
+  if ($('#pendV')) $('#pendV').innerHTML = v ? `${v.partes && v.partes.length > 1 ? tablaCola(v) : ''}<div class="note"><b>${esc(v.file)}</b>: ${nf(v.n)} filas de ventas ${v.rangosNuevos && v.rangosNuevos.length > 1 ? v.rangosNuevos.map(fmtRango).join(' y ') : 'del ' + dnFmt(v.minD) + ' al ' + dnFmt(v.maxD)} (${nf(v.nDays)} días${v.partialWeek ? ', la última semana incompleta: hasta ' + DOWN[dowOf(v.maxD)] : ''}).${v.ignored.size ? ` ${nf(v.ignored.size)} códigos no están en el catálogo y se ignoran${ignoradosTop(v)}.` : ''}${v.bad ? ` ${v.bad} filas sin dato válido (totales o vacías) se saltean.` : ''}${v.overlap ? `<br>Hay ${nf(v.overlap)} días en común con lo ya cargado: los datos de este archivo reemplazan a los anteriores para esos mismos productos, sucursales y días; lo demás no se toca.` : ''}${v.huecos && v.huecos.length ? `<br><b>Atención:</b> con este archivo quedarían sin datos ${v.huecos.map(fmtRango).join(' y ')}. Esos días no se toman como cero: mientras falten, el pronóstico usa solo desde el ${dnFmt(v.validFromDn)}. Cargá también ese período cuando lo tengas.` : ''}${v.missing.length ? `<br><b>Atención:</b> ${v.missing.length} días del rango no tienen ninguna venta en el archivo (ej. ${v.missing.slice(0, 4).map(dnFmtS).join(', ')}).` : ''}${v.shorter && !(v.huecos && v.huecos.length) ? '<br>Este archivo termina antes de la última fecha cargada (' + dnFmt(S.lastDn) + '): se suma a lo que ya hay.' : ''}${v.ciDesdePedidos ? `<br>Los productos de Firebase no traían el código interno: lo tomé de los pedidos (${nf(v.ciDesdePedidos)} productos).` : ''}${v.truncado ? `<br><b>⚠ Archivo incompleto:</b> trae el aviso “Exported data exceeded the allowed volume”: el sistema cortó la exportación y faltan datos${v.familias && v.familias.length ? ` (las familias llegan hasta ${esc(v.familias[v.familias.length - 1])})` : ''}. Exportalo por partes —por familia o con menos días— y cargá cada parte: se suman sin pisarse.` : ''}${v.maxD < todayDn() - 7 ? `<br><b>Ojo:</b> las ventas llegan hasta el ${dnFmt(v.maxD)}, hace ${todayDn() - v.maxD} días: el pronóstico parte de datos viejos. Cargá también las ventas más recientes.` : ''}</div><div class="flex" style="margin-top:8px"><button class="btn pri" id="okV">${textoConfirmar()}</button><button class="btn" id="noV">Cancelar</button></div><div class="muted small" style="margin-top:6px">Podés seguir agregando archivos: se suman a esta lista y se guardan todos juntos.</div><div class="pbar" id="pbV" style="margin-top:8px;display:none"><i></i></div>` : '';
   if ($('#pendS')) $('#pendS').innerHTML = s ? (() => { const keep = { stock: S.stock, map: S.stockMap, mis: S.stockMissing, unk: S.stockUnknown, dn: S.stockDn }; S.stock = s.data; buildStock(); const info = { unk: S.stockUnknown.slice(), mis: S.stockMissing.length, n: Object.keys(S.stockMap).length, zero: Object.values(S.stockMap).every(x => x === 0) }; S.stock = keep.stock; S.stockMap = keep.map; S.stockMissing = keep.mis; S.stockUnknown = keep.unk; S.stockDn = keep.dn; return `<div class="note"><b>${esc(s.file)}</b>: ${s.data.rows.length} filas, ${info.n} productos reconocidos.${info.unk.length ? ` <b>Códigos que no están en la base:</b> ${info.unk.slice(0, 8).map(esc).join(', ')}.` : ''}${info.mis ? ` ${info.mis} productos de la base no están en el archivo (se toman con stock 0).` : ''}${info.zero ? ' <b>Todas las cantidades son 0.</b>' : ''}</div><div class="flex" style="margin-top:8px"><button class="btn pri" id="okS">Usar este stock</button><button class="btn" id="noS">Cancelar</button></div>`; })() : '';
   if ($('#pendM')) $('#pendM').innerHTML = m ? `<div class="note"><b>${esc(m.file)}</b>: ${m.items.length} productos, ${[...new Set(m.items.map(x => x.prov))].length} proveedores. ${m.items.filter(x => !S.mm[x.cod]).length} códigos nuevos.</div><div class="flex" style="margin-top:8px"><button class="btn pri" id="okM">Reemplazar base de productos</button><button class="btn" id="noM">Cancelar</button></div>` : '';
-  $('#okV') && ($('#okV').onclick = async () => { const bar = $('#pbV'); bar.style.display = ''; $('#okV').disabled = true; $('#okV').textContent = 'Guardando…'; try { await commitSales(v, p => { bar.firstChild.style.width = Math.round(p * 100) + '%'; $('#okV').textContent = 'Guardando… ' + Math.round(p * 100) + '%'; }); PEND.ventas = null; toast('Ventas guardadas. Datos hasta el ' + dnFmt(S.lastDn) + '.'); render(); } catch (e) { toast('Error al guardar: ' + (e.message || e.code || e) + '. Si la pantalla ya muestra las ventas, no se guardaron: volvé a cargar el archivo.', 12000); $('#okV').disabled = false; $('#okV').textContent = 'Confirmar y guardar'; } });
-  $('#noV') && ($('#noV').onclick = () => { PEND.ventas = null; renderPending(); });
+  $('#okV') && ($('#okV').onclick = async () => { const bar = $('#pbV'); bar.style.display = ''; $('#okV').disabled = true; $$('[data-quitar]').forEach(b => b.disabled = true); $('#okV').textContent = 'Guardando…'; try { await commitSales(v, p => { bar.firstChild.style.width = Math.round(p * 100) + '%'; $('#okV').textContent = 'Guardando… ' + Math.round(p * 100) + '%'; }); PEND.ventas = null; PEND.cola = []; toast('Ventas guardadas. Datos hasta el ' + dnFmt(S.lastDn) + '.'); render(); } catch (e) { toast('Error al guardar: ' + (e.message || e.code || e) + '. Las ventas NO quedaron guardadas; los archivos siguen en la lista: probá de nuevo.', 12000); $('#okV').disabled = false; $$('[data-quitar]').forEach(b => b.disabled = false); $('#okV').textContent = textoConfirmar(); } });
+  $$('[data-quitar]').forEach(b => b.onclick = () => { PEND.cola.splice(+b.dataset.quitar, 1); armarPendiente(); });
+  $('#noV') && ($('#noV').onclick = () => { PEND.ventas = null; PEND.cola = []; renderPending(); });
   $('#okS') && ($('#okS').onclick = async () => { const dt = $('#sDate').value || dnToStr(todayDn()); S.stock = { date: dt, file: s.file, rows: s.data.rows }; PEND.stock = null; buildStock(); invalidate(); try { await saveStock(); toast('Stock cargado (' + dnFmt(strToDn(dt)) + ').'); } catch (e) { toast('No se pudo guardar el stock: ' + (e.message || e.code)); } render(); });
   $('#noS') && ($('#noS').onclick = () => { PEND.stock = null; renderPending(); });
   $('#okM') && ($('#okM').onclick = async () => { S.master = mezclarMaster(S.base || {}, S.master.concat(m.items)); PEND.master = null; S.master.forEach(x => { if (!S.params.prov[x.prov]) S.params.prov[x.prov] = { ...DEFAULT_PROV }; }); S.mm = {}; S.master.forEach(x => S.mm[x.cod] = x); if (S.meta) setup(); saveParams(); try { await saveMaster(); } catch (e) { toast('No se pudo guardar: ' + (e.message || e.code)); } toast('Base de productos actualizada.'); render(); });
   $('#noM') && ($('#noM').onclick = () => { PEND.master = null; renderPending(); });
 }
-async function onSalesRows(rows, file) {
+/* ---- cola de archivos de ventas: se pueden elegir varios de una vez o ir sumándolos de a uno; quedan en una lista y se guardan juntos ---- */
+function mergeParsed(list) {
+  if (list.length === 1) { const q = list[0]; return { ...q, rangosNuevos: [[q.minD, q.maxD]] }; }
+  const agg = new Map(), ignored = new Map(), dayTot = new Map(), fams = new Set(); let minD = Infinity, maxD = -Infinity, n = 0, bad = 0, truncado = false, matriz = false;
+  for (const q of list) {
+    for (const [cod, stores] of q.agg) { let a = agg.get(cod); if (!a) agg.set(cod, a = new Map()); for (const [s, days] of stores) { let b = a.get(s); if (!b) a.set(s, b = new Map()); for (const [d, v] of days) b.set(d, v); } }   // la misma celda en dos archivos: vale la del último
+    for (const [cd, o] of q.ignored) { const x = ignored.get(cd) || { n: 0, q: 0, nombre: o.nombre || '' }; x.n += o.n; x.q += o.q || 0; if (!x.nombre) x.nombre = o.nombre || ''; ignored.set(cd, x); }
+    for (const [d, k] of q.dayTot) dayTot.set(d, (dayTot.get(d) || 0) + k);
+    minD = Math.min(minD, q.minD); maxD = Math.max(maxD, q.maxD); n += q.n; bad += q.bad || 0; truncado = truncado || !!q.truncado; matriz = matriz || !!q.matriz; (q.familias || []).forEach(f => fams.add(f));
+  }
+  return { agg, ignored, dayTot, minD, maxD, n, bad, truncado, matriz, familias: [...fams], rangosNuevos: unirRangos(list.map(q => [q.minD, q.maxD])) };
+}
+function resumenParte(x) {
+  let unidades = 0; const sucs = new Set();
+  for (const [, st] of x.parsed.agg) for (const [s, days] of st) { sucs.add(s); for (const q of days.values()) unidades += q; }
+  return { file: x.file, minD: x.parsed.minD, maxD: x.parsed.maxD, n: x.parsed.n, productos: x.parsed.agg.size, sucursales: sucs.size, unidades: Math.round(unidades), ignorados: x.parsed.ignored.size, matriz: !!x.parsed.matriz };
+}
+function armarPendiente() {
+  if (!PEND.cola.length) { PEND.ventas = null; renderPending(); return; }
+  const p = planSalesImport(mergeParsed(PEND.cola.map(x => x.parsed)));
+  p.partes = PEND.cola.map(resumenParte);
+  p.file = PEND.cola.length === 1 ? PEND.cola[0].file : PEND.cola.length + ' archivos';
+  p.ciDesdePedidos = Math.max(0, ...PEND.cola.map(x => x.desdePedidos || 0));
+  PEND.ventas = p; renderPending();
+}
+async function agregarArchivoVentas(rows, nombre) {
   if (!S.master.length) throw new Error('Primero cargá la base de productos.');
   let parsed, desdePedidos = 0;
   try { parsed = parseSales(rows); }
@@ -1870,8 +1931,16 @@ async function onSalesRows(rows, file) {
     if (!desdePedidos) throw e;
     parsed = parseSales(rows);
   }
-  const p = planSalesImport(parsed); p.file = file; p.ciDesdePedidos = desdePedidos; PEND.ventas = p; renderPending();
+  const clave = nombre + '|' + parsed.n + '|' + parsed.minD + '|' + parsed.maxD;
+  PEND.cola = PEND.cola.filter(x => x.clave !== clave);          // el mismo archivo elegido dos veces queda una sola vez
+  PEND.cola.push({ clave, file: nombre, parsed, desdePedidos });
+  armarPendiente();
 }
+const textoConfirmar = () => PEND.cola.length > 1 ? 'Confirmar y guardar los ' + PEND.cola.length + ' archivos' : 'Confirmar y guardar';
+function tablaCola(v) {
+  return `<div class="tw" style="max-height:300px;margin-bottom:10px"><table><thead><tr><th>#</th><th>Archivo</th><th>Período</th><th class="n">Filas</th><th class="n">Productos</th><th class="n">Ignorados</th><th></th></tr></thead><tbody>${v.partes.map((x, i) => `<tr><td>${i + 1}</td><td>${esc(x.file)}</td><td>${fmtRango([x.minD, x.maxD])}</td><td class="n">${nf(x.n)}</td><td class="n">${nf(x.productos)}</td><td class="n">${nf(x.ignorados)}</td><td><button class="btn" data-quitar="${i}">Quitar</button></td></tr>`).join('')}</tbody></table></div>`;
+}
+async function onSalesRows(rows, file) { await agregarArchivoVentas(rows, file); }
 async function onStockRows(rows, file) { PEND.stock = { file, data: { rows: parseStock(rows) } }; const m = String(file).match(/(\d{4}-\d{2}-\d{2})/); if (m && $('#sDate')) $('#sDate').value = m[1]; renderPending(); }
 async function onMasterRows(rows, file) { PEND.master = { file, items: parseMaster(rows) }; renderPending(); }
 
