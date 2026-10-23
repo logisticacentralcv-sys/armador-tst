@@ -778,6 +778,7 @@ function xChart(host, o) {
   const W = Math.max(320, host.clientWidth || 800), H = o.height || 400, m = { l: 62, r: 18, t: 22, b: 36 };
   const n = o.xs.length, main = o.series[o.main || 0];
   let max = 0; o.series.forEach(s => { if (!s.hidden) s.vals.forEach(v => { if (v != null && v > max) max = v; }); });
+  if (o.band) o.band.hi.forEach(v => { if (v != null && v > max) max = v; });
   max = niceMax(max * 1.08);
   const x = i => m.l + (W - m.l - m.r) * (n <= 1 ? 0 : i / (n - 1)), y = v => m.t + (H - m.t - m.b) * (1 - v / max);
   const uid = 'g' + Math.random().toString(36).slice(2, 7);
@@ -786,6 +787,12 @@ function xChart(host, o) {
   const step = Math.max(1, Math.ceil(n / Math.floor((W - m.l) / 72)));
   for (let i = 0; i < n; i += step) g += `<text x="${x(i)}" y="${H - 10}" text-anchor="middle" font-size="12.5" fill="var(--muted)" font-family="var(--f-mono)">${dnFmtS(o.xs[i])}</text>`;
   if (o.forecastFrom != null && o.forecastFrom < n - 1) g += `<rect x="${x(o.forecastFrom)}" y="${m.t}" width="${x(n - 1) - x(o.forecastFrom)}" height="${H - m.t - m.b}" fill="var(--accent-soft)" opacity=".7"/><text x="${x(o.forecastFrom) + 10}" y="${m.t + 16}" font-size="12.5" font-weight="600" fill="var(--accent)">pronóstico</text>`;
+  if (o.band) {
+    let top = '', bot = '', first = -1, last = -1;
+    for (let i = 0; i < n; i++) { const hv = o.band.hi[i]; if (hv == null) continue; top += (first < 0 ? 'M' : 'L') + x(i).toFixed(1) + ' ' + y(hv).toFixed(1); if (first < 0) first = i; last = i; }
+    for (let i = last; i >= first && first >= 0; i--) bot += 'L' + x(i).toFixed(1) + ' ' + y(o.band.lo[i]).toFixed(1);
+    if (first >= 0) g += `<path d="${top}${bot}Z" fill="var(--c2)" opacity=".14" class="band" data-lo="${o.band.lo[first].toFixed(1)}" data-hi="${o.band.hi[first].toFixed(1)}" data-n="${o.band.n}"/>`;
+  }
   // notas del usuario
   const noteIdx = []; if (o.notes) o.xs.forEach((dn, i) => { if (o.notes[dnToStr(dn)]) noteIdx.push(i); });
   g += '<g id="serie">';
@@ -879,9 +886,9 @@ window.addEventListener('resize', () => { moveInd(); });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(moveInd);
 function renderStatus() {
   if (!S.ready) { $('#status').innerHTML = ''; return; }
-  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 22/10 · sin frecuencia de envío</span>`; return; }
+  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 22/10 · franja de variación</span>`; return; }
   const part = isPartial() ? `<span class="pill warn" title="La última semana tiene datos hasta el ${dnFmt(S.lastDn)}; se completa con el perfil por día de la semana">semana en curso parcial</span>` : '';
-  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 22/10 · sin frecuencia de envío</span>${part}`;
+  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 22/10 · franja de variación</span>${part}`;
 }
 function render(anim) {
   renderTabs(); renderStatus(); badgeSol();
@@ -953,7 +960,7 @@ function chartSpec(cods, o) {
   const span = o.span || 364, partial = isPartial(), cl = partial ? S.lastIdx - 1 : S.lastIdx;
   const i0 = Math.max(S.vf, cl - Math.round(span / 7) + 1), nF = fc && !split ? 12 : 0, i1 = S.lastIdx + nF, n = i1 - i0 + 1;
   const xs = Array.from({ length: n }, (_, k) => S.start + 7 * (i0 + k)), series = [];
-  let val = new Array(n).fill(null), base = new Array(n).fill(0), main = 0;
+  let val = new Array(n).fill(null), base = new Array(n).fill(0), main = 0, band = null;
   if (!split) {
     const ser = seriesFor(cods, { unit });
     const act = new Array(n).fill(null), cur = new Array(n).fill(null), fcv = new Array(n).fill(null), lyv = new Array(n).fill(null);
@@ -965,6 +972,11 @@ function chartSpec(cods, o) {
     main = series.length; series.push({ name: 'Ventas', color: 'var(--c1)', vals: act, w: 3.4, area: true });
     if (partial) series.push({ name: 'Semana en curso (extrapolada)', color: 'var(--c4)', vals: cur, dot: true, hollow: true });
     if (nF) series.push({ name: 'Pronóstico', color: 'var(--c2)', vals: fcv, w: 3.2, dash: '8 6', skipAt: cl - i0 });
+    if (nF) {   // franja: cuánto suelen variar las ventas de una semana a otra (±1,3 desvíos de las últimas 13 semanas); lo que cae adentro es lo normal
+      const hist = []; for (let i = Math.max(S.vf, cl - 12); i <= cl; i++) hist.push(ser[i]);
+      const sd = hist.length >= 4 ? sdev(hist) : 0;
+      if (sd > 0) { const k = 1.28, lo = new Array(n).fill(null), hi = new Array(n).fill(null); for (let i = cl + 1; i <= i1; i++) { const f = fcv[i - i0]; if (f != null) { lo[i - i0] = Math.max(0, f - k * sd); hi[i - i0] = f + k * sd; } } band = { lo, hi, n: hist.length, k }; }
+    }
   } else {
     split.forEach(s => {
       const ser = seriesFor(cods, { unit, store: s }), hidden = hid.has(s), vals = new Array(n).fill(null);
@@ -973,7 +985,7 @@ function chartSpec(cods, o) {
       if (!hidden) for (let k = 0; k < n; k++) if (vals[k] != null) { val[k] = (val[k] || 0) + vals[k]; base[k] += vals[k]; }
     });
   }
-  return { mode, xs, series, main, val, base, forecastFrom: nF ? cl - i0 : null, labelOf: i => 'Semana del ' + dnFmt(xs[i]) + (xs[i] > S.start + 7 * cl ? (xs[i] <= S.lastDn ? ' · en curso' : ' · pronóstico') : ''), unitName: unit0 + '/semana', rangeOf: i => [xs[i], xs[i] + 6], notes: notesFor('week', xs), unit0 };
+  return { mode, xs, series, main, val, base, forecastFrom: nF ? cl - i0 : null, band, labelOf: i => 'Semana del ' + dnFmt(xs[i]) + (xs[i] > S.start + 7 * cl ? (xs[i] <= S.lastDn ? ' · en curso' : ' · pronóstico') : ''), unitName: unit0 + '/semana', rangeOf: i => [xs[i], xs[i] + 6], notes: notesFor('week', xs), unit0 };
 }
 
 /* ================= análisis de un punto o de un tramo ================= */
@@ -1072,7 +1084,7 @@ function wireInspector(root, redraw) {
 }
 function mountXChart({ host, insp, cods, o, sel, height }) {
   let spec = null;
-  const paint = () => { spec = chartSpec(cods, o); xChart(host, { xs: spec.xs, series: spec.series, main: spec.main, val: spec.val, base: spec.base, forecastFrom: spec.forecastFrom, notes: spec.notes, labelOf: spec.labelOf, unitName: spec.unitName, sel, height, aria: o.aria, onSelect: showInsp }); };
+  const paint = () => { spec = chartSpec(cods, o); xChart(host, { xs: spec.xs, series: spec.series, main: spec.main, val: spec.val, base: spec.base, forecastFrom: spec.forecastFrom, band: spec.band, notes: spec.notes, labelOf: spec.labelOf, unitName: spec.unitName, sel, height, aria: o.aria, onSelect: showInsp }); };
   const showInsp = () => { if (!insp) return; insp.innerHTML = inspectorHtml(cods, spec, sel, o.unit || 'venta'); wireInspector(insp, paint); };
   paint(); showInsp();
   return { paint, showInsp, spec: () => spec };
@@ -1514,7 +1526,7 @@ function viewTend(main) {
   <section class="card"><div class="sec-h"><h3>${u.tMode === 'total' ? 'Ventas' : 'Ventas por sucursal'} · ${esc(unitName)} ${u.tScale === 'day' ? 'por día (promedio de 7 días)' : 'por semana'}</h3><span class="muted small">${S.params.g.admin ? 'incluye Administración' : 'sin Administración'}</span></div>
     ${u.tMode === 'suc' ? `<div class="chips" style="margin:10px 0" id="sChips">${S.storeList.map(s => `<button class="chipb" aria-pressed="${u.tStores.includes(s)}" data-s="${esc(s)}"><span class="sw" style="background:${storeColor(s)}"></span>${esc(s)}</button>`).join('')}</div><div class="hint">Elegí las sucursales a comparar (arranca con las 6 de mayor venta). Los % del gráfico miden la suma de las elegidas.</div>` : ''}
     <div class="chart" id="tChart" style="margin-top:10px"></div>
-    <div class="flex" style="margin-top:10px"><div class="legend" id="tLeg" style="margin:0"></div><span class="sp"></span><span class="hint">Clic: A · otro clic: B · arrastrar: medir un tramo</span><button class="btn sm" id="tClear">Limpiar selección</button></div></section>
+    <div class="flex" style="margin-top:10px"><div class="legend" id="tLeg" style="margin:0"></div><span class="sp"></span><span class="hint">Clic: A · otro clic: B · arrastrar: medir un tramo</span><button class="btn sm" id="tClear">Limpiar selección</button></div><div class="hint" id="tBandNote" style="margin-top:10px;display:none"></div></section>
   <section class="card" id="tInsp"></section>
   <section class="card"><h3>Tendencia por sucursal</h3><div class="hint" style="margin:2px 0 10px">Promedios semanales en ${esc(unitName)}. La semana en curso no se incluye. “Última venta” marca sucursales que dejaron de vender el producto.</div>
     <div class="tw" style="max-height:420px"><table><thead><tr><th>Sucursal</th><th class="n">Prom. 4 sem</th><th class="n">Prom. 13 sem</th><th class="n">4 vs 13</th><th class="n">4 vs 4 previas</th><th class="n">Vs año ant.</th><th class="n">% del total</th><th>Última venta</th></tr></thead><tbody>
@@ -1532,7 +1544,8 @@ function viewTend(main) {
   $$('#sChips [data-s]').forEach(b => b.onclick = () => { const s = b.dataset.s, i = u.tStores.indexOf(s); if (i >= 0) u.tStores.splice(i, 1); else u.tStores.push(s); reset(); viewTend(main); });
   const mc = mountXChart({ host: $('#tChart'), insp: $('#tInsp'), cods, o: { mode: u.tScale, unit, span: u.tSpan, fc: u.tMode === 'total', ly: u.tMode === 'total' && u.tLY, split, aria: 'Tendencia de ventas' }, sel: u.sel, height: 440 });
   S.redraw = () => mc.paint();
-  $('#tLeg').innerHTML = mc.spec().series.filter(s => !s.hidden && s.vals.some(v => v != null)).map(s => `<span style="display:inline-flex;gap:8px;align-items:center;font-size:14px"><span class="sw" style="background:${s.color}"></span>${esc(s.name)}</span>`).join('');
+  $('#tLeg').innerHTML = mc.spec().series.filter(s => !s.hidden && s.vals.some(v => v != null)).map(s => `<span style="display:inline-flex;gap:8px;align-items:center;font-size:14px"><span class="sw" style="background:${s.color}"></span>${esc(s.name)}</span>`).join('') + (mc.spec().band ? '<span style="display:inline-flex;gap:8px;align-items:center;font-size:14px"><span class="sw" style="background:var(--c2);opacity:.35"></span>Rango habitual</span>' : '');
+  { const bn = $('#tBandNote'), bd = mc.spec().band; if (bn) { bn.style.display = bd ? '' : 'none'; if (bd) bn.innerHTML = `<b>Por qué el pronóstico es parejo.</b> Es el promedio de las últimas 4 semanas (con más peso a las recientes): no se puede saber de antemano cuál semana va a ser alta y cuál baja, y copiar los altibajos del pasado empeora el pronóstico. La franja muestra cuánto suelen variar las ventas de una semana a otra (±${nf(bd.k, 1)} desvíos de las últimas ${bd.n} semanas): lo que cae adentro es lo normal.`; } }
   $('#tClear').onclick = () => { reset(); mc.paint(); mc.showInsp(); };
   $('#tExp').onclick = () => { const rows = [['Semana', 'Total']]; for (let i = cl; i >= S.vf; i--) rows.push([dnToStr(S.start + 7 * i), +sm[i].toFixed(3)]); saveFile('tendencia_' + (single ? cods[0] : 'seleccion') + '.csv', toCSV(rows)); };
 }
@@ -2149,6 +2162,7 @@ function viewTeoria(main) {
     ['Stock actual', 'Lo que hay en depósito según el stock cargado, en cajas y en unidades.'],
     ['Días a cubrir', 'Cuántos días de venta cubre el pedido, contados desde que llega el proveedor (desde el día siguiente a la llegada). Se elige por proveedor y se puede cambiar producto por producto. Si lo escribís en una línea, manda tu número.'],
     ['Pronóstico', 'Ventas esperadas en los días a cubrir, desde que llega el proveedor. Debajo, el rango de fechas. Lo que se vende hasta la llegada no se pronostica acá: solo sirve para calcular el stock al llegar.'],
+      ['Franja del gráfico (rango habitual)', 'En Tendencias, la franja alrededor del pronóstico semanal es el rango habitual: el pronóstico ± 1,3 desvíos de las últimas 13 semanas. Las semanas reales suelen caer adentro. El pronóstico no copia los altibajos pasados porque no se pueden anticipar y, probado con ventas reales, copiarlos empeoraba el error.'],
     ['Día de envío', 'Editable. Días desde el pedido hasta el primer envío a sucursales y qué día de la semana cae. Hasta ese día el stock no se consume.'],
     ['Lead time', 'Días que tarda el proveedor desde el pedido, y qué día llega.'],
     ['Stock al llegar', 'Stock teórico cuando llega el proveedor: stock actual menos la venta de los días desde el primer envío hasta el día de la llegada, incluido ese día. Si es 0, te quedás sin mercadería antes de que llegue.'],
