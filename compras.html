@@ -945,9 +945,9 @@ window.addEventListener('resize', () => { moveInd(); });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(moveInd);
 function renderStatus() {
   if (!S.ready) { $('#status').innerHTML = ''; return; }
-  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 23/10 · semana en curso</span>`; return; }
+  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 23/10 · orden en PDF</span>`; return; }
   const part = isPartial() ? `<span class="pill warn" title="La última semana tiene datos hasta el ${dnFmt(S.lastDn)}; se completa con el perfil por día de la semana">semana en curso parcial</span>` : '';
-  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 23/10 · semana en curso</span>${part}`;
+  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 23/10 · orden en PDF</span>${part}`;
 }
 function render(anim) {
   renderTabs(); renderStatus(); badgeSol();
@@ -1433,17 +1433,18 @@ function viewOrden(main) {
     <div class="hint" style="margin-top:10px">Pasá el mouse por el título de cada columna para ver qué es. Las columnas con fondo celeste se editan. Para ver paso a paso cómo se calculó un producto, tocá la fila. <a href="#" id="goTeoria">Ver la teoría completa ›</a></div>
     <div class="bar" style="margin-top:18px">
       <div class="fld" style="flex:1;min-width:260px"><label for="poNote">Observaciones para el proveedor (opcional)</label><input type="text" id="poNote" value="${esc(u.poNote)}" placeholder="Ej.: entrega por la mañana"></div>
-      ${u.poAsk ? `<button class="btn pri" id="poOk">Confirmar: emitir ${emit.length} líneas</button><button class="btn" id="poNo">Cancelar</button>` : (puedeAprobar() ? `<button class="btn pri" id="poEmit" ${emit.length ? '' : 'disabled'}>Emitir orden de compra</button>` : `<button class="btn pri" id="poSol" ${emit.length ? '' : 'disabled'}>Enviar solicitud a Compras</button>`)}
-      <button class="btn" id="poDraft" ${emit.length ? '' : 'disabled'}>Bajar borrador (Excel)</button>
+      ${u.poAsk ? `<button class="btn pri" id="poOk">Confirmar: emitir ${emit.length} líneas</button><button class="btn" id="poNo">Cancelar</button>` : (puedeAprobar() && puedeSolicitar() ? `<button class="btn pri" id="poSol" ${emit.length ? '' : 'disabled'}>Enviar solicitud a Compras</button><button class="btn" id="poEmit" ${emit.length ? '' : 'disabled'}>Emitir orden de compra</button>` : puedeAprobar() ? `<button class="btn pri" id="poEmit" ${emit.length ? '' : 'disabled'}>Emitir orden de compra</button>` : `<button class="btn pri" id="poSol" ${emit.length ? '' : 'disabled'}>Enviar solicitud a Compras</button>`)}
+      <button class="btn" id="poDraft" ${emit.length ? '' : 'disabled'}>Borrador (PDF)</button><button class="btn" id="poDraftX" ${emit.length ? '' : 'disabled'}>Borrador (Excel)</button>
     </div>
-    ${u.poAsk ? '<div class="note" style="margin-top:12px">Al confirmar se guarda la orden en el historial y se descarga el Excel para mandar a compras. No se modifica el stock.</div>' : ''}
+    ${u.poAsk ? `<div class="note" style="margin-top:12px">Al confirmar se guarda la orden en el historial, queda registrada en Solicitudes y se descarga el <b>PDF de la orden</b> para mandar al proveedor. No se modifica el stock.<div class="bar" style="margin-top:8px"><label class="chipb"><input type="checkbox" id="poXInt" ${u.poXInt ? 'checked' : ''}> También bajar el análisis interno (PDF aparte, no es para el proveedor)</label><label class="chipb"><input type="checkbox" id="poXExcel" ${u.poXExcel ? 'checked' : ''}> También bajar el Excel</label></div></div>` : ''}
+    ${puedeAprobar() && puedeSolicitar() && !u.poAsk ? '<div class="note" style="margin-top:12px"><b>Podés hacer las dos cosas.</b> <b>Enviar solicitud a Compras</b> la deja en la pestaña Solicitudes para que Compras la revise (puede cambiar cantidades) y la emita. <b>Emitir orden de compra</b> la emite ahora, sin revisión, y queda registrada en Solicitudes como emitida directamente.</div>' : ''}
     ${!puedeAprobar() ? '<div class="note" style="margin-top:12px"><b>Vos planificás la compra.</b> Dejá lo que corresponda en <b>Pedido final</b> (se guarda solo) y enviá la solicitud: Compras la ve con estos mismos datos y puede aceptarla, rechazarla o modificarla antes de hacer el pedido.</div>' : ''}
   </section>
   ${selR ? `<section class="card" id="poGraf"><div class="po-head"><div><div class="eyebrow">Cómo evoluciona el stock</div><h3 style="margin:2px 0 0">${esc(selR.m.nombre)}</h3></div><div class="fld"><label for="poSel">Producto</label><select id="poSel">${lines.map(x => `<option value="${x.m.cod}" ${x.m.cod === u.poSel ? 'selected' : ''}>${esc(x.m.nombre)}</option>`).join('')}</select></div></div>
     ${stockPanelHtml(selR, ulabel(selR))}
     <div class="stkc">${stockChartSvg(selR)}</div>
     <div class="hint">Línea verde: stock teórico. Hasta el primer envío no baja. Desde ahí baja con la venta de cada día; el día que llega el proveedor sale primero la venta de ese día del stock que ya tenías (la mercadería que llega todavía no cuenta), y recién después suma el pedido. La zona celeste son los días a cubrir, que arrancan el día siguiente a la llegada. El punto celeste es el stock que queda al terminar, que es el colchón. La línea gris punteada es lo que pasaría sin pedir nada.</div></section>` : ''}
-  <section class="card"><h3>Órdenes emitidas a ${esc(cur.p)}</h3>${hist.length ? `<div class="tw" style="max-height:340px;margin-top:10px"><table><thead><tr><th>Orden</th><th>Fecha</th><th class="n">Líneas</th><th class="n">Cajas</th><th class="n">Kg</th><th>Llegada</th><th></th></tr></thead><tbody>${hist.map(o => `<tr><td class="mono-s">${esc(o.num)}</td><td>${dnFmt(strToDn(o.fecha))}</td><td class="n">${o.lines.length}</td><td class="n">${nf(o.tot.cajas)}</td><td class="n">${nf(o.tot.kg)}</td><td>${dnFmt(strToDn(o.llegada))}</td><td><button class="btn sm" data-dl="${esc(o.id)}">Descargar</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="muted small" style="margin-top:6px">Todavía no emitiste órdenes a este proveedor.</div>'}</section>`;
+  <section class="card"><h3>Órdenes emitidas a ${esc(cur.p)}</h3>${hist.length ? `<div class="tw" style="max-height:340px;margin-top:10px"><table><thead><tr><th>Orden</th><th>Fecha</th><th class="n">Líneas</th><th class="n">Cajas</th><th class="n">Kg</th><th>Llegada</th><th></th></tr></thead><tbody>${hist.map(o => `<tr><td class="mono-s">${esc(o.num)}</td><td>${dnFmt(strToDn(o.fecha))}</td><td class="n">${o.lines.length}</td><td class="n">${nf(o.tot.cajas)}</td><td class="n">${nf(o.tot.kg)}</td><td>${dnFmt(strToDn(o.llegada))}</td><td style="white-space:nowrap"><button class="btn sm" data-dl="${esc(o.id)}">PDF</button> <button class="btn sm" data-dli="${esc(o.id)}" title="Stock, pronóstico y cobertura (uso interno)">Análisis</button> <button class="btn sm" data-dlx="${esc(o.id)}">Excel</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="muted small" style="margin-top:6px">Todavía no emitiste órdenes a este proveedor.</div>'}</section>`;
   provPickerBind('ppOrden', p => { u.poProv = p; u.poAsk = false; viewOrden(main); });
   $$('[data-go-teoria]', main).forEach(a => a.onclick = e => { e.preventDefault(); S.ui.tab = 'teoria'; render(true); window.scrollTo({ top: 0 }); });
   const irAProv = d => { const k = lista[idxP + d]; if (k) { u.poProv = k.p; u.poAsk = false; viewOrden(main); } };
@@ -1468,23 +1469,142 @@ function viewOrden(main) {
   const bN = $('#poNo'); if (bN) bN.onclick = () => { u.poAsk = false; viewOrden(main); };
   const bO = $('#poOk'); if (bO) bO.onclick = async () => { bO.disabled = true; await emitOrder(cur, emit); u.poAsk = false; viewOrden(main); };
   $('#poDraft').onclick = () => exportOrder(buildOrder(cur, emit, true));
-  $$('[data-dl]', main).forEach(b => b.onclick = () => { const o = S.orders.find(x => x.id === b.dataset.dl); if (o) exportOrder(o); });
+  $('#poDraftX').onclick = () => exportOrderXlsx(buildOrder(cur, emit, true));
+  if ($('#poXInt')) $('#poXInt').onchange = e => { u.poXInt = e.target.checked; };
+  if ($('#poXExcel')) $('#poXExcel').onchange = e => { u.poXExcel = e.target.checked; };
+  const ordenPorId = id => S.orders.find(x => x.id === id);
+  $$('[data-dl]', main).forEach(b => b.onclick = () => { const o = ordenPorId(b.dataset.dl); if (o) exportOrder(o); });
+  $$('[data-dli]', main).forEach(b => b.onclick = () => { const o = ordenPorId(b.dataset.dli); if (o) exportOrderInterno(o); });
+  $$('[data-dlx]', main).forEach(b => b.onclick = () => { const o = ordenPorId(b.dataset.dlx); if (o) exportOrderXlsx(o); });
 }
 function buildOrder(cur, emit, draft) {
   const from = S.stockDn, pr = cur.pr, n = S.orders.filter(o => o.fecha === dnToStr(todayDn())).length + 1;
   const lines = emit.map(r => { const c = lineCalc(r); return { cod: r.m.cod, nombre: r.m.nombre, unidad: ulabel(r), stock: +(r.stockU / r.pm).toFixed(2), stockU: +r.stockU.toFixed(1), nDias: +r.N.toFixed(1), pron: +(r.D_N / r.pm).toFixed(2), pico: r.pico != null ? +(r.pico / r.pm).toFixed(1) : null, picoPct: r.picoPct, envio: dnToStr(r.envDn), lt: r.LT, llega: +(r.stockArr / r.pm).toFixed(2), ssDias: +r.ssDias.toFixed(1), ss: +(r.SSu / r.pm).toFixed(2), sug: r.sug, qty: r.fin, colchon: Math.round(c.share * 100), dias: c.sup >= 400 ? 400 : Math.round(c.sup), kg: +c.kg.toFixed(1) }; });
   const slug = cur.p.normalize('NFD').replace(/[^\w]+/g, '').toLowerCase().slice(0, 14);
   const id = 'oc_' + Date.now().toString(36) + '_' + slug;
-  return { id, num: 'OC-' + dnToStr(todayDn()).replace(/-/g, '') + '-' + String(n).padStart(2, '0'), prov: cur.p, fecha: dnToStr(S.ui.pedidoDn || todayDn()), envio: dnToStr((S.ui.pedidoDn || todayDn()) + (pr.denv !== undefined ? +pr.denv : 3)), llegada: dnToStr((S.ui.pedidoDn || todayDn()) + (+pr.lt || 0)), lt: pr.lt, ciclo: pr.ciclo, obs: S.ui.poNote || '', borrador: !!draft, lines, tot: { cajas: lines.filter(l => l.unidad === 'cajas').reduce((s, l) => s + l.qty, 0), unidades: lines.filter(l => l.unidad !== 'cajas').reduce((s, l) => s + l.qty, 0), kg: Math.round(lines.reduce((s, l) => s + l.kg, 0)) } };
+  return { id, num: 'OC-' + dnToStr(todayDn()).replace(/-/g, '') + '-' + String(n).padStart(2, '0'), prov: cur.p, fecha: dnToStr(S.ui.pedidoDn || todayDn()), envio: dnToStr((pr.envioFecha && strToDn(pr.envioFecha) >= (S.ui.pedidoDn || todayDn())) ? strToDn(pr.envioFecha) : (S.ui.pedidoDn || todayDn()) + (pr.denv !== undefined ? +pr.denv : 3)), llegada: dnToStr((S.ui.pedidoDn || todayDn()) + (+pr.lt || 0)), lt: pr.lt, ciclo: pr.ciclo, obs: S.ui.poNote || '', borrador: !!draft, lines, tot: { cajas: lines.filter(l => l.unidad === 'cajas').reduce((s, l) => s + l.qty, 0), unidades: lines.filter(l => l.unidad !== 'cajas').reduce((s, l) => s + l.qty, 0), kg: Math.round(lines.reduce((s, l) => s + l.kg, 0)) } };
 }
 async function emitOrder(cur, emit) {
   if (!emit.length) { toast('No hay líneas con pedido.'); return; }
   const o = buildOrder(cur, emit, false);
   S.orders.unshift(o);
   try { if (S.db) await S.db.doc('ordenes/' + o.id).set(o); } catch (e) { toast('La orden se descargó pero no se pudo guardar en el historial: ' + (e.message || e.code), 7000); }
-  exportOrder(o); toast('Orden ' + o.num + ' emitida.');
+  // queda registrada en Solicitudes (como emitida directamente), para que Compras vea todo lo que se emitió
+  const ahora = new Date().toISOString(), sol = { id: 'sol_' + Date.now().toString(36) + '_' + slugProv(cur.p).slice(0, 10), prov: cur.p, estado: 'aprobada', directa: true, por: S.user.nombre, porDni: S.user.dni, en: ahora, fecha: dnToStr(todayDn()), nLineas: emit.length, orden: o, resolucion: { por: S.user.nombre, porDni: S.user.dni, en: ahora, orden: o.num, directa: true, cambios: [] } };
+  S.solic = S.solic || []; S.solic.unshift(sol);
+  try { if (S.db) await S.db.doc('solicitudes/' + sol.id).set(sol); } catch (e) { /* igual queda en el historial de órdenes */ }
+  avisoEmitida(o, await exportOrder(o, { interno: !!S.ui.poXInt, excel: !!S.ui.poXExcel }));
 }
-function exportOrder(o) {
+/* ================= PDF de la orden de compra ================= */
+const PDF_C = { acc: [46, 91, 255], ink: [17, 24, 39], mut: [100, 116, 139], bg: [238, 242, 255], zeb: [248, 250, 252], line: [226, 232, 240], ok: [22, 163, 74], warn: [234, 88, 12], crit: [220, 38, 38], oscuro: [30, 41, 59] };
+// los PDF usan la tipografía estándar (Latin-1): se reemplazan los símbolos que no tiene
+const lat1 = s => String(s ?? '').replace(/[\u2013\u2014]/g, '-').replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/\u2192/g, '->').replace(/\u2265/g, '>=').replace(/\u2264/g, '<=').replace(/[^\x20-\xFF]/g, '');
+const fechaPdf = s => { const d = strToDn(s); return isNaN(d) ? String(s || '') : dnLong(d) + '/' + String(s).slice(0, 4); };
+const nombrePdf = (o, suf) => (o.borrador ? 'borrador_' : '') + o.num + '_' + o.prov.replace(/\W+/g, '_') + (suf || '') + '.pdf';
+function cargarPdf() {   // las librerías se bajan la primera vez que hace falta un PDF
+  if (window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API && window.jspdf.jsPDF.API.autoTable) return Promise.resolve();
+  const cargar = src => new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => no(new Error('No se pudo cargar ' + src)); document.head.appendChild(s); });
+  return cargar('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js').then(() => cargar('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js'));
+}
+function pdfTarjeta(doc, x, y, w, h, etiqueta, valor, op = {}) {
+  const C = PDF_C;
+  doc.setFillColor(...(op.fondo || C.bg)); doc.setDrawColor(...C.line); doc.setLineWidth(0.3); doc.roundedRect(x, y, w, h, 2.2, 2.2, op.borde ? 'FD' : 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(6.8); doc.setTextColor(...C.mut); doc.text(lat1(etiqueta).toUpperCase(), x + 4, y + 5.4, { charSpace: 0.3 });
+  doc.setFontSize(op.tam || 12); doc.setTextColor(...C.ink); doc.text(lat1(valor), x + 4, y + h - 3.8);
+  if (op.sub) { doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2); doc.setTextColor(...C.mut); doc.text(lat1(op.sub), x + w - 4, y + 5.4, { align: 'right' }); }
+}
+function pdfPie(doc, o) {
+  const n = doc.internal.getNumberOfPages(), W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setDrawColor(...PDF_C.line); doc.setLineWidth(0.2); doc.line(14, H - 13, W - 14, H - 13); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...PDF_C.mut); doc.text(lat1(o.num + '  -  ' + o.prov), 14, H - 8); doc.text('Página ' + i + ' de ' + n, W - 14, H - 8, { align: 'right' }); }
+}
+// La orden para el proveedor: prolija y sin datos internos (no trae stock ni pronóstico).
+function pdfOrden(o) {
+  const { jsPDF } = window.jspdf, doc = new jsPDF({ unit: 'mm', format: 'a4' }), W = 210, M = 14, C = PDF_C, t = o.tot || {};
+  doc.setFillColor(...C.acc); doc.rect(0, 0, W, 34, 'F');
+  doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.text('CENTRAL CV  -  LOGÍSTICA', M, 11, { charSpace: 0.7 });
+  doc.setFontSize(24); doc.text('ORDEN DE COMPRA', M, 24);
+  doc.setFontSize(13); doc.text(lat1(o.num), W - M, 14, { align: 'right' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.text('Fecha del pedido: ' + fechaPdf(o.fecha), W - M, 21, { align: 'right' });
+  if (o.borrador) { doc.setFillColor(...C.warn); doc.roundedRect(W - M - 26, 25, 26, 6, 3, 3, 'F'); doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.text('BORRADOR', W - M - 13, 29.1, { align: 'center', charSpace: 0.5 }); }
+  doc.setTextColor(...C.mut); doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.text('PROVEEDOR', M, 44, { charSpace: 0.5 });
+  doc.setTextColor(...C.ink); doc.setFontSize(18); const nom = doc.splitTextToSize(lat1(o.prov), W - 2 * M); doc.text(nom, M, 52);
+  let y = 52 + (nom.length - 1) * 7.5 + 7; const cw = (W - 2 * M - 8) / 3;
+  pdfTarjeta(doc, M, y, cw, 17, 'Fecha del pedido', fechaPdf(o.fecha));
+  pdfTarjeta(doc, M + cw + 4, y, cw, 17, 'Plazo de entrega', (o.lt ?? '') !== '' ? o.lt + (+o.lt === 1 ? ' día' : ' días') : '-');
+  pdfTarjeta(doc, M + 2 * (cw + 4), y, cw, 17, 'Entrega esperada', fechaPdf(o.llegada));
+  y += 17 + 4; const kw = (W - 2 * M - 12) / 4;
+  [['Líneas', nf(o.lines.length)], ['Cajas', nf(t.cajas || 0)], ['Unidades sueltas', nf(t.unidades || 0)], ['Kilos aproximados', nf(t.kg || 0, 0)]].forEach(([e, v], i) => pdfTarjeta(doc, M + i * (kw + 4), y, kw, 16, e, v, { fondo: [255, 255, 255], borde: true, tam: 14 }));
+  y += 16 + 6;
+  if (o.obs) {
+    const tx = doc.splitTextToSize(lat1(o.obs), W - 2 * M - 8), h = 10 + tx.length * 4.4;
+    doc.setFillColor(255, 247, 237); doc.roundedRect(M, y, W - 2 * M, h, 2, 2, 'F'); doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(...C.warn); doc.text('OBSERVACIONES', M + 4, y + 5.2, { charSpace: 0.4 });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...C.ink); doc.text(tx, M + 4, y + 10); y += h + 6;
+  }
+  const totTxt = [t.cajas ? nf(t.cajas) + ' cajas' : '', t.unidades ? nf(t.unidades) + ' u.' : ''].filter(Boolean).join(' + ') || '-';
+  doc.autoTable({
+    startY: y, margin: { left: M, right: M, bottom: 20 }, theme: 'plain', showFoot: 'lastPage',
+    head: [['#', 'Código', 'Producto', 'Cantidad', 'Unidad', 'Kg']],
+    body: o.lines.map((l, i) => [i + 1, l.cod, lat1(l.nombre), nf(l.qty), l.unidad === 'cajas' ? 'cajas' : 'unidades', l.kg ? nf(l.kg, 0) : '-']),
+    foot: [['', '', 'TOTAL', totTxt, '', nf(t.kg || 0, 0)]],
+    styles: { font: 'helvetica', fontSize: 9, cellPadding: { top: 2.7, bottom: 2.7, left: 2.5, right: 2.5 }, textColor: C.ink, lineWidth: 0, overflow: 'linebreak' },
+    headStyles: { fillColor: C.acc, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5 },
+    footStyles: { fillColor: C.bg, textColor: C.ink, fontStyle: 'bold', fontSize: 9.5 },
+    alternateRowStyles: { fillColor: C.zeb },
+    columnStyles: { 0: { cellWidth: 9, halign: 'center', textColor: C.mut }, 1: { cellWidth: 31, textColor: C.mut, fontSize: 8.3 }, 2: { cellWidth: 'auto' }, 3: { cellWidth: 30, halign: 'right', fontStyle: 'bold', fontSize: 11 }, 4: { cellWidth: 20, textColor: C.mut }, 5: { cellWidth: 14, halign: 'right', textColor: C.mut } },
+    didParseCell: d => { if (d.section === 'head' && (d.column.index === 3 || d.column.index === 5)) d.cell.styles.halign = 'right'; if (d.section === 'foot' && (d.column.index === 3 || d.column.index === 5)) d.cell.styles.halign = 'right'; }
+  });
+  pdfPie(doc, o); doc.save(nombrePdf(o));
+}
+// Días que debería cubrir la orden (desde el primer envío): los de venta hasta la llegada + los a cubrir + la seguridad
+const metaDias = (l, o) => Math.max(0, strToDn(o.llegada) + 1 - strToDn(l.envio || o.envio)) + (+l.nDias || 0) + (+l.ssDias || 0);
+// El análisis interno: stock, pronóstico, picos y cobertura de cada línea. No es para mandar al proveedor.
+function pdfInterno(o) {
+  const { jsPDF } = window.jspdf, doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' }), W = 297, M = 12, C = PDF_C, t = o.tot || {};
+  doc.setFillColor(...C.oscuro); doc.rect(0, 0, W, 27, 'F');
+  doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.text('CENTRAL CV  -  LOGÍSTICA', M, 9.5, { charSpace: 0.7 });
+  doc.setFontSize(19); doc.text('ANÁLISIS DE LA ORDEN', M, 20);
+  doc.setFontSize(11); doc.text(lat1(o.num + '  -  ' + o.prov), W - M, 12, { align: 'right' });
+  doc.setFillColor(...C.warn); doc.roundedRect(W - M - 54, 16, 54, 6.4, 3.2, 3.2, 'F'); doc.setFontSize(7.5); doc.text('USO INTERNO - NO ENVIAR', W - M - 27, 20.3, { align: 'center', charSpace: 0.4 });
+  const cw = (W - 2 * M - 12) / 4; let y = 33;
+  pdfTarjeta(doc, M, y, cw, 15, 'Fecha del pedido', fechaPdf(o.fecha), { tam: 11 });
+  pdfTarjeta(doc, M + cw + 4, y, cw, 15, 'Primer envío', fechaPdf(o.envio), { tam: 11 });
+  pdfTarjeta(doc, M + 2 * (cw + 4), y, cw, 15, 'Llega el proveedor', fechaPdf(o.llegada), { tam: 11, sub: (o.lt ?? '') !== '' ? o.lt + ' días' : '' });
+  pdfTarjeta(doc, M + 3 * (cw + 4), y, cw, 15, 'Líneas y kilos', o.lines.length + ' líneas  -  ' + nf(t.kg || 0, 0) + ' kg', { tam: 11 });
+  y += 15 + 5;
+  const ab = l => l.unidad === 'cajas' ? 'cj' : 'u.';
+  doc.autoTable({
+    startY: y, margin: { left: M, right: M, bottom: 24 }, theme: 'plain', showFoot: 'never',
+    head: [['Código', 'Producto', 'Stock actual', 'Pronóstico', 'Pico de ventas', 'Stock al llegar', 'Seguridad', 'Sugerido', 'Pedido final', 'Colchón', 'Cubre (días)']],
+    body: o.lines.map(l => [l.cod, lat1(l.nombre), nf(l.stock, 1) + ' ' + ab(l), nf(l.pron, 1) + ' ' + ab(l) + '\nen ' + nf(l.nDias, 0) + ' días', l.pico != null ? nf(l.pico, 1) + ' ' + ab(l) + '/sem\n' + (l.picoPct > 0 ? 'cubre ' + nf(l.picoPct, 0) + '%' : 'sin cubrir') : '-', nf(l.llega, 1) + ' ' + ab(l), l.ss != null ? nf(l.ss, 1) + ' ' + ab(l) + '\n' + nf(l.ssDias, 1) + ' días' : '-', nf(l.sug), nf(l.qty), (l.colchon != null ? l.colchon : 0) + '%', (l.dias >= 400 ? '+365' : l.dias) + ' d']),
+    styles: { font: 'helvetica', fontSize: 8.3, cellPadding: { top: 2.2, bottom: 5, left: 2, right: 2 }, textColor: C.ink, lineWidth: 0, valign: 'top', minCellHeight: 12.5 },
+    headStyles: { fillColor: C.acc, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7.8, valign: 'middle', minCellHeight: 9 },
+    alternateRowStyles: { fillColor: C.zeb },
+    columnStyles: { 0: { cellWidth: 22, textColor: C.mut, fontSize: 7.6 }, 1: { cellWidth: 58 }, 2: { cellWidth: 20, halign: 'right' }, 3: { cellWidth: 24, halign: 'right' }, 4: { cellWidth: 25, halign: 'right' }, 5: { cellWidth: 22, halign: 'right' }, 6: { cellWidth: 22, halign: 'right' }, 7: { cellWidth: 17, halign: 'right' }, 8: { cellWidth: 20, halign: 'right', fontStyle: 'bold' }, 9: { cellWidth: 16, halign: 'right' }, 10: { cellWidth: 27 } },
+    didParseCell: d => { if (d.section === 'head' && d.column.index >= 2 && d.column.index <= 9) d.cell.styles.halign = 'right'; if (d.section === 'body' && d.column.index === 8) { const l = o.lines[d.row.index]; if (l && l.qty !== l.sug) d.cell.styles.textColor = C.warn; } },
+    didDrawCell: d => {   // la barra de cobertura: la marca negra es la meta (días a cubrir + seguridad)
+      if (d.section !== 'body' || d.column.index !== 10) return;
+      const l = o.lines[d.row.index]; if (!l) return;
+      const meta = Math.max(1, metaDias(l, o)), tope = Math.max(meta * 1.6, l.dias, 1), bw = d.cell.width - 4, by = d.cell.y + d.cell.height - 4.2, ok = l.dias >= meta, medio = l.dias >= 0.7 * meta;
+      doc.setFillColor(...C.line); doc.roundedRect(d.cell.x + 2, by, bw, 2.2, 1.1, 1.1, 'F');
+      doc.setFillColor(...(ok ? C.ok : medio ? C.warn : C.crit)); doc.roundedRect(d.cell.x + 2, by, Math.max(1.4, bw * Math.min(1, l.dias / tope)), 2.2, 1.1, 1.1, 'F');
+      doc.setDrawColor(...C.ink); doc.setLineWidth(0.35); const mx = d.cell.x + 2 + bw * Math.min(1, meta / tope); doc.line(mx, by - 0.9, mx, by + 3.1);
+    }
+  });
+  const fy = (doc.lastAutoTable && doc.lastAutoTable.finalY || y) + 6;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7.8); doc.setTextColor(...C.mut);
+  doc.text(doc.splitTextToSize('Cubre: cuántos días duran el stock actual más este pedido, contados desde el primer envío. La marca negra de la barra es la meta (días de venta hasta la llegada, más los días a cubrir, más la seguridad). Verde: cumple; naranja: le falta poco; rojo: queda corto. El colchón es el porcentaje del pedido que quedaría sin vender al terminar los días a cubrir.', W - 2 * M), M, Math.min(fy, 200));
+  pdfPie(doc, o); doc.save(nombrePdf(o, '_analisis'));
+}
+async function exportOrder(o, extra = {}) {   // PDF de la orden (y, si se pide, el análisis interno y el Excel)
+  try { await cargarPdf(); pdfOrden(o); }
+  catch (e) { exportOrderXlsx(o); return false; }   // sin poder generar el PDF (por ejemplo sin conexión para bajar la librería) se baja el Excel; el que llama avisa
+  if (extra.interno) setTimeout(() => { try { pdfInterno(o); } catch (e) { toast('No se pudo generar el análisis: ' + (e.message || e)); } }, 450);
+  if (extra.excel) setTimeout(() => exportOrderXlsx(o), 900);
+  return true;
+}
+const avisoEmitida = (o, pdfOk) => pdfOk === false ? toast('Orden ' + o.num + ' emitida y guardada, pero NO se pudo generar el PDF (¿sin conexión?): se descargó el Excel.', 9000) : toast('Orden ' + o.num + ' emitida.');
+async function exportOrderInterno(o) { try { await cargarPdf(); pdfInterno(o); } catch (e) { toast('No se pudo generar el PDF (' + (e.message || e) + ').', 7000); } }
+function exportOrderXlsx(o) {
   const hdr = ['Código', 'Producto', 'Unidad de compra', 'Stock actual (unidad de compra)', 'Stock actual (u.)', 'Días a cubrir', 'Pronóstico en esos días', 'Pico de ventas (por semana)', '% del pico a cubrir', 'Día de envío', 'Lead time (días)', 'Stock al llegar', 'Días de seguridad', 'Stock de seguridad', 'Pedido sugerido', 'Pedido', 'Colchón % del pedido', 'Cubre desde el envío (días)', 'Kilos'];
   const rows = [['ORDEN DE COMPRA', o.num + (o.borrador ? ' (borrador)' : '')], ['Proveedor', o.prov], ['Fecha del pedido', o.fecha], ['Primer envío', o.envio || ''], ['Llegada del proveedor', o.llegada], ['Observaciones', o.obs || ''], [], hdr,
     ...o.lines.map(l => [l.cod, l.nombre, l.unidad, l.stock, l.stockU ?? '', l.nDias, l.pron, l.pico ?? '', l.picoPct ?? '', l.envio || '', l.lt, l.llega, l.ssDias, l.ss ?? '', l.sug, l.qty, l.colchon ?? '', l.dias >= 400 ? '>365' : l.dias, l.kg]), [],
@@ -2271,6 +2391,7 @@ function gateHtml(ac) {
   return `<div class="note crit"><b>${msg}</b><br><br><a class="btn pri" href="index.html" style="text-decoration:none;display:inline-block">← Ir al Armador</a></div>`;
 }
 const puedeAprobar = () => !!(S.user && S.user.aprobar);
+const puedeSolicitar = () => !!(S.user && S.user.planifica);   // Planificación y Logística arman la compra; Compras solo la aprueba
 const slugProv = p => String(p).normalize('NFD').replace(/[^\w]+/g, '').toLowerCase().slice(0, 24);
 const tabInicial = () => { const h = (location.hash || '').replace('#', ''); return TABS.some(t => t[0] === h) ? h : 'home'; };
 
@@ -2318,7 +2439,7 @@ async function aprobarSolicitud(s, qtys) {
   try { await S.db.doc('ordenes/' + o.id).set(o); } catch (e) { toast('La orden se descargó pero no se pudo guardar en el historial: ' + (e.message || e.code), 7000); }
   s.estado = 'aprobada';
   await resolverSolicitud(s, { orden: o.num, cambios });
-  exportOrder(o); toast('Orden ' + o.num + ' emitida.');
+  avisoEmitida(o, await exportOrder(o, { interno: !!S.ui.poXInt, excel: !!S.ui.poXExcel }));
   return true;
 }
 async function rechazarSolicitud(s, motivo) { s.estado = 'rechazada'; await resolverSolicitud(s, { motivo }); toast('Solicitud rechazada: Planificación va a ver el motivo.'); }
@@ -2332,7 +2453,7 @@ function viewSol(main) {
   const chips = [['pendiente', 'Pendientes'], ['aprobada', 'Aprobadas'], ['rechazada', 'Rechazadas'], ['todas', 'Todas']].map(([k, t]) => `<button class="pchip" aria-pressed="${u.solF === k}" data-f="${k}">${t}<span class="n">${cuenta(k)}</span></button>`).join('');
   main.innerHTML = `<section>${heroHead('Solicitudes de compra', puedeAprobar() ? 'Lo que Planificación pide comprar' : 'Lo que enviaste a Compras', puedeAprobar() ? 'Cada solicitud trae los mismos datos que vio Planificación. Podés aceptarla, rechazarla (con el motivo) o modificar las cantidades antes de emitir la orden.' : 'Acá ves cómo va cada solicitud que enviaste: pendiente, aprobada (con la orden) o rechazada (con el motivo).')}</section>
   <div class="provrow" role="group" aria-label="Estado">${chips}</div>
-  ${lista.length ? lista.map(s => { const e = ESTADO_SOL[s.estado] || [s.estado, ''], t = s.orden.tot || {}; return `<section class="card sol-card" data-sol="${esc(s.id)}"><div class="flex"><div><div class="eyebrow">${esc(s.por)} · ${fmtFechaHora(s.en)}</div><h2 style="margin:4px 0 0">${esc(s.prov)}</h2></div><span class="sp"></span><span class="chip ${e[1]}">${e[0]}</span></div>
+  ${lista.length ? lista.map(s => { const e = ESTADO_SOL[s.estado] || [s.estado, ''], t = s.orden.tot || {}; return `<section class="card sol-card" data-sol="${esc(s.id)}"><div class="flex"><div><div class="eyebrow">${esc(s.por)} · ${fmtFechaHora(s.en)}${s.directa ? ' · emitida directamente' : ''}</div><h2 style="margin:4px 0 0">${esc(s.prov)}</h2></div><span class="sp"></span><span class="chip ${e[1]}">${e[0]}</span></div>
       <div class="muted small" style="margin-top:8px">${nf(s.nLineas)} líneas · ${nf(t.cajas || 0)} cajas${t.unidades ? ' · ' + nf(t.unidades) + ' u. sueltas' : ''} · ${nf(t.kg || 0)} kg${s.resolucion && s.resolucion.orden ? ' · orden ' + esc(s.resolucion.orden) : ''}${s.estado === 'rechazada' ? ' · “' + esc((s.resolucion || {}).motivo || '') + '”' : ''}</div></section>`; }).join('') : `<div class="note">${u.solF === 'pendiente' ? 'No hay solicitudes pendientes.' : 'No hay solicitudes en este estado.'}</div>`}`;
   $$('.pchip', main).forEach(b => b.onclick = () => { u.solF = b.dataset.f; viewSol(main); });
   $$('.sol-card', main).forEach(b => b.onclick = () => { u.solSel = b.dataset.sol; u.solRech = false; viewSol(main); window.scrollTo({ top: 0 }); });
@@ -2346,10 +2467,10 @@ function viewSolDetalle(main, s) {
     <td class="n ${edita ? 'ed' : ''}">${edita ? `<input class="ed solq" type="number" min="0" step="1" data-i="${i}" value="${l.qty}" aria-label="Cantidad final ${esc(l.nombre)}"><span class="u">${esc(l.unidad)}</span>` : `<b>${nf(((s.resolucion || {}).cambios || []).find(x => x.cod === l.cod) ? ((s.resolucion || {}).cambios.find(x => x.cod === l.cod)).a : l.qty)}</b><span class="u">${esc(l.unidad)}</span>`}</td>
     <td class="n">${l.kg ? `<b>${nf(l.kg, 0)}</b><span class="u">kg</span>` : '<span class="muted">—</span>'}</td></tr>`).join('');
   const res = s.resolucion || {};
-  const resHtml = s.estado === 'aprobada' ? `<div class="note ok" style="margin-top:14px"><b>Aprobada por ${esc(res.por)}</b> · ${fmtFechaHora(res.en)} · orden <b>${esc(res.orden)}</b>.${(res.cambios || []).length ? ' Cambios de Compras: ' + res.cambios.map(x => `${esc(x.nombre)} ${nf(x.de)} → ${nf(x.a)}`).join('; ') + '.' : ' Sin cambios.'}</div>`
+  const resHtml = s.estado === 'aprobada' ? `<div class="note ok" style="margin-top:14px"><b>${res.directa ? 'Emitida directamente por ' : 'Aprobada por '}${esc(res.por)}</b> · ${fmtFechaHora(res.en)} · orden <b>${esc(res.orden)}</b>.${(res.cambios || []).length ? ' Cambios de Compras: ' + res.cambios.map(x => `${esc(x.nombre)} ${nf(x.de)} → ${nf(x.a)}`).join('; ') + '.' : (res.directa ? '' : ' Sin cambios.')}</div><div class="bar" style="margin-top:12px"><button class="btn" id="solPdf">Bajar PDF de la orden</button><button class="btn" id="solPdfI" title="Stock, pronóstico y cobertura (uso interno)">Análisis interno (PDF)</button></div>`
     : s.estado === 'rechazada' ? `<div class="note crit" style="margin-top:14px"><b>Rechazada por ${esc(res.por)}</b> · ${fmtFechaHora(res.en)}: “${esc(res.motivo || '')}”</div>`
     : puedeAprobar() ? '' : '<div class="note plan" style="margin-top:14px">Compras todavía no respondió esta solicitud.</div>';
-  main.innerHTML = `<section><div class="bar"><button class="btn sm" id="solVolver">← Solicitudes</button></div>${heroHead('Solicitud de compra', 'Pedido a ' + esc(s.prov), `Enviada por ${esc(s.por)} (${fmtFechaHora(s.en)}). Estos son los datos tal como los dejó Planificación.`)}</section>
+  main.innerHTML = `<section><div class="bar"><button class="btn sm" id="solVolver">← Solicitudes</button></div>${heroHead('Solicitud de compra', 'Pedido a ' + esc(s.prov), (s.directa ? `Emitida directamente por ${esc(s.por)} (${fmtFechaHora(s.en)}), sin pasar por solicitud.` : `Enviada por ${esc(s.por)} (${fmtFechaHora(s.en)}). Estos son los datos tal como los dejó Planificación.`))}</section>
   <section class="card"><div class="flex"><div class="bar" style="gap:14px 28px;flex-wrap:wrap"><div><div class="eyebrow">Fecha del pedido</div><b>${esc(o.fecha)}</b></div><div><div class="eyebrow">Primer envío</div><b>${esc(o.envio || '')}</b></div><div><div class="eyebrow">Lead time</div><b>${esc(o.lt)} días</b></div><div><div class="eyebrow">Llega el proveedor</div><b>${esc(o.llegada)}</b></div></div><span class="sp"></span><span class="chip ${e[1]}">${e[0]}</span></div>
     ${o.obs ? `<div class="muted small" style="margin-top:10px">Observaciones: ${esc(o.obs)}</div>` : ''}
     <div class="tw" style="max-height:none;margin-top:16px"><table><thead><tr><th class="sticky1">Producto</th><th class="n">Stock actual</th><th class="n">Pronóstico</th><th class="n">Stock al llegar</th><th class="n">Pedido sugerido</th><th class="n">Pedido de Planificación</th><th class="n ${edita ? 'ed' : ''}">${edita ? 'Pedido final (Compras)' : 'Pedido final'}</th><th class="n">Kilos</th></tr></thead><tbody>${filas}</tbody></table></div>
@@ -2360,6 +2481,9 @@ function viewSolDetalle(main, s) {
   const qtys = () => $$('.solq', main).map(i => Math.max(0, Math.round(+i.value || 0)));
   const tot = () => { const q = o.lines.map((l, i) => $$('.solq', main)[i] ? qtys()[i] : l.qty), cam = o.lines.filter((l, i) => q[i] !== l.qty).length; const el = $('#solTot'); if (el) el.innerHTML = edita ? (cam ? `<b>${cam}</b> línea${cam > 1 ? 's' : ''} con cambios respecto de lo que pidió Planificación.` : 'Sin cambios respecto de lo que pidió Planificación.') : ''; };
   $('#solVolver').onclick = () => { u.solSel = ''; u.solRech = false; viewSol(main); };
+  const ordenDe = () => S.orders.find(x => x.num === res.orden) || o;
+  if ($('#solPdf')) $('#solPdf').onclick = () => exportOrder(ordenDe());
+  if ($('#solPdfI')) $('#solPdfI').onclick = () => exportOrderInterno(ordenDe());
   $$('.solq', main).forEach(i => i.oninput = tot); tot();
   const ok = $('#solOk'); if (ok) ok.onclick = async () => { ok.disabled = true; const hecho = await aprobarSolicitud(s, qtys()); if (hecho) { u.solSel = ''; render(false); } else ok.disabled = false; };
   const r1 = $('#solRech'); if (r1) r1.onclick = () => { u.solRech = true; viewSolDetalle(main, s); };
@@ -2713,7 +2837,7 @@ try {
       // el perfil con el que entró al Armador; si no vino (sesión vieja), el primero que le sirva para Compras
       const perfil = [ses.perfil, ...PERFILES].find(p => p && resolverPermisos(r.usuario, p) && (p === ses.perfil || resolverPermisos(r.usuario, p).has('compras_ver')));
       const perm = perfil ? resolverPermisos(r.usuario, perfil) : null;
-      acceso = (perm && perm.has('compras_ver')) ? { ok: true, dni: ses.documento, nombre: r.usuario.nombre, perfil, perfilNombre: NOMBRE_ROL[perfil], aprobar: perm.has('compras_aprobar') } : { ok: false, motivo: 'sin_permiso', nombre: r.usuario.nombre };
+      acceso = (perm && perm.has('compras_ver')) ? { ok: true, dni: ses.documento, nombre: r.usuario.nombre, perfil, perfilNombre: NOMBRE_ROL[perfil], aprobar: perm.has('compras_aprobar'), planifica: perm.has('planificar') } : { ok: false, motivo: 'sin_permiso', nombre: r.usuario.nombre };
     }
   }
   window.__acceso = acceso;
