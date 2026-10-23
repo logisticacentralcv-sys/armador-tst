@@ -207,6 +207,12 @@ ul.plain,ol.plain{margin:6px 0 0;padding-left:22px}ul.plain li,ol.plain li{margi
 .po-t input.ed{width:56px;padding:5px 6px}
 .po-t .sup{min-width:96px}.po-t .sup .cov{width:96px}
 .po-t .pn small{white-space:normal}
+.po-t th,.po-t td,.po-t th.n,.po-t td.n,.po-t th.sticky1,.po-t td.sticky1,.po-t .pn,.po-t .pn small{text-align:center}
+.po-t input.ed{text-align:center}
+.po-t .pk{justify-content:center}
+.po-t .sup .cov{margin:4px auto 0}
+.po-calc{font-size:14.5px;line-height:1.55;color:var(--ink2);max-width:600px}
+.po-calc a{color:var(--accent);font-weight:600;white-space:nowrap}
 .hero .stat .v{font-size:clamp(34px,4.4vw,62px)}
 .hero{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 .hero .stats{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
@@ -904,9 +910,9 @@ window.addEventListener('resize', () => { moveInd(); });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(moveInd);
 function renderStatus() {
   if (!S.ready) { $('#status').innerHTML = ''; return; }
-  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 23/10 · picos y fecha de envío</span>`; return; }
+  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 23/10 · tabla centrada</span>`; return; }
   const part = isPartial() ? `<span class="pill warn" title="La última semana tiene datos hasta el ${dnFmt(S.lastDn)}; se completa con el perfil por día de la semana">semana en curso parcial</span>` : '';
-  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 23/10 · picos y fecha de envío</span>${part}`;
+  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 23/10 · tabla centrada</span>${part}`;
 }
 function render(anim) {
   renderTabs(); renderStatus(); badgeSol();
@@ -1344,11 +1350,11 @@ function viewOrden(main) {
   const selR = lines.find(x => x.m.cod === u.poSel);
   const hist = S.orders.filter(o => o.prov === u.poProv).slice(0, 8);
   main.innerHTML = `
-  <section>${heroHead('Orden de compra · borrador', 'Pedido a ' + esc(cur.p), `Stock de hoy, ventas esperadas desde el día de envío, con cuánto stock llega el proveedor y cuánto pedir para cubrir los días que elijas más el stock de seguridad.`)}</section>
+  <section>${heroHead('Orden de compra · borrador', 'Pedido a ' + esc(cur.p), `Stock de hoy, ventas esperadas, con cuánto stock llega el proveedor y cuánto pedir para cubrir los días que elijas más el stock de seguridad.`)}</section>
   ${barra}
   <section class="card">
     <div class="po-head">
-      <div class="po-titulo"><div class="eyebrow">Proveedor</div><h2>${esc(cur.p)}</h2>
+      <div class="po-titulo"><div class="po-calc"><b>Cómo se calcula el pronóstico.</b> Es el promedio de las últimas ${S.params.g.N} semanas de venta de cada producto${S.params.g.pesos === 'lineal' ? ' (las más recientes pesan más)' : ''}${S.params.g.clip > 0 ? ', sin dejar que una semana atípica lo infle (tope de ' + nf(S.params.g.clip, 1) + ' veces la mediana)' : ''}, repartido por día de la semana. Con él se estima la venta hasta que llega el proveedor y la de los días a cubrir. Si cubrís un % del pico de ventas, se toma el mayor entre el pronóstico y ese % del pico. <a href="#" data-go-teoria>Ver la teoría completa ›</a></div>
         <div class="muted small po-estado">Stock cargado al ${dnFmt(from)}${pedDn > from ? ' (se asume sin cambios hasta el envío)' : ''}. ${CONF_LABEL[pr.conf]}${pr.configurado ? '' : ' · <span class="chip warn">valores por defecto</span>'}</div>
       </div>
       <div class="po-meta"><div class="tag-l"><span class="k">Líneas</span><span class="v">${emit.length}</span></div><div class="tag-l"><span class="k">Cajas</span><span class="v">${nf(cur.cajas)}</span></div>${cur.uni ? `<div class="tag-l"><span class="k">Unidades sueltas</span><span class="v">${nf(cur.uni)}</span></div>` : ''}<div class="tag-l"><span class="k">Kilos</span><span class="v">${nf(kg)}</span></div><div class="tag-l"><span class="k">Colchón sobre el pedido</span><span class="v">${kg > 0 ? nf(kgSS / kg * 100, 0) + '%' : '—'}</span></div><div class="tag-l"><span class="k">Cubre al menos</span><span class="v">${emit.length ? nf(minCover, 0) + ' d' : '—'}</span></div></div>
@@ -1404,6 +1410,7 @@ function viewOrden(main) {
     <div class="hint">Línea verde: stock teórico. Hasta el primer envío no baja. Desde ahí baja con la venta de cada día; el día que llega el proveedor sale primero la venta de ese día del stock que ya tenías (la mercadería que llega todavía no cuenta), y recién después suma el pedido. La zona celeste son los días a cubrir, que arrancan el día siguiente a la llegada. El punto celeste es el stock que queda al terminar, que es el colchón. La línea gris punteada es lo que pasaría sin pedir nada.</div></section>` : ''}
   <section class="card"><h3>Órdenes emitidas a ${esc(cur.p)}</h3>${hist.length ? `<div class="tw" style="max-height:340px;margin-top:10px"><table><thead><tr><th>Orden</th><th>Fecha</th><th class="n">Líneas</th><th class="n">Cajas</th><th class="n">Kg</th><th>Llegada</th><th></th></tr></thead><tbody>${hist.map(o => `<tr><td class="mono-s">${esc(o.num)}</td><td>${dnFmt(strToDn(o.fecha))}</td><td class="n">${o.lines.length}</td><td class="n">${nf(o.tot.cajas)}</td><td class="n">${nf(o.tot.kg)}</td><td>${dnFmt(strToDn(o.llegada))}</td><td><button class="btn sm" data-dl="${esc(o.id)}">Descargar</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="muted small" style="margin-top:6px">Todavía no emitiste órdenes a este proveedor.</div>'}</section>`;
   provPickerBind('ppOrden', p => { u.poProv = p; u.poAsk = false; viewOrden(main); });
+  $$('[data-go-teoria]', main).forEach(a => a.onclick = e => { e.preventDefault(); S.ui.tab = 'teoria'; render(true); window.scrollTo({ top: 0 }); });
   const irAProv = d => { const k = lista[idxP + d]; if (k) { u.poProv = k.p; u.poAsk = false; viewOrden(main); } };
   $('#ppPrev').onclick = () => irAProv(-1); $('#ppNext').onclick = () => irAProv(1);
   $('#ppSolo').onchange = e => { u.ppSolo = e.target.checked; viewOrden(main); };
