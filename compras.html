@@ -517,7 +517,21 @@ function prep(cod) {
   let useP = partial && g.parcial && cov > 0.3;
   let usableLast = useP ? lastIdx : completeLast;
   if (hWk < usableLast) { usableLast = Math.max(S.vf - 1, hWk); useP = false; }
-  const y = Float64Array.from(raw); if (useP) y[lastIdx] = raw[lastIdx] / cov;
+  const y = Float64Array.from(raw);
+  // Semana en curso (incompleta): se estima como lo vendido hasta ahora + lo que se espera para el resto de la semana, al nivel de las semanas completas.
+  // Antes se dividía lo vendido por la parte de la semana que ya pasó: con pocos días de datos eso multiplica el ruido por 2 o 3 y tiraba el pronóstico para arriba.
+  const nivelCompletas = () => {
+    let fi = -1; for (let i = S.vf; i <= completeLast; i++) if (raw[i] > 0) { fi = i; break; }
+    if (fi < 0) return 0;
+    const st0 = Math.max(S.vf, fi, dWk), n0 = Math.max(0, Math.min(Nw, completeLast - st0 + 1)); if (!n0) return 0;
+    const ix = []; for (let i = completeLast - n0 + 1; i <= completeLast; i++) ix.push(i);
+    const wv = []; for (let i = Math.max(st0, completeLast - (Ww - 1)); i <= completeLast; i++) wv.push(raw[i]);
+    const md = median(wv), cp = (g.clip > 0 && md >= 3) ? g.clip * md : Infinity, ww = ix.map((_, k) => g.pesos === 'lineal' ? k + 1 : 1), sw0 = ww.reduce((a, b) => a + b, 0);
+    return sw0 ? ix.reduce((s, i, k) => s + Math.min(raw[i], cp) * ww[k], 0) / sw0 : 0;
+  };
+  const Lprev = partial ? nivelCompletas() : 0;
+  const yProj = partial ? (Lprev > 0 ? raw[lastIdx] + (1 - cov) * Lprev : (cov > 0 ? raw[lastIdx] / cov : raw[lastIdx])) : raw[lastIdx];   // sin semanas completas con ventas no hay nivel previo: se estira
+  if (useP) y[lastIdx] = yProj;
   let first = -1; for (let i = S.vf; i <= usableLast; i++) if (raw[i] > 0) { first = i; break; }
   const start = first < 0 ? usableLast + 1 : Math.max(S.vf, first, dWk);
   const nUse = Math.max(0, Math.min(Nw, usableLast - start + 1));
@@ -568,7 +582,7 @@ function prep(cod) {
   for (let i = Math.max(S.vf, completeLast - pkV + 1); i <= completeLast; i++) pkIdx.push(i);
   let pico = null, picoSem = [];
   if (pkIdx.length >= 4) { const top = pkIdx.map(i => ({ i, v: raw[i] })).sort((a, b) => b.v - a.v).slice(0, Math.min(pkN, Math.floor(pkIdx.length / 2))); picoSem = top.map(x => x.i).sort((a, b) => a - b); pico = top.reduce((s, x) => s + x.v, 0) / top.length; }
-  return S.cache[key] = { qb, L0, pico, picoSem, cod, raw, y, idx, ya, clipped, w, L, med, cap, nUse, start, usableLast, completeLast, useP, cov, partial, m13, sd13, cv: m13 > 0 ? sd13 / m13 : 0, rel, reg, wIdx, w13, w13c, z, nOut, Nw, Ww, hasWin: !!(ovp.desde || ovp.hasta || ovp.N || ovp.W), lag: Math.max(0, (nUse - 1) / 3), sum8, kg13, f: {}, newish: (usableLast - start + 1) < 8 };
+  return S.cache[key] = { yProj, Lprev, qb, L0, pico, picoSem, cod, raw, y, idx, ya, clipped, w, L, med, cap, nUse, start, usableLast, completeLast, useP, cov, partial, m13, sd13, cv: m13 > 0 ? sd13 / m13 : 0, rel, reg, wIdx, w13, w13c, z, nOut, Nw, Ww, hasWin: !!(ovp.desde || ovp.hasta || ovp.N || ovp.W), lag: Math.max(0, (nUse - 1) / 3), sum8, kg13, f: {}, newish: (usableLast - start + 1) < 8 };
 }
 function seasInfo(cod, t) {
   const g = S.params.g, ov = S.params.prod[cod] || {}, P = prep(cod), m = S.mm[cod];
@@ -931,9 +945,9 @@ window.addEventListener('resize', () => { moveInd(); });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(moveInd);
 function renderStatus() {
   if (!S.ready) { $('#status').innerHTML = ''; return; }
-  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 23/10 · alta de proveedores</span>`; return; }
+  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 23/10 · semana en curso</span>`; return; }
   const part = isPartial() ? `<span class="pill warn" title="La última semana tiene datos hasta el ${dnFmt(S.lastDn)}; se completa con el perfil por día de la semana">semana en curso parcial</span>` : '';
-  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 23/10 · alta de proveedores</span>${part}`;
+  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 23/10 · semana en curso</span>${part}`;
 }
 function render(anim) {
   renderTabs(); renderStatus(); badgeSol();
@@ -1010,12 +1024,12 @@ function chartSpec(cods, o) {
     const ser = seriesFor(cods, { unit });
     const act = new Array(n).fill(null), cur = new Array(n).fill(null), fcv = new Array(n).fill(null), lyv = new Array(n).fill(null);
     for (let i = i0; i <= i1; i++) { const k = i - i0; if (i <= cl) act[k] = ser[i]; if (ly && i - 52 >= S.vf && i - 52 <= cl) lyv[k] = ser[i - 52]; }
-    if (partial) cur[S.lastIdx - i0] = ser[S.lastIdx] / covShare();
+    if (partial) cur[S.lastIdx - i0] = cods.reduce((s, c) => s + prep(c).yProj * um(c), 0);   // la misma proyección que usa el pronóstico
     if (nF) { fcv[cl - i0] = ser[cl]; for (let i = cl + 1; i <= i1; i++) { let s = 0; cods.forEach(c => s += weekF(c, i) * um(c)); fcv[i - i0] = s; } }
     for (let k = 0; k < n; k++) { const i = i0 + k; val[k] = i <= cl ? act[k] : (cur[k] != null ? cur[k] : fcv[k]); base[k] = val[k] || 0; }
     if (ly) series.push({ name: 'Año anterior', color: 'var(--muted)', vals: lyv, w: 2, op: .85, dash: '2 6' });
     main = series.length; series.push({ name: 'Ventas', color: 'var(--c1)', vals: act, w: 3.4, area: true });
-    if (partial) series.push({ name: 'Semana en curso (extrapolada)', color: 'var(--c4)', vals: cur, dot: true, hollow: true });
+    if (partial) series.push({ name: 'Semana en curso (proyectada)', color: 'var(--c4)', vals: cur, dot: true, hollow: true });
     if (nF) series.push({ name: 'Pronóstico', color: 'var(--c2)', vals: fcv, w: 3.2, dash: '8 6', skipAt: cl - i0 });
     if (nF) {   // franja: cuánto suelen variar las ventas de una semana a otra (±1,3 desvíos de las últimas 13 semanas); lo que cae adentro es lo normal
       const hist = []; for (let i = Math.max(S.vf, cl - 12); i <= cl; i++) hist.push(ser[i]);
@@ -1484,7 +1498,7 @@ function calcStepsHtml(r, withWeeks) {
   const mode = (S.params.prod[m.cod] || {}).est || 'grupo';
   const sf = []; for (let k = 1; k <= 8; k++) sf.push(seasFactor(m.cod, S.lastIdx + k));
   const n13 = Math.max(0, Math.min(13, P.usableLast - P.start + 1)), sq = Math.sqrt(Math.max(r.H, 1) / 7);
-  const wkTbl = P.idx.map((i, k) => `<tr><td>${dnFmt(wk(i))}</td><td class="n">${nf(P.raw[i], 1)}</td><td class="n">${nf(P.y[i], 1)}${P.useP && i === S.lastIdx ? ' <span class="chip warn" title="Semana parcial completada con el perfil por día">extrapolada</span>' : ''}</td><td class="n">${nf(P.ya[k], 1)}${P.clipped[k] ? ' <span class="chip crit" title="Recortada al tope de semanas atípicas">tope</span>' : ''}</td><td class="n">${P.w[k]}</td></tr>`).join('');
+  const wkTbl = P.idx.map((i, k) => `<tr><td>${dnFmt(wk(i))}</td><td class="n">${nf(P.raw[i], 1)}</td><td class="n">${nf(P.y[i], 1)}${P.useP && i === S.lastIdx ? ' <span class="chip warn" title="Lo vendido hasta ahora más lo que se espera para el resto de la semana">proyectada</span>' : ''}</td><td class="n">${nf(P.ya[k], 1)}${P.clipped[k] ? ' <span class="chip crit" title="Recortada al tope de semanas atípicas">tope</span>' : ''}</td><td class="n">${P.w[k]}</td></tr>`).join('');
   return `<ol class="steps">
     <li><span class="b">1</span><div><b>Nivel actual de ventas.</b> Promedio ponderado de las últimas ${P.nUse} semanas (${g.pesos === 'lineal' ? 'las más recientes pesan más' : 'mismo peso'}${g.parcial ? '; la semana en curso se completa con el perfil por día' : ''}) = <b class="mono">${nf(P.L, 1)} u./sem</b>.
       ${withWeeks ? `<div class="tw" style="margin-top:8px;max-height:none"><table><thead><tr><th>Semana</th><th class="n">Vendido</th><th class="n">Equivalente semana</th><th class="n">Usado</th><th class="n">Peso</th></tr></thead><tbody>${wkTbl || '<tr><td colspan="5" class="muted">Sin historia</td></tr>'}</tbody></table></div>` : ''}
@@ -2165,7 +2179,7 @@ function viewTeoria(main) {
     <div class="formula"><b>pronóstico semana</b> = nivel actual × factor estacional × tendencia × factor manual</div>
     ${kv([
       ['Nivel actual', `Promedio ponderado de las últimas ${g.N} semanas, donde la semana más reciente pesa ${g.N} veces y la más vieja 1. Elegí 4 porque, probando sobre tu historial, fue el método más preciso: error medio de 11,8% contra 13,1% usando 13 semanas y 14,7% usando 26.`],
-      ['Semana en curso', 'Si la última semana está incompleta (por ejemplo hay datos hasta el jueves) se completa dividiendo lo vendido por la parte de la semana que ya pasó, según el perfil por día. Así no se subestima el nivel por contar una semana corta.'],
+      ['Semana en curso', 'Si la última semana está incompleta (por ejemplo hay datos hasta el jueves) se estima como lo vendido hasta ahora más lo que se espera para el resto de la semana, al nivel de las semanas completas anteriores. Así una semana con pocos días de datos no distorsiona el nivel: estirar las ventas de 3 días (multiplicarlas por 2 o 3) amplifica el ruido, y probado con ventas reales estimaba peor el total de la semana (30% de error contra 21%).'],
       ['Tope de semanas atípicas', `Una semana con ventas mayores a ${nf(g.clip, 1)} veces la mediana de las últimas 13 se recorta a ese tope, para que una compra extraordinaria no infle el pronóstico.`],
       ['Estacionalidad', `Se mira qué pasó el año pasado en la semana que se quiere pronosticar (promedio de tres semanas) y se divide por lo que se vendía el año pasado en las semanas que hoy usamos como nivel. Esa razón R dice cuánto sube o baja la temporada. El factor aplicado es 1 + intensidad × (R − 1), con intensidad ${nf(g.estac * 100)}% y límites entre ${g.estacMin} y ${g.estacMax}. Se calcula por grupo de productos (por ejemplo, frutas) porque con un solo año de historia un producto aislado es demasiado ruidoso.`],
       ['Tendencia', `Opcional (hoy ${nf(g.tend * 100)}%). Extrapola la pendiente de las últimas 13 semanas, amortiguada. Arranca en cero porque en las pruebas empeoraba el pronóstico.`],
@@ -2503,7 +2517,7 @@ function drawAnaDetail(main) {
   const histFrom = Math.max(S.vf, P.usableLast - Math.max(26, P.Ww + 2) + 1);
   const histRows = []; for (let i = P.usableLast; i >= histFrom; i--) {
     const k = P.wIdx.indexOf(i), kl = P.idx.indexOf(i), t = k >= 0 && reg ? i - reg.t0 : null, yh = t != null ? reg.a + reg.b * t : null, j = i - 52;
-    histRows.push(`<tr><td>${dnFmt(wkDn(i))}</td><td class="n">${nf(P.raw[i], 1)}</td><td class="n">${nf(P.y[i], 1)}${i === S.lastIdx && P.useP ? ' <span class="chip warn" style="padding:0 6px;font-size:11px" title="Semana en curso completada con el perfil por día">extrap.</span>' : ''}</td><td class="n">${k >= 0 ? nf(P.w13c[k], 1) + (P.y[i] > P.cap ? ' <span class="chip crit" style="padding:0 6px;font-size:11px">tope</span>' : '') : '<span class="muted">fuera</span>'}</td><td class="n">${k >= 0 ? nf(P.z[k], 2) + (Math.abs(P.z[k]) > 2 ? ' <span class="chip crit" style="padding:0 6px;font-size:11px">atípica</span>' : '') : '—'}</td><td class="n">${yh != null ? nf(yh, 1) : '—'}</td><td class="n">${yh != null ? nf(P.w13c[k] - yh, 1) : '—'}</td><td class="n">${kl >= 0 ? P.w[kl] : '—'}</td><td class="n">${j >= S.vf ? nf(P.raw[j], 1) : '—'}</td></tr>`);
+    histRows.push(`<tr><td>${dnFmt(wkDn(i))}</td><td class="n">${nf(P.raw[i], 1)}</td><td class="n">${nf(P.y[i], 1)}${i === S.lastIdx && P.useP ? ' <span class="chip warn" style="padding:0 6px;font-size:11px" title="Lo vendido hasta ahora más lo que se espera para el resto de la semana">proyect.</span>' : ''}</td><td class="n">${k >= 0 ? nf(P.w13c[k], 1) + (P.y[i] > P.cap ? ' <span class="chip crit" style="padding:0 6px;font-size:11px">tope</span>' : '') : '<span class="muted">fuera</span>'}</td><td class="n">${k >= 0 ? nf(P.z[k], 2) + (Math.abs(P.z[k]) > 2 ? ' <span class="chip crit" style="padding:0 6px;font-size:11px">atípica</span>' : '') : '—'}</td><td class="n">${yh != null ? nf(yh, 1) : '—'}</td><td class="n">${yh != null ? nf(P.w13c[k] - yh, 1) : '—'}</td><td class="n">${kl >= 0 ? P.w[kl] : '—'}</td><td class="n">${j >= S.vf ? nf(P.raw[j], 1) : '—'}</td></tr>`);
   }
   const fRows = []; for (let k = 1; k <= 12; k++) {
     const t = S.lastIdx + k, si = seasInfo(cod, t), tr = trendFactor(cod, t), fm = fmOf(ov), f = weekF(cod, t);
@@ -2511,7 +2525,7 @@ function drawAnaDetail(main) {
   }
   const terms = P.idx.map((i, k) => `${P.w[k]}×${nf(P.ya[k], 1)}`).join(' + '), sw = P.w.reduce((s, x) => s + x, 0);
   const te = tendEff(ov, g), sd = ((reg && reg.ok) ? reg : null);
-  host.innerHTML = `<section class="card"><div class="po-head"><div><div class="eyebrow">${esc(m.prov)} · cód. ${esc(m.cod)} · grupo ${esc(m.grupo)}</div><h2 style="margin:4px 0 0">${esc(m.nombre)}</h2><div class="muted small" style="margin-top:6px">${m.xcaja ? m.ucaja + ' u. por caja' : 'se compra por unidad'} · datos disponibles del ${dnFmt(wkDn(S.vf))} al ${dnFmt(S.lastDn)}${P.useP ? ' · semana en curso completada con el perfil por día' : ''}</div></div>
+  host.innerHTML = `<section class="card"><div class="po-head"><div><div class="eyebrow">${esc(m.prov)} · cód. ${esc(m.cod)} · grupo ${esc(m.grupo)}</div><h2 style="margin:4px 0 0">${esc(m.nombre)}</h2><div class="muted small" style="margin-top:6px">${m.xcaja ? m.ucaja + ' u. por caja' : 'se compra por unidad'} · datos disponibles del ${dnFmt(wkDn(S.vf))} al ${dnFmt(S.lastDn)}${P.useP ? ' · semana en curso proyectada (lo vendido hasta ahora más el resto al nivel anterior)' : ''}</div></div>
       <div>${a.fl.map(f => `<span class="chip ${f[1]}" title="${esc(f[2])}">${f[0]}</span>`).join(' ') || '<span class="chip ok">sin alertas</span>'}</div></div>
     ${a.fl.length ? `<ul class="ulist" style="margin:10px 0">${a.fl.map(f => `<li>${esc(f[2])}</li>`).join('')}</ul>` : ''}
     <h3 style="margin-top:14px">Qué datos usa el modelo (editable)</h3>
