@@ -414,7 +414,7 @@ const S = {
   stockMap: {}, stockDn: 0, cache: {}, plan: [], planBy: {},
   ui: { tab: 'plan', prov: '', q: '', estado: '', vista: 'compra', sort: { k: 'estado', dir: 1 }, tPick: { kind: 'all', val: '' }, tMode: 'total', tUnit: 'u', tRange: 52, tLY: true, tStores: null, tOffStores: new Set(), pHorizon: 12, pShow: 'fc', detail: null }
 };
-const DEFAULT_G = { N: 4, picoN: 3, picoVentana: 13, pesos: 'lineal', parcial: true, admin: false, estac: 0.5, estacMin: 0.5, estacMax: 2.5, tend: 0, clip: 2.5, z: 1.65, maxCob: 90, redondeo: 'techo', tol: 0.15, ltCorto: 3, ltMedio: 10, recConf: { confiable: 0, aveces: 3, seguido: 7 } };
+const DEFAULT_G = { N: 4, picoN: 3, picoVentana: 13, quiebre: true, quiebreMax: 10, pesos: 'lineal', parcial: true, admin: false, estac: 0.5, estacMin: 0.5, estacMax: 2.5, tend: 0, clip: 2.5, z: 1.65, maxCob: 90, redondeo: 'techo', tol: 0.15, ltCorto: 3, ltMedio: 10, recConf: { confiable: 0, aveces: 3, seguido: 7 } };
 const DEFAULT_PROV = { lt: 7, ciclo: 7, denv: 3, dias: 7, conf: 'confiable', retraso: 0, ss: 7, moq: 0, configurado: false };
 const CONF_LABEL = { confiable: 'Confiable', aveces: 'Falla a veces', seguido: 'Falla seguido' };
 
@@ -527,7 +527,25 @@ function prep(cod) {
   const clipped = idx.map(i => y[i] > cap);
   const w = idx.map((_, k) => g.pesos === 'lineal' ? k + 1 : 1);
   const sw = w.reduce((a, b) => a + b, 0);
-  const L = sw ? ya.reduce((s, v, k) => s + v * w[k], 0) / sw : 0;
+  let L = sw ? ya.reduce((s, v, k) => s + v * w[k], 0) / sw : 0; const L0 = L;
+  // Posible quiebre: el producto no tiene stock y sus ventas se cortaron hace poco, después de vender con normalidad. Sin mercadería se vende 0, y eso no es falta
+  // de demanda: en ese caso el nivel es el que tenía justo antes del corte, no el 0 de las últimas semanas. Hace falta que el corte esté "cerrado" por una semana
+  // normal antes (si los ceros siguen más atrás del máximo configurado, se lo considera un producto que ya no se vende).
+  let qb = null;
+  const qbMax = Math.max(2, Math.round(+g.quiebreMax || 10));
+  if (g.quiebre !== false && ovp.quiebre !== 'no' && S.stock && (S.stockMap[cod] || 0) <= 0) {
+    const pri = Math.max(S.vf, start);
+    for (let Z = Math.min(qbMax, usableLast - pri - 2); Z >= 2; Z--) {
+      const s0 = usableLast - Z + 1, ws = []; for (let i = Math.max(pri, s0 - 4); i < s0; i++) ws.push(i);
+      if (ws.length < 3) continue;
+      const medPre = median(ws.map(i => y[i])), capPre = (g.clip > 0 && medPre >= 3) ? g.clip * medPre : Infinity;
+      const wg = ws.map((_, k) => k + 1), ref = ws.reduce((s, i, k) => s + Math.min(y[i], capPre) * wg[k], 0) / wg.reduce((a, b) => a + b, 0);
+      if (ref < 5 || y[s0 - 1] <= 0.15 * ref) continue;
+      let corte = true; for (let i = s0; i <= usableLast; i++) if (y[i] > 0.15 * ref) { corte = false; break; }
+      if (corte) { qb = { z: Z, desde: s0, ref, ws }; break; }
+    }
+    if (qb) L = qb.ref;
+  }
   const w13c = w13.map(v => Math.min(v, cap));
   const m13 = mean(w13c), sd13 = sdev(w13c);
   const mRaw = mean(w13), sdRaw = sdev(w13), z = w13.map(v => sdRaw > 0 ? (v - mRaw) / sdRaw : 0), nOut = z.filter(v => Math.abs(v) > 2).length;
@@ -547,7 +565,7 @@ function prep(cod) {
   for (let i = Math.max(S.vf, completeLast - pkV + 1); i <= completeLast; i++) pkIdx.push(i);
   let pico = null, picoSem = [];
   if (pkIdx.length >= 4) { const top = pkIdx.map(i => ({ i, v: raw[i] })).sort((a, b) => b.v - a.v).slice(0, Math.min(pkN, Math.floor(pkIdx.length / 2))); picoSem = top.map(x => x.i).sort((a, b) => a - b); pico = top.reduce((s, x) => s + x.v, 0) / top.length; }
-  return S.cache[key] = { pico, picoSem, cod, raw, y, idx, ya, clipped, w, L, med, cap, nUse, start, usableLast, completeLast, useP, cov, partial, m13, sd13, cv: m13 > 0 ? sd13 / m13 : 0, rel, reg, wIdx, w13, w13c, z, nOut, Nw, Ww, hasWin: !!(ovp.desde || ovp.hasta || ovp.N || ovp.W), lag: Math.max(0, (nUse - 1) / 3), sum8, kg13, f: {}, newish: (usableLast - start + 1) < 8 };
+  return S.cache[key] = { qb, L0, pico, picoSem, cod, raw, y, idx, ya, clipped, w, L, med, cap, nUse, start, usableLast, completeLast, useP, cov, partial, m13, sd13, cv: m13 > 0 ? sd13 / m13 : 0, rel, reg, wIdx, w13, w13c, z, nOut, Nw, Ww, hasWin: !!(ovp.desde || ovp.hasta || ovp.N || ovp.W), lag: Math.max(0, (nUse - 1) / 3), sum8, kg13, f: {}, newish: (usableLast - start + 1) < 8 };
 }
 function seasInfo(cod, t) {
   const g = S.params.g, ov = S.params.prod[cod] || {}, P = prep(cod), m = S.mm[cod];
@@ -910,9 +928,9 @@ window.addEventListener('resize', () => { moveInd(); });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(moveInd);
 function renderStatus() {
   if (!S.ready) { $('#status').innerHTML = ''; return; }
-  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 23/10 · tabla centrada</span>`; return; }
+  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 23/10 · posible quiebre</span>`; return; }
   const part = isPartial() ? `<span class="pill warn" title="La última semana tiene datos hasta el ${dnFmt(S.lastDn)}; se completa con el perfil por día de la semana">semana en curso parcial</span>` : '';
-  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 23/10 · tabla centrada</span>${part}`;
+  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 23/10 · posible quiebre</span>${part}`;
 }
 function render(anim) {
   renderTabs(); renderStatus(); badgeSol();
@@ -1334,7 +1352,7 @@ function viewOrden(main) {
     const c = lineCalc(r), e = ESTADO[r.estado], d = c.dec, ul = ulabel(r), sc = Math.max(c.goal, c.sup, 1) * 1.1, cc = c.sup >= c.goal - 0.5 ? 'var(--ok)' : c.sup >= c.goalN - 0.5 ? 'var(--accent)' : c.sup > 0 ? 'var(--warn,#d98a00)' : 'var(--crit)';
     const stk = r.m.xcaja ? `<b>${nf(r.stockU / r.pm, 1)}</b><span class="u">cajas</span><span class="sub">${nf(r.stockU, 0)} u.</span>` : `<b>${nf(r.stockU, 0)}</b><span class="u">u.</span><span class="sub">por unidad</span>`;
     return `<tr class="row" data-cod="${r.m.cod}">
-      <td class="sticky1 wrap"><div class="pn">${esc(r.m.nombre)}<small>cód. ${esc(r.m.cod)} · ${r.m.xcaja ? 'caja de ' + r.m.ucaja + ' u.' : 'por unidad'} · <span class="chip ${r.abc === 'A' ? 'acc' : ''}" style="padding:0 8px;font-size:12px">${r.abc}</span> <span class="chip ${e.c}" style="padding:0 8px;font-size:12px" title="${esc(e.d)}">${e.t}</span> <span class="calc" data-calc>ver cálculo ›</span><span class="calc" data-graf="${r.m.cod}">gráfico ›</span><span class="calc" data-ana="${r.m.cod}">análisis ›</span></small></div></td>
+      <td class="sticky1 wrap"><div class="pn">${esc(r.m.nombre)}<small>cód. ${esc(r.m.cod)} · ${r.m.xcaja ? 'caja de ' + r.m.ucaja + ' u.' : 'por unidad'} · <span class="chip ${r.abc === 'A' ? 'acc' : ''}" style="padding:0 8px;font-size:12px">${r.abc}</span> <span class="chip ${e.c}" style="padding:0 8px;font-size:12px" title="${esc(e.d)}">${e.t}</span>${r.P.qb ? ` <span class="chip warn" style="padding:0 8px;font-size:12px" title="Sin stock y con ventas casi nulas hace ${r.P.qb.z} semanas, después de vender unas ${nf(r.P.qb.ref, 0)} u./semana. Se usa ese ritmo en lugar del 0 reciente. Si el producto ya no se vende, elegí 'Tomar las ventas tal cual' en el detalle.">Posible quiebre</span>` : ''} <span class="calc" data-calc>ver cálculo ›</span><span class="calc" data-graf="${r.m.cod}">gráfico ›</span><span class="calc" data-ana="${r.m.cod}">análisis ›</span></small></div></td>
       <td class="n">${stk}</td>
       <td class="n ed"><input class="ed" type="number" min="1" step="1" data-k="dias" data-cod="${r.m.cod}" value="${r.nManual ? r.ov.dias : ''}" placeholder="${nf(r.N, 0)}" aria-label="Días a cubrir ${esc(r.m.nombre)}" style="width:54px"><span class="u">días</span><span class="sub">${r.nManual ? 'manual' : 'por defecto'}</span></td>
       <td class="n"><b>${nf(r.D_N / r.pm, d)}</b><span class="u">${ul}</span><span class="sub">${r.m.xcaja ? nf(r.D_N, 0) + ' u. · ' : ''}${dnFmtS(r.startPost)} → ${dnFmtS(r.startPost + r.N - 1)}</span></td>
@@ -1347,7 +1365,7 @@ function viewOrden(main) {
       <td class="n"><div class="sup"><span class="num">${c.sup >= 400 ? '>365' : nf(c.sup, 0)} días</span><div class="cov"><i style="width:${Math.min(100, c.sup / sc * 100)}%;background:${cc}"></i><b style="left:${c.goal / sc * 100}%" title="Meta: ${nf(r.N, 0)} + ${nf(r.ssDias, 0)} de seguridad"></b></div><span class="sub">meta ${nf(r.N, 0)} + ${nf(r.ssDias, 0)} seg.</span></div></td></tr>`;
   }).join('');
   if (!u.poSel || !lines.find(x => x.m.cod === u.poSel)) u.poSel = (emit[0] || lines[0] || { m: {} }).m.cod;
-  const selR = lines.find(x => x.m.cod === u.poSel);
+  const selR = lines.find(x => x.m.cod === u.poSel), nQb = lines.filter(x => x.P.qb).length;
   const hist = S.orders.filter(o => o.prov === u.poProv).slice(0, 8);
   main.innerHTML = `
   <section>${heroHead('Orden de compra · borrador', 'Pedido a ' + esc(cur.p), `Stock de hoy, ventas esperadas, con cuánto stock llega el proveedor y cuánto pedir para cubrir los días que elijas más el stock de seguridad.`)}</section>
@@ -1381,7 +1399,7 @@ function viewOrden(main) {
     </div>
     ${planBanner(cur.p)}
     ${moqBad ? `<div class="note warn" style="margin-top:14px">El pedido (${nf(kg)} kg) no llega al mínimo del proveedor (${nf(pr.moq)} kg).</div>` : ''}
-    <div class="bar" style="margin:18px 0 12px"><label class="chipb"><input type="checkbox" id="poOnly" ${u.poOnly ? 'checked' : ''}> Mostrar solo productos a pedir</label><span class="hint">Las columnas con fondo celeste se editan y se guardan. Tocá una fila para ver cómo se calculó.</span></div>
+    <div class="bar" style="margin:18px 0 12px"><label class="chipb"><input type="checkbox" id="poOnly" ${u.poOnly ? 'checked' : ''}> Mostrar solo productos a pedir</label>${nQb ? `<span class="chip warn" title="Productos sin stock cuyas ventas se cortaron: se usa el ritmo que tenían antes del corte. Aparecen con la etiqueta Posible quiebre.">${nQb} con posible quiebre</span>` : ''}<span class="hint">Las columnas con fondo celeste se editan y se guardan. Tocá una fila para ver cómo se calculó.</span></div>
     <div class="tw po-t" style="max-height:none"><table><thead><tr>
       <th class="sticky1" title="Producto, código, cómo se compra, clase ABC y estado. Tocá la fila para ver cómo se calculó.">Producto</th>
       <th class="n " title="Lo que hay hoy en depósito según el stock cargado, en cajas y en unidades."><span class="t">Stock actual</span><span class="r">cajas y unidades</span></th>
@@ -1490,6 +1508,8 @@ function drawDetail() {
     ${m.nota ? `<div class="note warn small"><b>Dato de la base corregido:</b> ${esc(m.nota)}</div>` : ''}
     ${(S.params.prod[cod] || {}).fm > 0 ? `<div class="note warn small"><b>Factor manual aplicado:</b> el pronóstico de este producto se multiplica por ${nf(+S.params.prod[cod].fm, 2)}. Borrá el valor en “Ajustes manuales” para volver al pronóstico del modelo.</div>` : ''}
     ${P.newish ? '<div class="note warn small">Producto con menos de 8 semanas de historia: el pronóstico es poco confiable.</div>' : ''}
+    ${P.qb ? `<div class="note warn small"><b>Posible quiebre de stock.</b> El producto no tiene stock y vendió casi nada en las últimas ${P.qb.z} semanas (desde el ${dnFmt(wk(P.qb.desde))}), después de vender unas <b>${nf(P.qb.ref, 0)} u./semana</b>. Como sin mercadería no se vende, el pronóstico usa ese ritmo en lugar del 0 reciente (pasa de ${nf(P.L0, 1)} a ${nf(P.L, 1)} u./semana). Si el producto ya no se vende, elegí “Tomar las ventas tal cual” en los ajustes de abajo.</div>` : ''}
+    ${(S.params.prod[cod] || {}).quiebre === 'no' ? '<div class="note small">Quiebre: este producto toma las ventas tal cual (no se corrige por falta de stock).</div>' : ''}
     <div class="stats s"><div class="stat"><div class="v">${nf(r.wk4, 1)}</div><div class="l">u. de venta por semana pronosticadas</div></div><div class="stat"><div class="v">${nf(r.pos / r.pm, 1)}</div><div class="l">${ul} de stock</div></div><div class="stat"><div class="v">${r.cover >= 400 ? '>365' : nf(r.cover, 0)}</div><div class="l">días de cobertura</div></div><div class="stat acc"><div class="v">${nf(r.sug)}</div><div class="l">${ul} sugeridas (${nf(c.kg, 0)} kg)</div></div></div>
     <div class="card"><div class="sec-h"><h3>Historia y pronóstico</h3><div class="seg" role="group"><button aria-pressed="${u.dMode === 'day'}" data-dm="day">Día a día</button><button aria-pressed="${u.dMode === 'week'}" data-dm="week">Semanal</button></div></div>
       <div class="hint" style="margin:6px 0 8px">Clic en un punto para ver qué pasó; segundo clic para medir el cambio.</div><div class="chart" id="dChart"></div><div class="legend" id="dLeg"></div></div>
@@ -1502,6 +1522,7 @@ function drawDetail() {
           <div class="fld"><label for="oSS">Días de seguridad (vacío = proveedor)</label><input type="number" id="oSS" step="0.5" min="0" value="${(S.params.prod[cod] || {}).ss ?? ''}"></div>
           <div class="fld"><label for="oEst">Estacionalidad</label><select id="oEst"><option value="grupo" ${mode === 'grupo' ? 'selected' : ''}>Del grupo</option><option value="producto" ${mode === 'producto' ? 'selected' : ''}>Propia del producto</option><option value="ninguna" ${mode === 'ninguna' ? 'selected' : ''}>Ninguna</option></select></div>
           <div class="fld"><label for="oFM">Factor manual (× pronóstico)</label><input type="number" id="oFM" step="0.05" min="0.1" value="${(S.params.prod[cod] || {}).fm ?? ''}" placeholder="1"></div>
+          <div class="fld"><label for="oQb" title="Si el producto está sin stock y sus ventas se cortaron, el pronóstico usa el ritmo anterior al corte. Elegí 'tal cual' si el producto ya no se vende.">Quiebre de stock</label><select id="oQb"><option value="auto" ${(S.params.prod[cod] || {}).quiebre !== 'no' ? 'selected' : ''}>Automático</option><option value="no" ${(S.params.prod[cod] || {}).quiebre === 'no' ? 'selected' : ''}>Tomar las ventas tal cual</option></select></div>
           <div class="fld"><label for="oAct">Estado</label><select id="oAct"><option value="1" ${r.active ? 'selected' : ''}>Activo</option><option value="0" ${!r.active ? 'selected' : ''}>Pausado (no se pide)</option></select></div>
         </div><div class="muted small" style="margin-top:6px">El factor manual sirve, por ejemplo, para anticipar una promoción o la temporada alta del producto. Se guarda y queda aplicado a todo el pronóstico.</div></div>
     </div>
@@ -1509,8 +1530,8 @@ function drawDetail() {
   document.body.style.overflow = 'hidden';
   $('#dClose').onclick = closeDetail;
   $('#dbg').onclick = ev => { if (ev.target.id === 'dbg') closeDetail(); };
-  const apply = () => { const ov = S.params.prod[cod] = S.params.prod[cod] || {}; const ss = $('#oSS').value, fm = $('#oFM').value; if (ss === '') delete ov.ss; else ov.ss = +ss; if (fm === '' || !(+fm > 0)) delete ov.fm; else ov.fm = +fm; ov.est = $('#oEst').value; ov.activo = $('#oAct').value === '1'; invalidate(); saveParams(); drawDetail(); render(); };
-  ['oSS', 'oEst', 'oFM', 'oAct'].forEach(id => $('#' + id).onchange = apply);
+  const apply = () => { const ov = S.params.prod[cod] = S.params.prod[cod] || {}; const ss = $('#oSS').value, fm = $('#oFM').value; if (ss === '') delete ov.ss; else ov.ss = +ss; if (fm === '' || !(+fm > 0)) delete ov.fm; else ov.fm = +fm; ov.est = $('#oEst').value; ov.activo = $('#oAct').value === '1'; if ($('#oQb').value === 'no') ov.quiebre = 'no'; else delete ov.quiebre; invalidate(); saveParams(); drawDetail(); render(); };
+  ['oSS', 'oEst', 'oFM', 'oAct', 'oQb'].forEach(id => $('#' + id).onchange = apply);
   $$('[data-dm]').forEach(b => b.onclick = () => { u.dMode = b.dataset.dm; u.dsel = { a: null, b: null }; drawDetail(); });
   const mc = mountXChart({ host: $('#dChart'), insp: $('#dInsp'), cods: [cod], o: { mode: u.dMode, unit: 'venta', span: u.dMode === 'day' ? 120 : 364, fc: true, ly: true, aria: 'Ventas y pronóstico de ' + m.nombre }, sel: u.dsel, height: 380 });
   $('#dLeg').innerHTML = mc.spec().series.filter(s => !s.hidden && s.vals.some(v => v != null)).map(s => `<span style="display:inline-flex;gap:8px;align-items:center"><span class="sw" style="background:${s.color}"></span>${esc(s.name)}</span>`).join('');
@@ -1674,9 +1695,9 @@ function viewProv(main) {
       ${num('gEs', 'Intensidad estacional (%)', Math.round(g.estac * 100), 10, 'min="0" max="100"')}
       ${num('gTe', 'Extrapolar tendencia (%)', Math.round(g.tend * 100), 10, 'min="0" max="100"')}
       ${num('gCl', 'Tope de semanas atípicas (× mediana, 0 = sin tope)', g.clip, 0.5)}
-      ${num('gPkN', 'Picos: cuántas semanas promediar', g.picoN, 1, 'min="1" max="6"')}${num('gPkW', 'Picos: de las últimas (semanas)', g.picoVentana, 1, 'min="6" max="26"')}
+      ${num('gPkN', 'Picos: cuántas semanas promediar', g.picoN, 1, 'min="1" max="6"')}${num('gPkW', 'Picos: de las últimas (semanas)', g.picoVentana, 1, 'min="6" max="26"')}${num('gQbN', 'Quiebre: máximo de semanas sin ventas', g.quiebreMax, 1, 'min="2" max="26"')}
     </div>
-    <div class="bar" style="margin-top:12px"><label class="chipb"><input type="checkbox" id="gPa" ${g.parcial ? 'checked' : ''}> Completar la semana en curso con el perfil por día</label><label class="chipb"><input type="checkbox" id="gAd" ${g.admin ? 'checked' : ''}> Incluir ventas de Administración</label></div>
+    <div class="bar" style="margin-top:12px"><label class="chipb"><input type="checkbox" id="gPa" ${g.parcial ? 'checked' : ''}> Completar la semana en curso con el perfil por día</label><label class="chipb"><input type="checkbox" id="gAd" ${g.admin ? 'checked' : ''}> Incluir ventas de Administración</label><label class="chipb" title="Si un producto no tiene stock y sus ventas se cortaron hace poco, el pronóstico usa el ritmo que tenía antes del corte en lugar del 0 reciente."><input type="checkbox" id="gQb" ${g.quiebre !== false ? 'checked' : ''}> Corregir productos sin stock cuyas ventas se cortaron (posible quiebre)</label></div>
     <div class="hint" style="margin-top:10px"><b>Por qué estos valores.</b> Probé distintos métodos sobre tu historial (predecir 4 semanas con datos anteriores): el promedio de las últimas 4 semanas fue el más preciso (error 11,8%), mejor que 13 semanas (13,1%) o 26 semanas (14,7%). Extrapolar la tendencia de cada producto empeoró el resultado, por eso arranca en 0%. La estacionalidad se calcula contra el mismo período del año anterior y se aplica por grupo de productos; con un solo año de historia se usa al 50%.</div></div>
   </div>
   <div class="card"><h3>Perfil de ventas por día de la semana</h3><div class="flex" style="margin-top:10px">${S.dow.map((v, i) => `<span class="chip acc">${DOWN[i]} ${nf(v * 100, 1)}%</span>`).join('')}</div><div class="hint" style="margin-top:8px">Se usa para completar la semana en curso y para repartir el pronóstico por día. Se recalcula con las ventas diarias cada vez que cargás datos.</div></div>`;
@@ -1689,7 +1710,7 @@ function viewProv(main) {
   $('#gRed').onchange = e => setG('redondeo', e.target.value);
   bindN('gN', v => setG('N', v)); $('#gP').onchange = e => setG('pesos', e.target.value);
   bindN('gEs', v => setG('estac', clamp(v, 0, 100) / 100)); bindN('gTe', v => setG('tend', clamp(v, 0, 100) / 100)); bindN('gCl', v => setG('clip', Math.max(0, v))); bindN('gPkN', v => setG('picoN', clamp(Math.round(v), 1, 6))); bindN('gPkW', v => setG('picoVentana', clamp(Math.round(v), 6, 26)));
-  $('#gPa').onchange = e => setG('parcial', e.target.checked); $('#gAd').onchange = e => setG('admin', e.target.checked);
+  $('#gPa').onchange = e => setG('parcial', e.target.checked); $('#gAd').onchange = e => setG('admin', e.target.checked); $('#gQb').onchange = e => setG('quiebre', e.target.checked); bindN('gQbN', v => setG('quiebreMax', clamp(Math.round(v), 2, 26)));
   const filtrarProv = () => { const t = sinAcentos(S.ui.pvQ || '').split(/\s+/).filter(Boolean); let n = 0; const trs = $$('tr[data-p]', main); trs.forEach(tr => { const ok = t.every(w => sinAcentos(tr.dataset.p).includes(w)) && (!S.ui.pvDef || !!$('.chip.warn', tr)); tr.style.display = ok ? '' : 'none'; if (ok) n++; }); $('#pvCnt').textContent = n === trs.length ? trs.length + ' proveedores' : n + ' de ' + trs.length + ' proveedores'; };
   $('#pvQ').oninput = e => { S.ui.pvQ = e.target.value; filtrarProv(); };
   $('#pvDef').onchange = e => { S.ui.pvDef = e.target.checked; filtrarProv(); };
@@ -2191,6 +2212,7 @@ function viewTeoria(main) {
     ['Pronóstico', 'Ventas esperadas en los días a cubrir, desde que llega el proveedor. Debajo, el rango de fechas. Lo que se vende hasta la llegada no se pronostica acá: solo sirve para calcular el stock al llegar.'],
       ['Franja del gráfico (rango habitual)', 'En Tendencias, la franja alrededor del pronóstico semanal es el rango habitual: el pronóstico ± 1,3 desvíos de las últimas 13 semanas. Las semanas reales suelen caer adentro. El pronóstico no copia los altibajos pasados porque no se pueden anticipar y, probado con ventas reales, copiarlos empeoraba el error.'],
       ['Picos de venta', 'El promedio de las semanas más altas de las últimas 13 (se puede cambiar en Proveedores): lo que se vendió cuando hubo mercadería. Si un producto se queda sin stock, sus ventas normales quedan por debajo de lo que se habría vendido; con el % del pico a cubrir elegís cuánto de ese pico querés poder atender. 0% = solo el pronóstico; 100% = el pico completo. El pedido usa el mayor entre el pronóstico y ese % del pico, tanto para el stock con el que llegás como para lo que hay que cubrir.'],
+      ['Posible quiebre', 'Un producto sin stock vende 0, y eso no es falta de demanda. Si no tiene stock y sus ventas se cortaron hace poco (casi nada en las últimas semanas, hasta el máximo que configures), después de haber vendido con normalidad, el pronóstico usa el ritmo que tenía justo antes del corte en lugar del 0 reciente. Aparece con la etiqueta Posible quiebre y se puede desactivar por producto (en el detalle) o para todos (en Proveedores). Si el producto ya no se vende, desactivalo para que no se pida.'],
     ['Día de envío', 'Editable. Días desde el pedido hasta el primer envío a sucursales y qué día de la semana cae. Hasta ese día el stock no se consume.'],
     ['Lead time', 'Días que tarda el proveedor desde el pedido, y qué día llega.'],
     ['Stock al llegar', 'Stock teórico cuando llega el proveedor: stock actual menos la venta de los días desde el primer envío hasta el día de la llegada, incluido ese día. Si es 0, te quedás sin mercadería antes de que llegue.'],
