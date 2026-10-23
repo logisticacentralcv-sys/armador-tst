@@ -182,6 +182,9 @@ ul.plain,ol.plain{margin:6px 0 0;padding-left:22px}ul.plain li,ol.plain li{margi
 /* ---- agregados v2 ---- */
 .po-t table{font-size:14.5px}
 .po-t th,.po-t td{padding:9px 5px}
+.po-t input.ed[type=date]{padding:5px 6px;font-size:13px}
+.po-t .pk{display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-top:3px}
+.po-t td a[data-envio-auto]{color:var(--accent);font-weight:600}
 .po-t th{white-space:normal;line-height:1.15;vertical-align:bottom;font-size:11.5px}
 .po-t td.n{font-size:14px;font-weight:500;vertical-align:middle;font-family:var(--f-body);white-space:nowrap}
 .po-t th.n{font-family:var(--f-body);letter-spacing:0;text-transform:none;font-size:12px;font-weight:600}
@@ -405,7 +408,7 @@ const S = {
   stockMap: {}, stockDn: 0, cache: {}, plan: [], planBy: {},
   ui: { tab: 'plan', prov: '', q: '', estado: '', vista: 'compra', sort: { k: 'estado', dir: 1 }, tPick: { kind: 'all', val: '' }, tMode: 'total', tUnit: 'u', tRange: 52, tLY: true, tStores: null, tOffStores: new Set(), pHorizon: 12, pShow: 'fc', detail: null }
 };
-const DEFAULT_G = { N: 4, pesos: 'lineal', parcial: true, admin: false, estac: 0.5, estacMin: 0.5, estacMax: 2.5, tend: 0, clip: 2.5, z: 1.65, maxCob: 90, redondeo: 'techo', tol: 0.15, ltCorto: 3, ltMedio: 10, recConf: { confiable: 0, aveces: 3, seguido: 7 } };
+const DEFAULT_G = { N: 4, picoN: 3, picoVentana: 13, pesos: 'lineal', parcial: true, admin: false, estac: 0.5, estacMin: 0.5, estacMax: 2.5, tend: 0, clip: 2.5, z: 1.65, maxCob: 90, redondeo: 'techo', tol: 0.15, ltCorto: 3, ltMedio: 10, recConf: { confiable: 0, aveces: 3, seguido: 7 } };
 const DEFAULT_PROV = { lt: 7, ciclo: 7, denv: 3, dias: 7, conf: 'confiable', retraso: 0, ss: 7, moq: 0, configurado: false };
 const CONF_LABEL = { confiable: 'Confiable', aveces: 'Falla a veces', seguido: 'Falla seguido' };
 
@@ -532,7 +535,13 @@ function prep(cod) {
   }
   let sum8 = 0; for (let i = Math.max(S.vf, usableLast - 7); i <= usableLast; i++) sum8 += raw[i];
   let kg13 = 0; for (let i = Math.max(start, usableLast - 12); i <= usableLast; i++) kg13 += y[i] * (m.kgu || 1);
-  return S.cache[key] = { cod, raw, y, idx, ya, clipped, w, L, med, cap, nUse, start, usableLast, completeLast, useP, cov, partial, m13, sd13, cv: m13 > 0 ? sd13 / m13 : 0, rel, reg, wIdx, w13, w13c, z, nOut, Nw, Ww, hasWin: !!(ovp.desde || ovp.hasta || ovp.N || ovp.W), lag: Math.max(0, (nUse - 1) / 3), sum8, kg13, f: {}, newish: (usableLast - start + 1) < 8 };
+  // Picos de venta: el promedio de las semanas más altas de la ventana (sin la semana en curso). Cuando un producto se queda sin stock, sus ventas
+  // normales quedan por debajo de lo que se habría vendido; los picos son lo que se vendió cuando hubo mercadería.
+  const pkV = Math.max(4, Math.round(+g.picoVentana || 13)), pkN = Math.max(1, Math.round(+g.picoN || 3)), pkIdx = [];
+  for (let i = Math.max(S.vf, completeLast - pkV + 1); i <= completeLast; i++) pkIdx.push(i);
+  let pico = null, picoSem = [];
+  if (pkIdx.length >= 4) { const top = pkIdx.map(i => ({ i, v: raw[i] })).sort((a, b) => b.v - a.v).slice(0, Math.min(pkN, Math.floor(pkIdx.length / 2))); picoSem = top.map(x => x.i).sort((a, b) => a - b); pico = top.reduce((s, x) => s + x.v, 0) / top.length; }
+  return S.cache[key] = { pico, picoSem, cod, raw, y, idx, ya, clipped, w, L, med, cap, nUse, start, usableLast, completeLast, useP, cov, partial, m13, sd13, cv: m13 > 0 ? sd13 / m13 : 0, rel, reg, wIdx, w13, w13c, z, nOut, Nw, Ww, hasWin: !!(ovp.desde || ovp.hasta || ovp.N || ovp.W), lag: Math.max(0, (nUse - 1) / 3), sum8, kg13, f: {}, newish: (usableLast - start + 1) < 8 };
 }
 function seasInfo(cod, t) {
   const g = S.params.g, ov = S.params.prod[cod] || {}, P = prep(cod), m = S.mm[cod];
@@ -558,22 +567,25 @@ function trendFactor(cod, t) {
   const h = Math.max(0, t - P.usableLast); let c = 0, ph = 1; for (let k = 1; k <= h + P.lag; k++) { ph *= 0.85; c += ph; }
   return 1 + te * P.rel * c;
 }
+// % del pico de ventas que se quiere cubrir: el del producto, o el del proveedor, o 0 (solo el pronóstico).
+const picoPctOf = (ov, pr) => (ov.pico !== undefined && ov.pico !== null && ov.pico !== '') ? Math.max(0, +ov.pico || 0) : Math.max(0, +(pr && pr.pico) || 0);
 const fmOf = ov => (ov.fm === undefined || ov.fm === '' || ov.fm === null || !(+ov.fm > 0)) ? 1 : +ov.fm;
 function weekF(cod, t) {
   const P = prep(cod); if (P.f[t] !== undefined) return P.f[t];
   const ov = S.params.prod[cod] || {};
   return P.f[t] = Math.max(0, P.L * seasFactor(cod, t) * trendFactor(cod, t) * fmOf(ov));
 }
-function demand(cod, fromDn, days) {
+// floorW: ritmo de venta semanal mínimo que se quiere cubrir (el % del pico de ventas); 0 = solo el pronóstico
+function demand(cod, fromDn, days, floorW = 0) {
   let s = 0; const dow = S.dow, whole = Math.floor(days), frac = days - whole;
-  for (let k = 0; k < whole; k++) { const d = fromDn + k; s += weekF(cod, Math.floor((d - S.start) / 7)) * dow[dowOf(d)]; }
-  if (frac > 0) { const d = fromDn + whole; s += frac * weekF(cod, Math.floor((d - S.start) / 7)) * dow[dowOf(d)]; }
+  for (let k = 0; k < whole; k++) { const d = fromDn + k; s += Math.max(weekF(cod, Math.floor((d - S.start) / 7)), floorW) * dow[dowOf(d)]; }
+  if (frac > 0) { const d = fromDn + whole; s += frac * Math.max(weekF(cod, Math.floor((d - S.start) / 7)), floorW) * dow[dowOf(d)]; }
   return s;
 }
-function coverDays(cod, pos, fromDn) {
+function coverDays(cod, pos, fromDn, floorW = 0) {
   if (pos <= 0) return 0; let cum = 0;
   for (let k = 0; k < 400; k++) {
-    const d = fromDn + k, x = weekF(cod, Math.floor((d - S.start) / 7)) * S.dow[dowOf(d)];
+    const d = fromDn + k, x = Math.max(weekF(cod, Math.floor((d - S.start) / 7)), floorW) * S.dow[dowOf(d)];
     if (cum + x >= pos && x > 0) return k + (pos - cum) / x;
     cum += x;
   }
@@ -593,9 +605,14 @@ function buildPlan() {
   for (const m of S.master) {
     const ov = S.params.prod[m.cod] || {}, pr = S.params.prov[m.prov], P = prep(m.cod);
     const LT = +pr.lt || 0, pm = pmOf(m), active = ov.activo !== false;
-    const denv = (ov.denv !== undefined && ov.denv !== null && ov.denv !== '') ? Math.max(0, +ov.denv) : (pr.denv !== undefined ? Math.max(0, +pr.denv || 0) : 3);
-    const denvManual = ov.denv !== undefined && ov.denv !== null && ov.denv !== '';
-    const envDn = pedDn + denv, arrDn = pedDn + LT;
+    // Primer envío: la fecha que elegiste para este producto, o la del proveedor, o los días por defecto desde el pedido. Una fecha anterior al pedido se ignora.
+    const fechaOk = s => s && strToDn(s) >= pedDn, denvOv = ov.denv !== undefined && ov.denv !== null && ov.denv !== '';
+    let envDn, denvManual = false;
+    if (fechaOk(ov.envioFecha)) { envDn = strToDn(ov.envioFecha); denvManual = true; }
+    else if (denvOv) { envDn = pedDn + Math.max(0, +ov.denv); denvManual = true; }
+    else if (fechaOk(pr.envioFecha)) envDn = strToDn(pr.envioFecha);
+    else envDn = pedDn + (pr.denv !== undefined ? Math.max(0, +pr.denv || 0) : 3);
+    const denv = envDn - pedDn, arrDn = pedDn + LT;
     const pos0 = v => v !== undefined && v !== null && v !== '' && +v > 0;
     // Días a cubrir: los que pidas a mano para este producto o, si no, los del proveedor. Se cuentan desde que llega el proveedor.
     const nManual = pos0(ov.dias);
@@ -606,10 +623,11 @@ function buildPlan() {
     const gapE = Math.max(0, arrDn - envDn);
     const startPost = Math.max(arrDn + 1, envDn);
     const diasPre = startPost - envDn;                                     // días de venta entre el primer envío y el inicio de la cobertura
-    const D_N = demand(m.cod, startPost, N), daily = N > 0 ? D_N / N : 0;   // pronóstico: de la llegada en adelante
+    const pctP = picoPctOf(ov, pr), floorW = (P.pico != null && pctP > 0) ? pctP / 100 * P.pico : 0;   // ritmo mínimo: el % del pico que se quiere cubrir
+    const D_N = demand(m.cod, startPost, N, floorW), daily = N > 0 ? D_N / N : 0;   // pronóstico: de la llegada en adelante
     const ss = ssDiasFor(m), SSu = ss.d * daily;
     const stockU = S.stockMap[m.cod] || 0, transitU = 0, pos = stockU;
-    const D_LT = demand(m.cod, envDn, diasPre);                             // la venta de los días hasta la llegada (sale del stock actual)
+    const D_LT = demand(m.cod, envDn, diasPre, floorW);                             // la venta de los días hasta la llegada (sale del stock actual)
     const stockArr = Math.max(0, pos - D_LT), falta = Math.max(0, D_LT - pos);
     const Dafter = D_N;
     const target = Dafter + SSu;
@@ -619,7 +637,7 @@ function buildPlan() {
     if (!active) sug = 0;
     const hasFinal = ov.final !== undefined && ov.final !== null && ov.final !== '';
     const fin = hasFinal ? +ov.final : sug;
-    const cover = coverDays(m.cod, pos, envDn);
+    const cover = coverDays(m.cod, pos, envDn, floorW);
     const noSales = P.L <= 0 && P.sum8 <= 0;
     let estado;
     if (!active) estado = 'pausado';
@@ -630,7 +648,7 @@ function buildPlan() {
     else estado = 'ok';
     const H = LT + N;
     const sugDays = daily > 0 ? (g.z * P.sd13 * Math.sqrt(Math.max(H, 1) / 7)) / daily : 0;
-    rows.push({ diasPre, startPost, m, pr, P, ov, LT, H, N, nManual, pedDn, denv, denvManual, envDn, arrDn, gapE, stockArr, falta, Dafter, D_N, pm, active, D_LT, daily, ssDias: ss.d, ssManual: ss.manual, SSu, target, stockU, transitU, pos, need, needPU, sug, fin, hasFinal, cover, estado, sugDays, wk4: [0, 1, 2, 3].reduce((s, k) => s + weekF(m.cod, S.lastIdx + 1 + k), 0) / 4, kg13: P.kg13 });
+    rows.push({ pico: P.pico, picoSem: P.picoSem, picoPct: pctP, picoManual: ov.pico !== undefined && ov.pico !== null && ov.pico !== '', floorW, diasPre, startPost, m, pr, P, ov, LT, H, N, nManual, pedDn, denv, denvManual, envDn, arrDn, gapE, stockArr, falta, Dafter, D_N, pm, active, D_LT, daily, ssDias: ss.d, ssManual: ss.manual, SSu, target, stockU, transitU, pos, need, needPU, sug, fin, hasFinal, cover, estado, sugDays, wk4: [0, 1, 2, 3].reduce((s, k) => s + weekF(m.cod, S.lastIdx + 1 + k), 0) / 4, kg13: P.kg13 });
   }
   const tot = rows.reduce((s, r) => s + r.kg13, 0); let acc = 0;
   [...rows].sort((a, b) => b.kg13 - a.kg13).forEach(r => { acc += r.kg13; r.abc = tot <= 0 ? 'C' : (acc - r.kg13) / tot < 0.8 ? 'A' : (acc - r.kg13) / tot < 0.95 ? 'B' : 'C'; });
@@ -886,9 +904,9 @@ window.addEventListener('resize', () => { moveInd(); });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(moveInd);
 function renderStatus() {
   if (!S.ready) { $('#status').innerHTML = ''; return; }
-  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 22/10 · franja de variación</span>`; return; }
+  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 23/10 · picos y fecha de envío</span>`; return; }
   const part = isPartial() ? `<span class="pill warn" title="La última semana tiene datos hasta el ${dnFmt(S.lastDn)}; se completa con el perfil por día de la semana">semana en curso parcial</span>` : '';
-  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 22/10 · franja de variación</span>${part}`;
+  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 23/10 · picos y fecha de envío</span>${part}`;
 }
 function render(anim) {
   renderTabs(); renderStatus(); badgeSol();
@@ -1137,8 +1155,8 @@ function viewHome(main) {
 /* ================= Orden de compra ================= */
 const dnLong = n => DOWN[dowOf(n)] + ' ' + dnFmtS(n);
 function lineCalc(r) {
-  const orderU = r.fin * r.pm, e = Math.max(0, r.stockArr + orderU - r.Dafter), eDays = coverDays(r.m.cod, e, r.startPost + r.N);
-  const sup = coverDays(r.m.cod, r.falta > 1e-9 ? r.pos : r.pos + orderU, r.envDn), share = orderU > 0 ? Math.min(1, e / orderU) : 0;
+  const orderU = r.fin * r.pm, e = Math.max(0, r.stockArr + orderU - r.Dafter), eDays = coverDays(r.m.cod, e, r.startPost + r.N, r.floorW);
+  const sup = coverDays(r.m.cod, r.falta > 1e-9 ? r.pos : r.pos + orderU, r.envDn, r.floorW), share = orderU > 0 ? Math.min(1, e / orderU) : 0;
   return { sup, goal: r.diasPre + r.N + r.ssDias, goalN: r.diasPre + r.N, kg: orderU * (r.m.kgu || 0), dec: decOf(r), e, eDays, share };
 }
 /* gráfico: stock teórico desde el día del pedido */
@@ -1150,7 +1168,7 @@ function stockSeries(r) {
   let base = r.pos, con = r.pos;
   for (let k = 0; k <= K; k++) {
     const d = r.pedDn + k, antesB = base, antesC = con;
-    if (d >= r.envDn) { const u = demand(cod, d, 1); base = Math.max(0, base - u); con = Math.max(0, con - u); }
+    if (d >= r.envDn) { const u = demand(cod, d, 1, r.floorW); base = Math.max(0, base - u); con = Math.max(0, con - u); }
     noOrd.push([k, antesB]); pts.push([k, antesC]);
     if (base !== antesB) noOrd.push([k, base]);
     if (con !== antesC) pts.push([k, con]);
@@ -1293,7 +1311,7 @@ function viewOrden(main) {
   const u = S.ui, sum = provSummary();
   if (!u.poProv || !sum.find(x => x.p === u.poProv)) { const first = [...sum].sort((a, b) => b.urg - a.urg || b.n - a.n)[0]; u.poProv = first ? first.p : ''; }
   const cur = sum.find(x => x.p === u.poProv); if (!cur) { main.innerHTML = '<div class="note">No hay proveedores cargados.</div>'; return; }
-  const pr = cur.pr, from = S.stockDn, pedDn = u.pedidoDn || todayDn(), denvP = pr.denv !== undefined ? +pr.denv : 3, envDn = pedDn + denvP, arr = pedDn + (+pr.lt || 0);
+  const pr = cur.pr, from = S.stockDn, pedDn = u.pedidoDn || todayDn(), denvP = pr.denv !== undefined ? +pr.denv : 3, envDn = (pr.envioFecha && strToDn(pr.envioFecha) >= pedDn) ? strToDn(pr.envioFecha) : pedDn + denvP, arr = pedDn + (+pr.lt || 0);
   const lines = cur.rr.filter(r => !u.poOnly || r.fin > 0 || r.estado === 'urgente').sort((a, b) => ESTADO[a.estado].o - ESTADO[b.estado].o || a.cover - b.cover || a.m.nombre.localeCompare(b.m.nombre));
   const emit = cur.rr.filter(r => r.fin > 0);
   const kgSS = emit.reduce((s, r) => s + lineCalc(r).share * r.fin * r.pm * (r.m.kgu || 0), 0), kg = emit.reduce((s, r) => s + r.fin * r.pm * (r.m.kgu || 0), 0), moqBad = (+pr.moq || 0) > 0 && kg < +pr.moq;
@@ -1314,14 +1332,13 @@ function viewOrden(main) {
       <td class="n">${stk}</td>
       <td class="n ed"><input class="ed" type="number" min="1" step="1" data-k="dias" data-cod="${r.m.cod}" value="${r.nManual ? r.ov.dias : ''}" placeholder="${nf(r.N, 0)}" aria-label="Días a cubrir ${esc(r.m.nombre)}" style="width:54px"><span class="u">días</span><span class="sub">${r.nManual ? 'manual' : 'por defecto'}</span></td>
       <td class="n"><b>${nf(r.D_N / r.pm, d)}</b><span class="u">${ul}</span><span class="sub">${r.m.xcaja ? nf(r.D_N, 0) + ' u. · ' : ''}${dnFmtS(r.startPost)} → ${dnFmtS(r.startPost + r.N - 1)}</span></td>
-      <td class="n ed"><input class="ed" type="number" min="0" step="1" data-k="denv" data-cod="${r.m.cod}" value="${r.denvManual ? r.ov.denv : ''}" placeholder="${r.denv}" aria-label="Días hasta el envío ${esc(r.m.nombre)}" style="width:54px"><span class="u">días</span><span class="sub"><b>${dnLong(r.envDn)}</b></span></td>
+      <td class="n ed"><div>${r.pico != null ? `<b>${nf(r.pico / r.pm, d)}</b><span class="u">${ul}/sem</span>` : '<span class="muted">—</span>'}</div><div class="pk"><input class="ed" type="number" min="0" max="200" step="5" data-k="pico" data-cod="${r.m.cod}" value="${r.picoManual ? r.ov.pico : ''}" placeholder="${nf(r.picoPct, 0)}" aria-label="% del pico a cubrir ${esc(r.m.nombre)}" style="width:50px"><span class="u">%</span></div><span class="sub">${r.pico == null ? 'pocas semanas' : r.picoPct > 0 ? (r.floorW > r.wk4 ? 'cubre ' + nf(r.floorW / r.pm, d) + ' /sem' : 'ya lo cubre el pronóstico') : 'pronóst. ' + nf(r.wk4 / r.pm, d) + ' /sem'}</span></td>
+      <td class="n ed"><input class="ed" type="date" data-k="envio" data-cod="${r.m.cod}" value="${dnToStr(r.envDn)}" min="${dnToStr(r.pedDn)}" aria-label="Primer envío ${esc(r.m.nombre)}" style="width:124px"><span class="sub">en ${r.denv} ${r.denv === 1 ? 'día' : 'días'}${r.denvManual ? ' · <a href="#" data-envio-auto="' + r.m.cod + '" title="Volver al primer envío del proveedor">↺ auto</a>' : ''}</span></td>
       <td class="n"><b>${nf(r.stockArr / r.pm, d)}</b><span class="u">${ul}</span><span class="sub">${r.falta > 1e-9 ? '<span style="color:var(--crit)">faltan ' + nf(r.falta / r.pm, d) + ' antes</span>' : r.diasPre === 0 ? 'llega antes del 1.er envío' : 'tras ' + nf(r.diasPre, 0) + ' d de venta'}</span></td>
       <td class="n ed"><input class="ed" type="number" min="0" step="0.5" data-k="ss" data-cod="${r.m.cod}" value="${r.ssManual ? r.ov.ss : ''}" placeholder="${nf(r.ssDias, 1)}" aria-label="Días de seguridad ${esc(r.m.nombre)}" style="width:54px"><span class="u">días</span><span class="sub"><b>${nf(r.SSu / r.pm, d)} ${ul}</b> · estad. ${nf(r.sugDays, 1)} d</span></td>
       <td class="n"><b>${nf(r.sug)}</b><span class="u">${ul}</span></td>
-      <td class="n ed"><input class="ed" type="number" min="0" step="1" data-k="final" data-cod="${r.m.cod}" value="${r.hasFinal ? r.ov.final : ''}" placeholder="${r.sug}" aria-label="Pedido final ${esc(r.m.nombre)}"><span class="u">${ul}</span></td>
-      <td class="n"><b>${nf(c.share * 100, 0)}%</b><span class="sub">${nf(c.e / r.pm, d)} ${ul}</span></td>
-      <td class="n"><div class="sup"><span class="num">${c.sup >= 400 ? '>365' : nf(c.sup, 0)} días</span><div class="cov"><i style="width:${Math.min(100, c.sup / sc * 100)}%;background:${cc}"></i><b style="left:${c.goal / sc * 100}%" title="Meta: ${nf(r.N, 0)} + ${nf(r.ssDias, 0)} de seguridad"></b></div><span class="sub">meta ${nf(r.N, 0)} + ${nf(r.ssDias, 0)} seg.</span></div></td>
-      <td class="n">${nf(c.kg, 0)}<span class="u">kg</span></td></tr>`;
+      <td class="n ed"><input class="ed" type="number" min="0" step="1" data-k="final" data-cod="${r.m.cod}" value="${r.hasFinal ? r.ov.final : ''}" placeholder="${r.sug}" aria-label="Pedido final ${esc(r.m.nombre)}"><span class="u">${ul}</span>${r.fin > 0 ? `<span class="sub">${c.kg > 0 ? nf(c.kg, 0) + ' kg · ' : ''}colchón ${nf(c.share * 100, 0)}%</span>` : ''}</td>
+      <td class="n"><div class="sup"><span class="num">${c.sup >= 400 ? '>365' : nf(c.sup, 0)} días</span><div class="cov"><i style="width:${Math.min(100, c.sup / sc * 100)}%;background:${cc}"></i><b style="left:${c.goal / sc * 100}%" title="Meta: ${nf(r.N, 0)} + ${nf(r.ssDias, 0)} de seguridad"></b></div><span class="sub">meta ${nf(r.N, 0)} + ${nf(r.ssDias, 0)} seg.</span></div></td></tr>`;
   }).join('');
   if (!u.poSel || !lines.find(x => x.m.cod === u.poSel)) u.poSel = (emit[0] || lines[0] || { m: {} }).m.cod;
   const selR = lines.find(x => x.m.cod === u.poSel);
@@ -1349,11 +1366,11 @@ function viewOrden(main) {
       <div class="po-grupo">
         <div class="po-gt"><span class="n">2</span>Envío y cobertura</div>
         <div class="po-fila">
-          <div class="fld"><label for="poDenv">Días hasta el envío</label><input type="number" id="poDenv" min="0" step="1" value="${denvP}"></div>
-          <div class="fld dato"><label>Primer envío</label><div class="v">${dnLong(envDn)}</div></div>
-          <div class="fld"><label for="poDias" title="Cuántos días de venta tiene que cubrir el pedido, contados desde que llega el proveedor. Se puede cambiar producto por producto en la tabla.">Días a cubrir (desde que llega)</label><input type="number" id="poDias" min="1" step="1" value="${pr.dias !== undefined ? pr.dias : 7}"></div>
+          <div class="fld"><label for="poEnvio" title="Fecha en que sale el primer envío a sucursales. Hasta ese día el stock no se consume. Los días desde el pedido se calculan solos.">Primer envío</label><input type="date" id="poEnvio" value="${dnToStr(envDn)}" min="${dnToStr(pedDn)}"></div>
+          <div class="fld dato"><label>Desde el pedido</label><div class="v">${envDn - pedDn} ${envDn - pedDn === 1 ? 'día' : 'días'}</div></div>
+          ${pr.envioFecha && strToDn(pr.envioFecha) >= pedDn ? '<div class="fld"><label>&nbsp;</label><button type="button" class="btn" id="poEnvioAuto" title="Volver a los días por defecto del proveedor">↺ automático</button></div>' : ''}
         </div>
-        <div class="hint po-nota">Hasta el primer envío el stock no se consume. Los días a cubrir se cuentan desde que llega el proveedor, y se pueden cambiar producto por producto en la tabla.</div>
+        <div class="hint po-nota">Elegí la fecha del primer envío a sucursales; los días desde el pedido se calculan solos. Hasta ese día el stock no se consume. Los días a cubrir y el % de los picos de venta se cambian producto por producto en la tabla, o por proveedor en Proveedores.</div>
       </div>
     </div>
     ${planBanner(cur.p)}
@@ -1364,15 +1381,14 @@ function viewOrden(main) {
       <th class="n " title="Lo que hay hoy en depósito según el stock cargado, en cajas y en unidades."><span class="t">Stock actual</span><span class="r">cajas y unidades</span></th>
       <th class="n ed" title="EDITABLE. Días de venta que cubre el pedido, contados desde que llega el proveedor. Vacío = los días a cubrir del proveedor."><span class="t">Días a cubrir</span><span class="r">desde que llega el proveedor</span></th>
       <th class="n " title="Ventas esperadas durante los días a cubrir, empezando el día siguiente a la llegada del proveedor. Debajo, el rango de fechas."><span class="t">Pronóstico</span><span class="r">ventas en esos días</span></th>
-      <th class="n ed" title="EDITABLE. Días que pasan desde el pedido hasta el primer envío a sucursales (3 = si pedís un lunes, el envío es el jueves). Hasta ese día el stock no se consume: ya está cubierto."><span class="t">Día de envío</span><span class="r">días desde el pedido</span></th>
+      <th class="n ed" title="Promedio de las semanas más altas de las últimas 13: lo que se vendió cuando hubo mercadería (si el producto se queda sin stock, las ventas normales quedan por debajo). EDITABLE: qué % de ese pico querés cubrir. 0 = solo el pronóstico; 100 = el pico completo. Vacío = el del proveedor."><span class="t">Picos de venta</span><span class="r">promedio y % a cubrir</span></th>
+      <th class="n ed" title="EDITABLE. Fecha del primer envío a sucursales; los días desde el pedido se calculan solos. Hasta ese día el stock no se consume. Vacío = el del proveedor."><span class="t">Primer envío</span><span class="r">fecha y días desde el pedido</span></th>
       <th class="n " title="Stock teórico en el momento en que llega el proveedor: stock actual menos la venta de los días desde el primer envío hasta el día de la llegada, incluido ese día (la mercadería que llega todavía no cuenta ese día). No baja de 0."><span class="t">Stock al llegar</span><span class="r">a la llegada del proveedor</span></th>
       <th class="n ed" title="EDITABLE. Colchón en días de venta y su equivalente en cantidades. Vacío = lo del proveedor (días propios + recargo por confiabilidad). Debajo, lo que sugiere la estadística de variabilidad."><span class="t">Stock de seguridad</span><span class="r">días (editable) y cantidad</span></th>
       <th class="n " title="Lo que falta vender después de la llegada, más el stock de seguridad, menos el stock con el que llegás; redondeado a cajas o unidades."><span class="t">Pedido sugerido</span><span class="r">pronóstico + seguridad − stock</span></th>
       <th class="n ed" title="EDITABLE. Lo que realmente vas a pedir. Vacío = se usa el sugerido."><span class="t">Pedido final</span><span class="r">lo que se manda</span></th>
-      <th class="n " title="Del pedido, qué porcentaje queda sin vender al terminar los días a cubrir. Es el stock de seguridad que estás pidiendo. Debajo, cuántas unidades son."><span class="t">Colchón</span><span class="r">% del pedido</span></th>
       <th class="n " title="Cuántos días duran el stock actual más este pedido, contados desde el día de envío. La marca negra de la barra es la meta: días a cubrir más seguridad."><span class="t">Cubre</span><span class="r">días desde el envío</span></th>
-      <th class="n " title="Pedido final × unidades por caja × kilos por unidad."><span class="t">Kilos</span><span class="r">del pedido final</span></th>
-    </tr></thead><tbody>${tr || '<tr><td colspan="12" class="muted">No hay productos para pedir a este proveedor con el stock actual.</td></tr>'}</tbody></table></div>
+    </tr></thead><tbody>${tr || '<tr><td colspan="11" class="muted">No hay productos para pedir a este proveedor con el stock actual.</td></tr>'}</tbody></table></div>
     <div class="hint" style="margin-top:10px">Pasá el mouse por el título de cada columna para ver qué es. Las columnas con fondo celeste se editan. Para ver paso a paso cómo se calculó un producto, tocá la fila. <a href="#" id="goTeoria">Ver la teoría completa ›</a></div>
     <div class="bar" style="margin-top:18px">
       <div class="fld" style="flex:1;min-width:260px"><label for="poNote">Observaciones para el proveedor (opcional)</label><input type="text" id="poNote" value="${esc(u.poNote)}" placeholder="Ej.: entrega por la mañana"></div>
@@ -1394,8 +1410,8 @@ function viewOrden(main) {
   $('#ppStock').onclick = () => { u.stProv = u.poProv; u.stQ = ''; u.stF = 'todos'; u.stN = 150; S.ui.tab = 'stock'; render(true); window.scrollTo({ top: 0 }); };
   $('#poOnly').onchange = e => { u.poOnly = e.target.checked; viewOrden(main); };
   $('#poPed').onchange = e => { u.pedidoDn = e.target.value ? strToDn(e.target.value) : undefined; S.plan = []; viewOrden(main); };
-  $('#poDenv').onchange = e => { pr.denv = Math.max(0, Math.round(+e.target.value || 0)); pr.configurado = true; S.plan = []; saveParams(); viewOrden(main); };
-  $('#poDias').onchange = e => { pr.dias = Math.max(1, Math.round(+e.target.value || 1)); pr.configurado = true; S.plan = []; saveParams(); viewOrden(main); };
+  $('#poEnvio').onchange = e => { if (e.target.value) pr.envioFecha = e.target.value; else delete pr.envioFecha; pr.configurado = true; S.plan = []; saveParams(); viewOrden(main); };
+  if ($('#poEnvioAuto')) $('#poEnvioAuto').onclick = () => { delete pr.envioFecha; S.plan = []; saveParams(); viewOrden(main); };
   $('#poLT').onchange = e => { const v = Math.max(0, Math.round(+e.target.value || 0)); pr.lt = v; pr.ltOrigen = 'manual'; pr.configurado = true; S.plan = []; saveParams(); viewOrden(main); };
   const ps = $('#poSel'); if (ps) ps.onchange = e => { u.poSel = e.target.value; viewOrden(main); };
   $$('[data-graf]', main).forEach(b => b.onclick = e => { e.stopPropagation(); u.poSel = b.dataset.graf; viewOrden(main); const g = $('#poGraf'); if (g) g.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
@@ -1403,7 +1419,8 @@ function viewOrden(main) {
   $('#goTeoria').onclick = e => { e.preventDefault(); u.tab = 'teoria'; render(true); window.scrollTo({ top: 0 }); };
   $('#poNote').oninput = e => { u.poNote = e.target.value; };
   $$('tr.row', main).forEach(t => t.onclick = e => { if (e.target.closest('input')) return; openDetail(t.dataset.cod); });
-  $$('input.ed', main).forEach(inp => { inp.onclick = e => e.stopPropagation(); inp.onchange = () => { const c = inp.dataset.cod, ov = S.params.prod[c] = S.params.prod[c] || {}, v = inp.value === '' ? undefined : Math.max(0, +inp.value); if (v === undefined || (inp.dataset.k === 'dias' && !(v > 0))) delete ov[inp.dataset.k]; else ov[inp.dataset.k] = v; if (inp.dataset.k !== 'final') delete ov.final; S.plan = []; saveParams(); viewOrden(main); }; });
+  $$('input.ed', main).forEach(inp => { inp.onclick = e => e.stopPropagation(); inp.onchange = () => { if (inp.dataset.k === 'envio') { const c0 = inp.dataset.cod, ov0 = S.params.prod[c0] = S.params.prod[c0] || {}; if (inp.value) { ov0.envioFecha = inp.value; delete ov0.denv; } else delete ov0.envioFecha; delete ov0.final; S.plan = []; saveParams(); viewOrden(main); return; } const c = inp.dataset.cod, ov = S.params.prod[c] = S.params.prod[c] || {}, v = inp.value === '' ? undefined : Math.max(0, +inp.value); if (v === undefined || (inp.dataset.k === 'dias' && !(v > 0))) delete ov[inp.dataset.k]; else ov[inp.dataset.k] = v; if (inp.dataset.k !== 'final') delete ov.final; S.plan = []; saveParams(); viewOrden(main); }; });
+  $$('[data-envio-auto]', main).forEach(a => a.onclick = e => { e.preventDefault(); e.stopPropagation(); const ov = S.params.prod[a.dataset.envioAuto]; if (ov) { delete ov.envioFecha; delete ov.denv; delete ov.final; } S.plan = []; saveParams(); viewOrden(main); });
   const bE = $('#poEmit'); if (bE) bE.onclick = () => { u.poAsk = true; viewOrden(main); };
   const bS = $('#poSol'); if (bS) bS.onclick = async () => { bS.disabled = true; await enviarSolicitud(cur, emit); viewOrden(main); };
   const bN = $('#poNo'); if (bN) bN.onclick = () => { u.poAsk = false; viewOrden(main); };
@@ -1413,7 +1430,7 @@ function viewOrden(main) {
 }
 function buildOrder(cur, emit, draft) {
   const from = S.stockDn, pr = cur.pr, n = S.orders.filter(o => o.fecha === dnToStr(todayDn())).length + 1;
-  const lines = emit.map(r => { const c = lineCalc(r); return { cod: r.m.cod, nombre: r.m.nombre, unidad: ulabel(r), stock: +(r.stockU / r.pm).toFixed(2), stockU: +r.stockU.toFixed(1), nDias: +r.N.toFixed(1), pron: +(r.D_N / r.pm).toFixed(2), envio: dnToStr(r.envDn), lt: r.LT, llega: +(r.stockArr / r.pm).toFixed(2), ssDias: +r.ssDias.toFixed(1), ss: +(r.SSu / r.pm).toFixed(2), sug: r.sug, qty: r.fin, colchon: Math.round(c.share * 100), dias: c.sup >= 400 ? 400 : Math.round(c.sup), kg: +c.kg.toFixed(1) }; });
+  const lines = emit.map(r => { const c = lineCalc(r); return { cod: r.m.cod, nombre: r.m.nombre, unidad: ulabel(r), stock: +(r.stockU / r.pm).toFixed(2), stockU: +r.stockU.toFixed(1), nDias: +r.N.toFixed(1), pron: +(r.D_N / r.pm).toFixed(2), pico: r.pico != null ? +(r.pico / r.pm).toFixed(1) : null, picoPct: r.picoPct, envio: dnToStr(r.envDn), lt: r.LT, llega: +(r.stockArr / r.pm).toFixed(2), ssDias: +r.ssDias.toFixed(1), ss: +(r.SSu / r.pm).toFixed(2), sug: r.sug, qty: r.fin, colchon: Math.round(c.share * 100), dias: c.sup >= 400 ? 400 : Math.round(c.sup), kg: +c.kg.toFixed(1) }; });
   const slug = cur.p.normalize('NFD').replace(/[^\w]+/g, '').toLowerCase().slice(0, 14);
   const id = 'oc_' + Date.now().toString(36) + '_' + slug;
   return { id, num: 'OC-' + dnToStr(todayDn()).replace(/-/g, '') + '-' + String(n).padStart(2, '0'), prov: cur.p, fecha: dnToStr(S.ui.pedidoDn || todayDn()), envio: dnToStr((S.ui.pedidoDn || todayDn()) + (pr.denv !== undefined ? +pr.denv : 3)), llegada: dnToStr((S.ui.pedidoDn || todayDn()) + (+pr.lt || 0)), lt: pr.lt, ciclo: pr.ciclo, obs: S.ui.poNote || '', borrador: !!draft, lines, tot: { cajas: lines.filter(l => l.unidad === 'cajas').reduce((s, l) => s + l.qty, 0), unidades: lines.filter(l => l.unidad !== 'cajas').reduce((s, l) => s + l.qty, 0), kg: Math.round(lines.reduce((s, l) => s + l.kg, 0)) } };
@@ -1426,9 +1443,9 @@ async function emitOrder(cur, emit) {
   exportOrder(o); toast('Orden ' + o.num + ' emitida.');
 }
 function exportOrder(o) {
-  const hdr = ['Código', 'Producto', 'Unidad de compra', 'Stock actual (unidad de compra)', 'Stock actual (u.)', 'Días a cubrir', 'Pronóstico en esos días', 'Día de envío', 'Lead time (días)', 'Stock al llegar', 'Días de seguridad', 'Stock de seguridad', 'Pedido sugerido', 'Pedido', 'Colchón % del pedido', 'Cubre desde el envío (días)', 'Kilos'];
+  const hdr = ['Código', 'Producto', 'Unidad de compra', 'Stock actual (unidad de compra)', 'Stock actual (u.)', 'Días a cubrir', 'Pronóstico en esos días', 'Pico de ventas (por semana)', '% del pico a cubrir', 'Día de envío', 'Lead time (días)', 'Stock al llegar', 'Días de seguridad', 'Stock de seguridad', 'Pedido sugerido', 'Pedido', 'Colchón % del pedido', 'Cubre desde el envío (días)', 'Kilos'];
   const rows = [['ORDEN DE COMPRA', o.num + (o.borrador ? ' (borrador)' : '')], ['Proveedor', o.prov], ['Fecha del pedido', o.fecha], ['Primer envío', o.envio || ''], ['Llegada del proveedor', o.llegada], ['Observaciones', o.obs || ''], [], hdr,
-    ...o.lines.map(l => [l.cod, l.nombre, l.unidad, l.stock, l.stockU ?? '', l.nDias, l.pron, l.envio || '', l.lt, l.llega, l.ssDias, l.ss ?? '', l.sug, l.qty, l.colchon ?? '', l.dias >= 400 ? '>365' : l.dias, l.kg]), [],
+    ...o.lines.map(l => [l.cod, l.nombre, l.unidad, l.stock, l.stockU ?? '', l.nDias, l.pron, l.pico ?? '', l.picoPct ?? '', l.envio || '', l.lt, l.llega, l.ssDias, l.ss ?? '', l.sug, l.qty, l.colchon ?? '', l.dias >= 400 ? '>365' : l.dias, l.kg]), [],
     ['TOTAL', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', o.tot.kg], ['Cajas', o.tot.cajas], ['Unidades sueltas', o.tot.unidades]];
   saveXlsx((o.borrador ? 'borrador_' : '') + o.num + '_' + o.prov.replace(/\W+/g, '_') + '.xlsx', [['Orden', rows]]);
 }
@@ -1446,7 +1463,7 @@ function calcStepsHtml(r, withWeeks) {
       <div class="muted small" style="margin-top:4px">Tope de semanas atípicas: ${g.clip > 0 ? nf(g.clip, 1) + ' × la mediana de 13 semanas (' + nf(P.med, 1) + ') = ' + (isFinite(P.cap) ? nf(P.cap, 1) : 'no aplica') : 'desactivado'}.</div></div></li>
     <li><span class="b">2</span><div><b>Estacionalidad.</b> Modo: <b>${mode === 'grupo' ? 'grupo "' + esc(m.grupo) + '"' : mode === 'producto' ? 'propia del producto' : 'ninguna'}</b>, intensidad ${nf(g.estac * 100)}%. Factor de las próximas 8 semanas: <span class="mono">${sf.map(x => nf(x, 2)).join(' · ')}</span>. Compara las ventas de este mismo período del año pasado contra las de las semanas que hoy usamos como nivel.</div></li>
     <li><span class="b">3</span><div><b>Fechas.</b> Pedido el <b>${dnLong(r.pedDn)}</b>. El primer envío a sucursales es ${r.denv} días después: <b>${dnLong(r.envDn)}</b>; hasta ese día el stock no se consume. El proveedor tarda ${r.LT} días: llega el <b>${dnLong(r.arrDn)}</b>. ${r.diasPre === 0 ? 'Llega antes del primer envío: no se descuenta nada del stock actual.' : `Desde el primer envío se vende día por día: hasta el día de la llegada (inclusive) son <b>${nf(r.diasPre, 0)} días</b> de venta que salen del stock actual (la mercadería que llega ese día todavía no cuenta).`}</div></li>
-    <li><span class="b">4</span><div><b>Pronóstico desde la llegada.</b> Días a cubrir: <b>${nf(r.N, 0)}</b>${r.nManual ? ' (elegidos a mano para este producto)' : ' (los del proveedor)'}, empezando el día siguiente a la llegada: del ${dnFmt(r.startPost)} al ${dnFmt(r.startPost + r.N - 1)}. Venta pronosticada: <b class="mono">${nf(r.D_N, 1)} u.</b> (${nf(r.D_N / r.pm, 1)} ${ul}), unas ${nf(r.daily, 2)} u./día.</div></li>
+    <li><span class="b">4</span><div><b>Pronóstico desde la llegada.</b> Días a cubrir: <b>${nf(r.N, 0)}</b>${r.nManual ? ' (elegidos a mano para este producto)' : ' (los del proveedor)'}, empezando el día siguiente a la llegada: del ${dnFmt(r.startPost)} al ${dnFmt(r.startPost + r.N - 1)}. Venta pronosticada: <b class="mono">${nf(r.D_N, 1)} u.</b> (${nf(r.D_N / r.pm, 1)} ${ul}), unas ${nf(r.daily, 2)} u./día.${r.pico != null ? ` <b>Picos de venta:</b> el promedio de las ${r.picoSem.length} semanas más altas (${r.picoSem.map(i => dnFmtS(S.start + 7 * i)).join(', ')}) es de <b class="mono">${nf(r.pico, 1)} u./semana</b>${r.picoPct > 0 ? `; cubriendo el <b>${nf(r.picoPct, 0)}%</b>, el ritmo de venta que se usa es de al menos <b class="mono">${nf(r.floorW, 1)} u./semana</b>${r.floorW > r.wk4 ? '' : ' (el pronóstico ya lo supera, así que no cambia nada)'}.` : '. No estás cubriendo picos (0%): se usa solo el pronóstico.'}` : ''}</div></li>
     <li><span class="b">5</span><div><b>Stock al llegar.</b> Stock actual <span class="mono">${nf(r.pos, 1)} u.</span>. Los ${nf(r.diasPre, 0)} días de venta hasta la llegada se llevan <span class="mono">${nf(r.D_LT, 1)} u.</span> Llegás con <b class="mono">${nf(r.stockArr, 1)} u.</b>${r.falta > 1e-9 ? ` y te faltan <b class="mono">${nf(r.falta, 1)} u.</b> antes de que llegue.` : ''}</div></li>
     <li><span class="b">6</span><div><b>Stock de seguridad.</b> ${nf(r.ssDias, 1)} días${r.ssManual ? ' (definidos a mano)' : ` = ${pr.ss} del proveedor + ${g.recConf[pr.conf]} por confiabilidad (${CONF_LABEL[pr.conf]})`} × ${nf(r.daily, 2)} u./día = <b class="mono">${nf(r.SSu, 1)} u.</b> (${nf(r.SSu / r.pm, 1)} ${ul}). Referencia estadística: con las últimas ${n13} semanas, σ = ${nf(P.sd13, 1)} y CV = ${nf(P.cv * 100)}%, z × σ × √(${nf(r.H, 0)}/7) = ${g.z} × ${nf(P.sd13, 1)} × ${nf(sq, 2)} = ${nf(g.z * P.sd13 * sq, 1)} u. ÷ ${nf(r.daily, 2)} u./día = <b class="mono">${nf(r.sugDays, 1)} días</b>.</div></li>
     <li><span class="b">7</span><div><b>Pedido.</b> Lo que falta vender después de que llega (${nf(r.Dafter, 1)} u.) + seguridad (${nf(r.SSu, 1)} u.) = objetivo <span class="mono">${nf(r.target, 1)} u.</span> Menos el stock al llegar (${nf(r.stockArr, 1)} u.) = <span class="mono">${nf(r.need, 1)} u.</span> = ${nf(r.needPU, 2)} ${ul} → sugerido <b>${nf(r.sug)} ${ul}</b> (${g.redondeo === 'techo' ? 'redondeo hacia arriba con tolerancia de ' + nf(g.tol * 100) + '%' : 'redondeo al más cercano'}).</div></li>
@@ -1621,6 +1638,7 @@ function viewProv(main) {
     <td><span class="chip ${cls === 'Largo' ? 'crit' : cls === 'Medio' ? 'warn' : 'ok'}">${cls}</span></td>
     <td class="n"><input class="ed" type="number" min="0" step="1" data-f="denv" value="${pr.denv !== undefined ? pr.denv : 3}" aria-label="Días hasta el envío ${esc(p)}"></td>
     <td class="n"><input class="ed" type="number" min="1" step="1" data-f="dias" value="${pr.dias !== undefined ? pr.dias : 7}" aria-label="Días a cubrir ${esc(p)}"></td>
+    <td class="n"><input class="ed" type="number" min="0" max="200" step="5" data-f="pico" value="${pr.pico !== undefined ? pr.pico : 0}" aria-label="% del pico a cubrir ${esc(p)}"></td>
     <td><select data-f="conf" aria-label="Confiabilidad ${esc(p)}">${Object.entries(CONF_LABEL).map(([k, t]) => `<option value="${k}" ${pr.conf === k ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
     <td class="n"><input class="ed" type="number" min="0" step="0.5" data-f="ss" value="${pr.ss}" aria-label="Días de seguridad ${esc(p)}"></td>
     <td class="n">${rec ? '+' + rec : '0'}</td><td class="n"><b>${nf((+pr.ss || 0) + rec, 1)}</b></td>
@@ -1629,10 +1647,10 @@ function viewProv(main) {
   }).join('');
   main.innerHTML = `
   <section>${heroHead('Proveedores y parámetros', 'Cómo compra cada proveedor', 'El lead time y la confiabilidad de cada proveedor definen cuánto stock de seguridad conviene tener. Todo lo que cambies acá se recalcula al instante y queda guardado.')}</section>
-  <div class="note"><b>Cómo se usa cada dato.</b> El <b>lead time</b> es lo que tarda el proveedor desde que hacés el pedido. Los <b>días hasta el envío</b> son los días que pasan hasta el primer envío a sucursales (hasta ese día el stock no se consume). Los <b>días a cubrir</b> son cuántos días de venta tiene que cubrir el pedido, contados desde que llega el proveedor; se pueden cambiar producto por producto en la orden de compra. La <b>confiabilidad</b> suma días de seguridad si el proveedor suele fallar, y el <b>pedido mínimo</b> avisa si el pedido no llega a los kilos que exige el proveedor.</div>
+  <div class="note"><b>Cómo se usa cada dato.</b> El <b>lead time</b> es lo que tarda el proveedor desde que hacés el pedido. Los <b>días hasta el envío</b> son los días que pasan hasta el primer envío a sucursales (hasta ese día el stock no se consume). Los <b>días a cubrir</b> son cuántos días de venta tiene que cubrir el pedido, contados desde que llega el proveedor; se pueden cambiar producto por producto en la orden de compra. El <b>% del pico a cubrir</b> es qué parte de los picos de venta recientes querés poder atender (0 = solo el pronóstico); se puede cambiar producto por producto. La <b>confiabilidad</b> suma días de seguridad si el proveedor suele fallar, y el <b>pedido mínimo</b> avisa si el pedido no llega a los kilos que exige el proveedor.</div>
   <div class="note plan">${ltResumen()}</div>
   <div class="pp-bar" style="margin:10px 0"><input type="text" id="pvQ" placeholder="Buscar proveedor…" aria-label="Buscar proveedor" value="${esc(S.ui.pvQ || '')}" style="min-width:280px"><label class="chipb"><input type="checkbox" id="pvDef" ${S.ui.pvDef ? 'checked' : ''}> Solo los que usan valores por defecto</label><span class="muted small" id="pvCnt"></span></div>
-  <div class="tw" style="max-height:none"><table><thead><tr><th>Proveedor</th><th class="n">Productos</th><th class="n">Lead time (días)</th><th>Clase</th><th class="n" title="Días desde el pedido hasta el primer envío a sucursales. Por defecto de este proveedor; se puede cambiar en cada línea.">Días hasta el envío</th><th class="n" title="Cuántos días de venta cubre el pedido, contados desde que llega el proveedor. Por defecto de este proveedor; se puede cambiar en cada línea.">Días a cubrir</th><th>Confiabilidad</th><th class="n">Seguridad propia (días)</th><th class="n">Recargo</th><th class="n">Seguridad total</th><th class="n">Sugerido por variabilidad (días)</th><th class="n">Pedido mínimo (kg)</th></tr></thead><tbody>${prow}</tbody></table></div>
+  <div class="tw" style="max-height:none"><table><thead><tr><th>Proveedor</th><th class="n">Productos</th><th class="n">Lead time (días)</th><th>Clase</th><th class="n" title="Días desde el pedido hasta el primer envío a sucursales. Por defecto de este proveedor; se puede cambiar en cada línea.">Días hasta el envío</th><th class="n" title="Cuántos días de venta cubre el pedido, contados desde que llega el proveedor. Por defecto de este proveedor; se puede cambiar en cada línea.">Días a cubrir</th><th class="n" title="Qué % de los picos de venta querés cubrir, por defecto, en los productos de este proveedor. 0 = solo el pronóstico. Se puede cambiar producto por producto en la orden.">% del pico a cubrir</th><th>Confiabilidad</th><th class="n">Seguridad propia (días)</th><th class="n">Recargo</th><th class="n">Seguridad total</th><th class="n">Sugerido por variabilidad (días)</th><th class="n">Pedido mínimo (kg)</th></tr></thead><tbody>${prow}</tbody></table></div>
   <div class="grid2">
   <div class="card"><h3>Clasificación de proveedores</h3>
     <div class="bar" style="margin-top:10px">${num('gLtC', 'Lead time corto hasta (días)', g.ltCorto, 1)}${num('gLtM', 'Medio hasta (días)', g.ltMedio, 1)}</div>
@@ -1649,6 +1667,7 @@ function viewProv(main) {
       ${num('gEs', 'Intensidad estacional (%)', Math.round(g.estac * 100), 10, 'min="0" max="100"')}
       ${num('gTe', 'Extrapolar tendencia (%)', Math.round(g.tend * 100), 10, 'min="0" max="100"')}
       ${num('gCl', 'Tope de semanas atípicas (× mediana, 0 = sin tope)', g.clip, 0.5)}
+      ${num('gPkN', 'Picos: cuántas semanas promediar', g.picoN, 1, 'min="1" max="6"')}${num('gPkW', 'Picos: de las últimas (semanas)', g.picoVentana, 1, 'min="6" max="26"')}
     </div>
     <div class="bar" style="margin-top:12px"><label class="chipb"><input type="checkbox" id="gPa" ${g.parcial ? 'checked' : ''}> Completar la semana en curso con el perfil por día</label><label class="chipb"><input type="checkbox" id="gAd" ${g.admin ? 'checked' : ''}> Incluir ventas de Administración</label></div>
     <div class="hint" style="margin-top:10px"><b>Por qué estos valores.</b> Probé distintos métodos sobre tu historial (predecir 4 semanas con datos anteriores): el promedio de las últimas 4 semanas fue el más preciso (error 11,8%), mejor que 13 semanas (13,1%) o 26 semanas (14,7%). Extrapolar la tendencia de cada producto empeoró el resultado, por eso arranca en 0%. La estacionalidad se calcula contra el mismo período del año anterior y se aplica por grupo de productos; con un solo año de historia se usa al 50%.</div></div>
@@ -1662,13 +1681,13 @@ function viewProv(main) {
   bindN('gMax', v => setG('maxCob', v)); bindN('gZ', v => setG('z', v)); bindN('gTol', v => setG('tol', clamp(v, 0, 100) / 100));
   $('#gRed').onchange = e => setG('redondeo', e.target.value);
   bindN('gN', v => setG('N', v)); $('#gP').onchange = e => setG('pesos', e.target.value);
-  bindN('gEs', v => setG('estac', clamp(v, 0, 100) / 100)); bindN('gTe', v => setG('tend', clamp(v, 0, 100) / 100)); bindN('gCl', v => setG('clip', Math.max(0, v)));
+  bindN('gEs', v => setG('estac', clamp(v, 0, 100) / 100)); bindN('gTe', v => setG('tend', clamp(v, 0, 100) / 100)); bindN('gCl', v => setG('clip', Math.max(0, v))); bindN('gPkN', v => setG('picoN', clamp(Math.round(v), 1, 6))); bindN('gPkW', v => setG('picoVentana', clamp(Math.round(v), 6, 26)));
   $('#gPa').onchange = e => setG('parcial', e.target.checked); $('#gAd').onchange = e => setG('admin', e.target.checked);
   const filtrarProv = () => { const t = sinAcentos(S.ui.pvQ || '').split(/\s+/).filter(Boolean); let n = 0; const trs = $$('tr[data-p]', main); trs.forEach(tr => { const ok = t.every(w => sinAcentos(tr.dataset.p).includes(w)) && (!S.ui.pvDef || !!$('.chip.warn', tr)); tr.style.display = ok ? '' : 'none'; if (ok) n++; }); $('#pvCnt').textContent = n === trs.length ? trs.length + ' proveedores' : n + ' de ' + trs.length + ' proveedores'; };
   $('#pvQ').oninput = e => { S.ui.pvQ = e.target.value; filtrarProv(); };
   $('#pvDef').onchange = e => { S.ui.pvDef = e.target.checked; filtrarProv(); };
   filtrarProv();
-  $$('tr[data-p]', main).forEach(tr => $$('[data-f]', tr).forEach(inp => inp.onchange = () => { const pr = S.params.prov[tr.dataset.p], f = inp.dataset.f; pr[f] = f === 'conf' ? inp.value : f === 'dias' ? Math.max(1, Math.round(+inp.value || 1)) : Math.max(0, +inp.value); if (f === 'lt') pr.ltOrigen = 'manual'; pr.configurado = true; invalidate(); saveParams(); viewProv(main); }));
+  $$('tr[data-p]', main).forEach(tr => $$('[data-f]', tr).forEach(inp => inp.onchange = () => { const pr = S.params.prov[tr.dataset.p], f = inp.dataset.f; pr[f] = f === 'conf' ? inp.value : f === 'dias' ? Math.max(1, Math.round(+inp.value || 1)) : f === 'pico' ? Math.min(200, Math.max(0, +inp.value || 0)) : Math.max(0, +inp.value); if (f === 'lt') pr.ltOrigen = 'manual'; pr.configurado = true; invalidate(); saveParams(); viewProv(main); }));
   $$('[data-apply]', main).forEach(b => b.onclick = () => { const pr = S.params.prov[b.dataset.apply]; pr.ss = Math.round(+b.dataset.med * 2) / 2; pr.configurado = true; invalidate(); saveParams(); viewProv(main); });
 }
 
@@ -2122,6 +2141,7 @@ function viewTeoria(main) {
 <b>stock al llegar</b>   = máx(0, stock − ventas de esos días)
 <b>días a cubrir N</b>   = los del producto, o los del proveedor
 <b>pronóstico</b>        = ventas de los N días, desde el día siguiente a la llegada
+<b>con picos</b>         = si cubrís un % del pico: el mayor entre el pronóstico y ese % del pico semanal
 <b>seguridad SS</b>      = días de seguridad × (pronóstico ÷ N)
 <b>objetivo</b>          = pronóstico + SS
 <b>necesidad</b>         = máx(0, objetivo − stock al llegar)
@@ -2163,6 +2183,7 @@ function viewTeoria(main) {
     ['Días a cubrir', 'Cuántos días de venta cubre el pedido, contados desde que llega el proveedor (desde el día siguiente a la llegada). Se elige por proveedor y se puede cambiar producto por producto. Si lo escribís en una línea, manda tu número.'],
     ['Pronóstico', 'Ventas esperadas en los días a cubrir, desde que llega el proveedor. Debajo, el rango de fechas. Lo que se vende hasta la llegada no se pronostica acá: solo sirve para calcular el stock al llegar.'],
       ['Franja del gráfico (rango habitual)', 'En Tendencias, la franja alrededor del pronóstico semanal es el rango habitual: el pronóstico ± 1,3 desvíos de las últimas 13 semanas. Las semanas reales suelen caer adentro. El pronóstico no copia los altibajos pasados porque no se pueden anticipar y, probado con ventas reales, copiarlos empeoraba el error.'],
+      ['Picos de venta', 'El promedio de las semanas más altas de las últimas 13 (se puede cambiar en Proveedores): lo que se vendió cuando hubo mercadería. Si un producto se queda sin stock, sus ventas normales quedan por debajo de lo que se habría vendido; con el % del pico a cubrir elegís cuánto de ese pico querés poder atender. 0% = solo el pronóstico; 100% = el pico completo. El pedido usa el mayor entre el pronóstico y ese % del pico, tanto para el stock con el que llegás como para lo que hay que cubrir.'],
     ['Día de envío', 'Editable. Días desde el pedido hasta el primer envío a sucursales y qué día de la semana cae. Hasta ese día el stock no se consume.'],
     ['Lead time', 'Días que tarda el proveedor desde el pedido, y qué día llega.'],
     ['Stock al llegar', 'Stock teórico cuando llega el proveedor: stock actual menos la venta de los días desde el primer envío hasta el día de la llegada, incluido ese día. Si es 0, te quedás sin mercadería antes de que llegue.'],
