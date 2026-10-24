@@ -213,6 +213,9 @@ ul.plain,ol.plain{margin:6px 0 0;padding-left:22px}ul.plain li,ol.plain li{margi
 .po-t .sup .cov{margin:4px auto 0}
 .po-calc{font-size:14.5px;line-height:1.55;color:var(--ink2);max-width:600px}
 .po-calc a{color:var(--accent);font-weight:600;white-space:nowrap}
+.solmot{width:190px;min-width:170px}.solmw{display:flex;flex-direction:column;gap:5px}.solmw[hidden]{display:none}.solmw select,.solmw input{display:block;width:100%;min-width:0;box-sizing:border-box;font-size:13px;padding:6px 8px}
+.sol-t table{font-size:14px}.sol-t th,.sol-t td{padding:9px 8px}.sol-t th{white-space:normal;line-height:1.15;vertical-align:bottom;font-size:11.5px}.sol-t td{white-space:normal}.sol-t td.n{white-space:nowrap}.sol-t .sticky1{min-width:170px;max-width:210px}.sol-t input.ed{width:68px;padding:5px 7px}
+#main .tw tr.cambiada td{background-image:linear-gradient(rgba(245,158,11,.11),rgba(245,158,11,.11))}   /* se superpone al fondo de cada celda (también el de la columna fija) sin volverla transparente */
 .hero .stat .v{font-size:clamp(34px,4.4vw,62px)}
 .hero{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 .hero .stats{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
@@ -945,9 +948,9 @@ window.addEventListener('resize', () => { moveInd(); });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(moveInd);
 function renderStatus() {
   if (!S.ready) { $('#status').innerHTML = ''; return; }
-  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 23/10 · orden en PDF</span>`; return; }
+  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 23/10 · motivos en solicitudes</span>`; return; }
   const part = isPartial() ? `<span class="pill warn" title="La última semana tiene datos hasta el ${dnFmt(S.lastDn)}; se completa con el perfil por día de la semana">semana en curso parcial</span>` : '';
-  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 23/10 · orden en PDF</span>${part}`;
+  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 23/10 · motivos en solicitudes</span>${part}`;
 }
 function render(anim) {
   renderTabs(); renderStatus(); badgeSol();
@@ -1575,7 +1578,7 @@ function pdfInterno(o) {
   doc.autoTable({
     startY: y, margin: { left: M, right: M, bottom: 24 }, theme: 'plain', showFoot: 'never',
     head: [['Código', 'Producto', 'Stock actual', 'Pronóstico', 'Pico de ventas', 'Stock al llegar', 'Seguridad', 'Sugerido', 'Pedido final', 'Colchón', 'Cubre (días)']],
-    body: o.lines.map(l => [l.cod, lat1(l.nombre), nf(l.stock, 1) + ' ' + ab(l), nf(l.pron, 1) + ' ' + ab(l) + '\nen ' + nf(l.nDias, 0) + ' días', l.pico != null ? nf(l.pico, 1) + ' ' + ab(l) + '/sem\n' + (l.picoPct > 0 ? 'cubre ' + nf(l.picoPct, 0) + '%' : 'sin cubrir') : '-', nf(l.llega, 1) + ' ' + ab(l), l.ss != null ? nf(l.ss, 1) + ' ' + ab(l) + '\n' + nf(l.ssDias, 1) + ' días' : '-', nf(l.sug), nf(l.qty), (l.colchon != null ? l.colchon : 0) + '%', (l.dias >= 400 ? '+365' : l.dias) + ' d']),
+    body: o.lines.map(l => [l.cod, lat1(l.nombre), nf(l.stock, 1) + ' ' + ab(l), nf(l.pron, 1) + ' ' + ab(l) + '\nen ' + nf(l.nDias, 0) + ' días', l.pico != null ? nf(l.pico, 1) + ' ' + ab(l) + '/sem\n' + (l.picoPct > 0 ? 'cubre ' + nf(l.picoPct, 0) + '%' : 'sin cubrir') : '-', nf(l.llega, 1) + ' ' + ab(l), l.ss != null ? nf(l.ss, 1) + ' ' + ab(l) + '\n' + nf(l.ssDias, 1) + ' días' : '-', nf(l.sug), nf(l.qty) + (l.qtyPlan != null && l.qtyPlan !== l.qty ? '\n(pidió ' + nf(l.qtyPlan) + ')' : ''), (l.colchon != null ? l.colchon : 0) + '%', (l.dias >= 400 ? '+365' : l.dias) + ' d']),
     styles: { font: 'helvetica', fontSize: 8.3, cellPadding: { top: 2.2, bottom: 5, left: 2, right: 2 }, textColor: C.ink, lineWidth: 0, valign: 'top', minCellHeight: 12.5 },
     headStyles: { fillColor: C.acc, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7.8, valign: 'middle', minCellHeight: 9 },
     alternateRowStyles: { fillColor: C.zeb },
@@ -1590,7 +1593,21 @@ function pdfInterno(o) {
       doc.setDrawColor(...C.ink); doc.setLineWidth(0.35); const mx = d.cell.x + 2 + bw * Math.min(1, meta / tope); doc.line(mx, by - 0.9, mx, by + 3.1);
     }
   });
-  const fy = (doc.lastAutoTable && doc.lastAutoTable.finalY || y) + 6;
+  let fy = (doc.lastAutoTable && doc.lastAutoTable.finalY || y) + 6;
+  // lo que cambió Compras respecto de lo que pidió Planificación, con el motivo
+  const camb = [...o.lines.filter(l => l.qtyPlan != null && l.qtyPlan !== l.qty).map(l => [lat1(l.nombre), nf(l.qtyPlan), nf(l.qty), lat1(l.motivo || 'Sin motivo'), lat1(l.nota || '')]), ...(o.quitadas || []).map(x => [lat1(x.nombre), nf(x.de), '0 (quitado)', lat1(x.motivo || 'Sin motivo'), lat1(x.nota || '')])];
+  if (camb.length || o.comentarioCompras) {
+    if (fy > 150) { doc.addPage(); fy = 18; }
+    if (camb.length) {
+      doc.autoTable({ startY: fy, margin: { left: M, right: M, bottom: 24 }, theme: 'plain', head: [['Cambios de Compras', 'Pidió Planificación', 'Quedó', 'Motivo', 'Detalle']], body: camb,
+        styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2, textColor: C.ink }, headStyles: { fillColor: C.oscuro, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 }, alternateRowStyles: { fillColor: C.zeb },
+        columnStyles: { 0: { cellWidth: 90 }, 1: { cellWidth: 32, halign: 'right' }, 2: { cellWidth: 28, halign: 'right', fontStyle: 'bold' }, 3: { cellWidth: 55 }, 4: { cellWidth: 'auto' } },
+        didParseCell: d => { if (d.section === 'head' && (d.column.index === 1 || d.column.index === 2)) d.cell.styles.halign = 'right'; } });
+      fy = doc.lastAutoTable.finalY + 5;
+    }
+    if (o.comentarioCompras) { doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...C.ink); doc.text('Comentario de Compras: ', M, fy + 3); doc.setFont('helvetica', 'normal'); doc.text(doc.splitTextToSize(lat1(o.comentarioCompras), W - 2 * M - 40), M + 38, fy + 3); fy += 10; }
+  }
+  if (fy > 185) { doc.addPage(); fy = 18; }
   doc.setFont('helvetica', 'normal'); doc.setFontSize(7.8); doc.setTextColor(...C.mut);
   doc.text(doc.splitTextToSize('Cubre: cuántos días duran el stock actual más este pedido, contados desde el primer envío. La marca negra de la barra es la meta (días de venta hasta la llegada, más los días a cubrir, más la seguridad). Verde: cumple; naranja: le falta poco; rojo: queda corto. El colchón es el porcentaje del pedido que quedaría sin vender al terminar los días a cubrir.', W - 2 * M), M, Math.min(fy, 200));
   pdfPie(doc, o); doc.save(nombrePdf(o, '_analisis'));
@@ -1605,10 +1622,10 @@ async function exportOrder(o, extra = {}) {   // PDF de la orden (y, si se pide,
 const avisoEmitida = (o, pdfOk) => pdfOk === false ? toast('Orden ' + o.num + ' emitida y guardada, pero NO se pudo generar el PDF (¿sin conexión?): se descargó el Excel.', 9000) : toast('Orden ' + o.num + ' emitida.');
 async function exportOrderInterno(o) { try { await cargarPdf(); pdfInterno(o); } catch (e) { toast('No se pudo generar el PDF (' + (e.message || e) + ').', 7000); } }
 function exportOrderXlsx(o) {
-  const hdr = ['Código', 'Producto', 'Unidad de compra', 'Stock actual (unidad de compra)', 'Stock actual (u.)', 'Días a cubrir', 'Pronóstico en esos días', 'Pico de ventas (por semana)', '% del pico a cubrir', 'Día de envío', 'Lead time (días)', 'Stock al llegar', 'Días de seguridad', 'Stock de seguridad', 'Pedido sugerido', 'Pedido', 'Colchón % del pedido', 'Cubre desde el envío (días)', 'Kilos'];
-  const rows = [['ORDEN DE COMPRA', o.num + (o.borrador ? ' (borrador)' : '')], ['Proveedor', o.prov], ['Fecha del pedido', o.fecha], ['Primer envío', o.envio || ''], ['Llegada del proveedor', o.llegada], ['Observaciones', o.obs || ''], [], hdr,
-    ...o.lines.map(l => [l.cod, l.nombre, l.unidad, l.stock, l.stockU ?? '', l.nDias, l.pron, l.pico ?? '', l.picoPct ?? '', l.envio || '', l.lt, l.llega, l.ssDias, l.ss ?? '', l.sug, l.qty, l.colchon ?? '', l.dias >= 400 ? '>365' : l.dias, l.kg]), [],
-    ['TOTAL', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', o.tot.kg], ['Cajas', o.tot.cajas], ['Unidades sueltas', o.tot.unidades]];
+  const hdr = ['Código', 'Producto', 'Unidad de compra', 'Stock actual (unidad de compra)', 'Stock actual (u.)', 'Días a cubrir', 'Pronóstico en esos días', 'Pico de ventas (por semana)', '% del pico a cubrir', 'Día de envío', 'Lead time (días)', 'Stock al llegar', 'Días de seguridad', 'Stock de seguridad', 'Pedido sugerido', 'Pedido', 'Colchón % del pedido', 'Cubre desde el envío (días)', 'Kilos', 'Pidió Planificación', 'Motivo del cambio', 'Detalle del cambio'];
+  const rows = [['ORDEN DE COMPRA', o.num + (o.borrador ? ' (borrador)' : '')], ['Proveedor', o.prov], ['Fecha del pedido', o.fecha], ['Primer envío', o.envio || ''], ['Llegada del proveedor', o.llegada], ['Observaciones', o.obs || ''], ...(o.comentarioCompras ? [['Comentario de Compras', o.comentarioCompras]] : []), [], hdr,
+    ...o.lines.map(l => [l.cod, l.nombre, l.unidad, l.stock, l.stockU ?? '', l.nDias, l.pron, l.pico ?? '', l.picoPct ?? '', l.envio || '', l.lt, l.llega, l.ssDias, l.ss ?? '', l.sug, l.qty, l.colchon ?? '', l.dias >= 400 ? '>365' : l.dias, l.kg, l.qtyPlan ?? '', l.motivo || '', l.nota || '']), [],
+    ['TOTAL', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', o.tot.kg], ['Cajas', o.tot.cajas], ['Unidades sueltas', o.tot.unidades], ...(o.quitadas && o.quitadas.length ? [[], ['Líneas que Compras quitó (pedía Planificación)'], ...o.quitadas.map(x => [x.nombre, x.de, x.motivo || '', x.nota || ''])] : [])];
   saveXlsx((o.borrador ? 'borrador_' : '') + o.num + '_' + o.prov.replace(/\W+/g, '_') + '.xlsx', [['Orden', rows]]);
 }
 
@@ -2427,18 +2444,19 @@ async function resolverSolicitud(s, res) {
   s.resolucion = { por: S.user.nombre, porDni: S.user.dni, en: new Date().toISOString(), ...res };
   try { await S.db.doc('solicitudes/' + s.id).set(s); } catch (e) { toast('No se pudo guardar la respuesta: ' + (e.message || e.code), 7000); }
 }
-async function aprobarSolicitud(s, qtys) {
+async function aprobarSolicitud(s, qtys, extra = {}) {
+  const mot = extra.motivos || [], nts = extra.notas || [];
   const hoy = dnToStr(todayDn()), n = S.orders.filter(o => o.fecha === hoy).length + 1;
-  const cambios = s.orden.lines.map((l, i) => ({ cod: l.cod, nombre: l.nombre, de: l.qty, a: Math.max(0, Math.round(+qtys[i] || 0)) })).filter(x => x.de !== x.a);
-  const lines = s.orden.lines.map((l, i) => { const q = Math.max(0, Math.round(+qtys[i] || 0)); return { ...l, qty: q, qtyPlan: l.qty, kg: +(l.qty > 0 ? l.kg * q / l.qty : 0).toFixed(1) }; }).filter(l => l.qty > 0);
+  const cambios = s.orden.lines.map((l, i) => ({ cod: l.cod, nombre: l.nombre, de: l.qty, a: Math.max(0, Math.round(+qtys[i] || 0)), motivo: mot[i] || '', nota: nts[i] || '' })).filter(x => x.de !== x.a);
+  const lines = s.orden.lines.map((l, i) => { const q = Math.max(0, Math.round(+qtys[i] || 0)); return { ...l, qty: q, qtyPlan: l.qty, kg: +(l.qty > 0 ? l.kg * q / l.qty : 0).toFixed(1), ...(q !== l.qty ? { motivo: mot[i] || '', nota: nts[i] || '' } : {}) }; }).filter(l => l.qty > 0);
   if (!lines.length) { toast('Todas las cantidades están en 0: en ese caso rechazá la solicitud.'); return false; }
   const o = { ...s.orden, id: 'oc_' + Date.now().toString(36) + '_' + slugProv(s.prov).slice(0, 14), num: 'OC-' + hoy.replace(/-/g, '') + '-' + String(n).padStart(2, '0'), borrador: false, lines,
     tot: { cajas: lines.filter(l => l.unidad === 'cajas').reduce((a, l) => a + l.qty, 0), unidades: lines.filter(l => l.unidad !== 'cajas').reduce((a, l) => a + l.qty, 0), kg: Math.round(lines.reduce((a, l) => a + l.kg, 0)) },
-    solicitud: s.id, solicitadaPor: s.por, aprobadaPor: S.user.nombre };
+    solicitud: s.id, solicitadaPor: s.por, aprobadaPor: S.user.nombre, comentarioCompras: extra.comentario || '', quitadas: cambios.filter(x => x.a === 0).map(x => ({ nombre: x.nombre, de: x.de, motivo: x.motivo, nota: x.nota })) };
   S.orders.unshift(o);
   try { await S.db.doc('ordenes/' + o.id).set(o); } catch (e) { toast('La orden se descargó pero no se pudo guardar en el historial: ' + (e.message || e.code), 7000); }
   s.estado = 'aprobada';
-  await resolverSolicitud(s, { orden: o.num, cambios });
+  await resolverSolicitud(s, { orden: o.num, cambios, comentario: extra.comentario || '' });
   avisoEmitida(o, await exportOrder(o, { interno: !!S.ui.poXInt, excel: !!S.ui.poXExcel }));
   return true;
 }
@@ -2454,41 +2472,69 @@ function viewSol(main) {
   main.innerHTML = `<section>${heroHead('Solicitudes de compra', puedeAprobar() ? 'Lo que Planificación pide comprar' : 'Lo que enviaste a Compras', puedeAprobar() ? 'Cada solicitud trae los mismos datos que vio Planificación. Podés aceptarla, rechazarla (con el motivo) o modificar las cantidades antes de emitir la orden.' : 'Acá ves cómo va cada solicitud que enviaste: pendiente, aprobada (con la orden) o rechazada (con el motivo).')}</section>
   <div class="provrow" role="group" aria-label="Estado">${chips}</div>
   ${lista.length ? lista.map(s => { const e = ESTADO_SOL[s.estado] || [s.estado, ''], t = s.orden.tot || {}; return `<section class="card sol-card" data-sol="${esc(s.id)}"><div class="flex"><div><div class="eyebrow">${esc(s.por)} · ${fmtFechaHora(s.en)}${s.directa ? ' · emitida directamente' : ''}</div><h2 style="margin:4px 0 0">${esc(s.prov)}</h2></div><span class="sp"></span><span class="chip ${e[1]}">${e[0]}</span></div>
-      <div class="muted small" style="margin-top:8px">${nf(s.nLineas)} líneas · ${nf(t.cajas || 0)} cajas${t.unidades ? ' · ' + nf(t.unidades) + ' u. sueltas' : ''} · ${nf(t.kg || 0)} kg${s.resolucion && s.resolucion.orden ? ' · orden ' + esc(s.resolucion.orden) : ''}${s.estado === 'rechazada' ? ' · “' + esc((s.resolucion || {}).motivo || '') + '”' : ''}</div></section>`; }).join('') : `<div class="note">${u.solF === 'pendiente' ? 'No hay solicitudes pendientes.' : 'No hay solicitudes en este estado.'}</div>`}`;
+      <div class="muted small" style="margin-top:8px">${nf(s.nLineas)} líneas · ${nf(t.cajas || 0)} cajas${t.unidades ? ' · ' + nf(t.unidades) + ' u. sueltas' : ''} · ${nf(t.kg || 0)} kg${s.resolucion && s.resolucion.orden ? ' · orden ' + esc(s.resolucion.orden) : ''}${s.resolucion && (s.resolucion.cambios || []).length ? ' · <b>' + s.resolucion.cambios.length + ' cambio' + (s.resolucion.cambios.length > 1 ? 's' : '') + ' de Compras</b>' : ''}${s.estado === 'rechazada' ? ' · “' + esc((s.resolucion || {}).motivo || '') + '”' : ''}</div></section>`; }).join('') : `<div class="note">${u.solF === 'pendiente' ? 'No hay solicitudes pendientes.' : 'No hay solicitudes en este estado.'}</div>`}`;
   $$('.pchip', main).forEach(b => b.onclick = () => { u.solF = b.dataset.f; viewSol(main); });
   $$('.sol-card', main).forEach(b => b.onclick = () => { u.solSel = b.dataset.sol; u.solRech = false; viewSol(main); window.scrollTo({ top: 0 }); });
 }
+const MOTIVOS_COMPRA = ['Mínimo de compra', 'Promoción u oferta del proveedor', 'Múltiplo o pack de compra', 'Entrega o stock del proveedor', 'Criterio de Compras', 'Otro'];
 function viewSolDetalle(main, s) {
-  const u = S.ui, o = s.orden, e = ESTADO_SOL[s.estado] || [s.estado, ''], edita = puedeAprobar() && s.estado === 'pendiente';
-  const filas = o.lines.map((l, i) => `<tr><td class="sticky1 wrap"><div class="pn">${esc(l.nombre)}<small>cód. ${esc(l.cod)}</small></div></td>
-    <td class="n"><b>${nf(l.stock, 1)}</b><span class="u">${esc(l.unidad)}</span></td><td class="n"><b>${nf(l.pron, 1)}</b><span class="u">${esc(l.unidad)}</span><span class="sub">${nf(l.nDias, 0)} días</span></td>
-    <td class="n"><b>${nf(l.llega, 1)}</b><span class="u">${esc(l.unidad)}</span><span class="sub">llega ${esc(o.llegada)}</span></td><td class="n"><b>${nf(l.sug)}</b><span class="u">${esc(l.unidad)}</span></td>
-    <td class="n"><b>${nf(l.qty)}</b><span class="u">${esc(l.unidad)}</span></td>
-    <td class="n ${edita ? 'ed' : ''}">${edita ? `<input class="ed solq" type="number" min="0" step="1" data-i="${i}" value="${l.qty}" aria-label="Cantidad final ${esc(l.nombre)}"><span class="u">${esc(l.unidad)}</span>` : `<b>${nf(((s.resolucion || {}).cambios || []).find(x => x.cod === l.cod) ? ((s.resolucion || {}).cambios.find(x => x.cod === l.cod)).a : l.qty)}</b><span class="u">${esc(l.unidad)}</span>`}</td>
-    <td class="n">${l.kg ? `<b>${nf(l.kg, 0)}</b><span class="u">kg</span>` : '<span class="muted">—</span>'}</td></tr>`).join('');
-  const res = s.resolucion || {};
-  const resHtml = s.estado === 'aprobada' ? `<div class="note ok" style="margin-top:14px"><b>${res.directa ? 'Emitida directamente por ' : 'Aprobada por '}${esc(res.por)}</b> · ${fmtFechaHora(res.en)} · orden <b>${esc(res.orden)}</b>.${(res.cambios || []).length ? ' Cambios de Compras: ' + res.cambios.map(x => `${esc(x.nombre)} ${nf(x.de)} → ${nf(x.a)}`).join('; ') + '.' : (res.directa ? '' : ' Sin cambios.')}</div><div class="bar" style="margin-top:12px"><button class="btn" id="solPdf">Bajar PDF de la orden</button><button class="btn" id="solPdfI" title="Stock, pronóstico y cobertura (uso interno)">Análisis interno (PDF)</button></div>`
+  const u = S.ui, o = s.orden, e = ESTADO_SOL[s.estado] || [s.estado, ''], edita = puedeAprobar() && s.estado === 'pendiente', res = s.resolucion || {};
+  // lo que Compras va escribiendo (cantidades, motivos, comentario) se guarda aparte: no se pierde si toca Rechazar y vuelve
+  u.solDraft = u.solDraft || {}; const dr = u.solDraft[s.id] = u.solDraft[s.id] || { q: {}, m: {}, t: {}, c: '' };
+  const cambios = res.cambios || [], cambioDe = cod => cambios.find(x => x.cod === cod), verMotivo = !edita && cambios.length > 0;
+  const signo = (de, a) => a === 0 ? 'se quitó' : (a > de ? '+' : '−') + nf(Math.abs(a - de));
+  const filas = o.lines.map((l, i) => {
+    const ch = cambioDe(l.cod), final = ch ? ch.a : l.qty;
+    const colFinal = edita ? `<td class="n ed"><input class="ed solq" type="number" min="0" step="1" data-i="${i}" value="${dr.q[i] ?? l.qty}" aria-label="Cantidad final ${esc(l.nombre)}"><span class="u">${esc(l.unidad)}</span><span class="sub solD" data-i="${i}" style="color:var(--accent);font-weight:700"></span></td>`
+      : `<td class="n"><b>${nf(final)}</b><span class="u">${esc(l.unidad)}</span>${ch ? `<span class="sub" style="color:var(--accent);font-weight:700">${signo(ch.de, ch.a)}</span>` : ''}</td>`;
+    const colMotivo = edita ? `<td class="solmot"><div class="solmw" data-i="${i}" hidden><select class="solm" data-i="${i}" aria-label="Motivo del cambio de ${esc(l.nombre)}"><option value="">Elegí un motivo…</option>${MOTIVOS_COMPRA.map(m => `<option ${dr.m[i] === m ? 'selected' : ''}>${m}</option>`).join('')}</select><input type="text" class="solt" data-i="${i}" placeholder="Detalle (opcional)" value="${esc(dr.t[i] || '')}" aria-label="Detalle del cambio de ${esc(l.nombre)}"></div></td>`
+      : verMotivo ? `<td>${ch ? `<b>${esc(ch.motivo || 'Sin motivo')}</b>${ch.nota ? `<span class="sub">${esc(ch.nota)}</span>` : ''}` : '<span class="muted">—</span>'}</td>` : '';
+    const kg = l.qty > 0 ? l.kg * final / l.qty : 0;
+    return `<tr data-i="${i}"><td class="sticky1 wrap"><div class="pn">${esc(l.nombre)}<small>cód. ${esc(l.cod)}</small></div></td>
+     <td class="n"><b>${nf(l.stock, 1)}</b><span class="u">${esc(l.unidad)}</span></td><td class="n"><b>${nf(l.pron, 1)}</b><span class="u">${esc(l.unidad)}</span><span class="sub">${nf(l.nDias, 0)} días</span></td>
+     <td class="n"><b>${nf(l.llega, 1)}</b><span class="u">${esc(l.unidad)}</span><span class="sub">llega ${esc(o.llegada)}</span></td><td class="n"><b>${nf(l.sug)}</b><span class="u">${esc(l.unidad)}</span></td>
+     <td class="n"><b>${nf(l.qty)}</b><span class="u">${esc(l.unidad)}</span></td>${colFinal}${colMotivo}
+     <td class="n">${kg ? `<b>${nf(kg, 0)}</b><span class="u">kg</span>` : '<span class="muted">—</span>'}</td></tr>`;
+  }).join('');
+  const resHtml = s.estado === 'aprobada' ? `<div class="note ok" style="margin-top:14px"><b>${res.directa ? 'Emitida directamente por ' : 'Aprobada por '}${esc(res.por)}</b> · ${fmtFechaHora(res.en)} · orden <b>${esc(res.orden)}</b>.${cambios.length ? ` Compras cambió ${cambios.length} línea${cambios.length > 1 ? 's' : ''} (el motivo de cada una está en la tabla).` : (res.directa ? '' : ' Sin cambios.')}</div>${res.comentario ? `<div class="note" style="margin-top:10px"><b>Comentario de Compras:</b> ${esc(res.comentario)}</div>` : ''}<div class="bar" style="margin-top:12px"><button class="btn" id="solPdf">Bajar PDF de la orden</button><button class="btn" id="solPdfI" title="Stock, pronóstico y cobertura (uso interno)">Análisis interno (PDF)</button></div>`
     : s.estado === 'rechazada' ? `<div class="note crit" style="margin-top:14px"><b>Rechazada por ${esc(res.por)}</b> · ${fmtFechaHora(res.en)}: “${esc(res.motivo || '')}”</div>`
     : puedeAprobar() ? '' : '<div class="note plan" style="margin-top:14px">Compras todavía no respondió esta solicitud.</div>';
   main.innerHTML = `<section><div class="bar"><button class="btn sm" id="solVolver">← Solicitudes</button></div>${heroHead('Solicitud de compra', 'Pedido a ' + esc(s.prov), (s.directa ? `Emitida directamente por ${esc(s.por)} (${fmtFechaHora(s.en)}), sin pasar por solicitud.` : `Enviada por ${esc(s.por)} (${fmtFechaHora(s.en)}). Estos son los datos tal como los dejó Planificación.`))}</section>
   <section class="card"><div class="flex"><div class="bar" style="gap:14px 28px;flex-wrap:wrap"><div><div class="eyebrow">Fecha del pedido</div><b>${esc(o.fecha)}</b></div><div><div class="eyebrow">Primer envío</div><b>${esc(o.envio || '')}</b></div><div><div class="eyebrow">Lead time</div><b>${esc(o.lt)} días</b></div><div><div class="eyebrow">Llega el proveedor</div><b>${esc(o.llegada)}</b></div></div><span class="sp"></span><span class="chip ${e[1]}">${e[0]}</span></div>
-    ${o.obs ? `<div class="muted small" style="margin-top:10px">Observaciones: ${esc(o.obs)}</div>` : ''}
-    <div class="tw" style="max-height:none;margin-top:16px"><table><thead><tr><th class="sticky1">Producto</th><th class="n">Stock actual</th><th class="n">Pronóstico</th><th class="n">Stock al llegar</th><th class="n">Pedido sugerido</th><th class="n">Pedido de Planificación</th><th class="n ${edita ? 'ed' : ''}">${edita ? 'Pedido final (Compras)' : 'Pedido final'}</th><th class="n">Kilos</th></tr></thead><tbody>${filas}</tbody></table></div>
+    ${o.obs ? `<div class="muted small" style="margin-top:10px">Observaciones de Planificación: ${esc(o.obs)}</div>` : ''}
+    <div class="tw sol-t" style="max-height:none;margin-top:16px"><table><thead><tr><th class="sticky1">Producto</th><th class="n">Stock actual</th><th class="n">Pronóstico</th><th class="n">Stock al llegar</th><th class="n">Pedido sugerido</th><th class="n">Pedido de Planificación</th><th class="n ${edita ? 'ed' : ''}">${edita ? 'Pedido final (Compras)' : 'Pedido final'}</th>${edita ? '<th class="ed" title="Aparece cuando cambiás la cantidad de una línea. Opcional: sirve para que Planificación entienda el cambio.">Motivo del cambio</th>' : verMotivo ? '<th>Motivo del cambio</th>' : ''}<th class="n">Kilos</th></tr></thead><tbody>${filas}</tbody></table></div>
     <div class="muted small" style="margin-top:10px" id="solTot"></div>
     ${resHtml}
     ${edita ? (u.solRech ? `<div class="bar" style="margin-top:16px;align-items:flex-end;flex-wrap:wrap"><div class="fld" style="flex:1;min-width:260px"><label for="solMot">Motivo del rechazo (lo ve Planificación)</label><input type="text" id="solMot" placeholder="Ej.: el proveedor no entrega esta semana"></div><button class="btn pri" id="solRechOk" style="background:var(--crit);border-color:var(--crit)">Confirmar rechazo</button><button class="btn" id="solRechNo">Cancelar</button></div>`
-      : `<div class="bar" style="margin-top:18px;flex-wrap:wrap"><button class="btn pri" id="solOk">Aceptar y emitir la orden</button><button class="btn" id="solRech">Rechazar</button><span class="hint">Si cambiás alguna cantidad, la orden sale con tu cambio y queda registrado.</span></div>`) : ''}</section>`;
+      : `<div class="fld" style="margin-top:16px"><label for="solCom">Comentario para Planificación (opcional)</label><input type="text" id="solCom" value="${esc(dr.c || '')}" placeholder="Ej.: sumé 2 cajas de cada uno para llegar al mínimo"></div><div class="bar" style="margin-top:14px;flex-wrap:wrap"><button class="btn pri" id="solOk">Aceptar y emitir la orden</button><button class="btn" id="solRech">Rechazar</button><span class="hint">Si cambiás alguna cantidad, elegí el motivo (mínimo de compra, promoción, etc.) para que Planificación entienda el cambio. La orden sale con tu cambio y queda registrado.</span></div>`) : ''}</section>`;
   const qtys = () => $$('.solq', main).map(i => Math.max(0, Math.round(+i.value || 0)));
-  const tot = () => { const q = o.lines.map((l, i) => $$('.solq', main)[i] ? qtys()[i] : l.qty), cam = o.lines.filter((l, i) => q[i] !== l.qty).length; const el = $('#solTot'); if (el) el.innerHTML = edita ? (cam ? `<b>${cam}</b> línea${cam > 1 ? 's' : ''} con cambios respecto de lo que pidió Planificación.` : 'Sin cambios respecto de lo que pidió Planificación.') : ''; };
+  const tot = () => {   // los cambios, el total del pedido y si alcanza el mínimo del proveedor, en vivo
+    if (!edita) return;
+    const q = qtys(); let cam = 0, sinMot = 0, kg = 0, cajas = 0, un = 0;
+    o.lines.forEach((l, i) => {
+      const qi = q[i], cambio = qi !== l.qty; if (cambio) { cam++; if (!dr.m[i]) sinMot++; }
+      kg += l.qty > 0 ? l.kg * qi / l.qty : 0; if (l.unidad === 'cajas') cajas += qi; else un += qi;
+      const w = $(`.solmw[data-i="${i}"]`, main); if (w) w.hidden = !cambio;
+      const dd = $(`.solD[data-i="${i}"]`, main); if (dd) dd.textContent = cambio ? signo(l.qty, qi) : '';
+      const tr = $(`tr[data-i="${i}"]`, main); if (tr) tr.classList.toggle('cambiada', cambio);
+    });
+    const moq = +((S.params.prov[s.prov] || {}).moq) || 0, partes = [cajas ? nf(cajas) + ' cajas' : '', un ? nf(un) + ' u. sueltas' : ''].filter(Boolean).join(' + ') || '0';
+    $('#solTot').innerHTML = (cam ? `<b>${cam}</b> línea${cam > 1 ? 's' : ''} con cambios${sinMot ? ` (<b>${sinMot}</b> sin motivo)` : ' (todas con motivo)'} respecto de lo que pidió Planificación.` : 'Sin cambios respecto de lo que pidió Planificación.')
+      + ` Total del pedido: <b>${partes}</b> · <b>${nf(kg, 0)} kg</b>.` + (moq ? (kg < moq ? ` <span class="chip warn">Por debajo del mínimo del proveedor (${nf(moq, 0)} kg)</span>` : ` <span class="chip ok">Alcanza el mínimo del proveedor (${nf(moq, 0)} kg)</span>`) : '');
+  };
   $('#solVolver').onclick = () => { u.solSel = ''; u.solRech = false; viewSol(main); };
   const ordenDe = () => S.orders.find(x => x.num === res.orden) || o;
   if ($('#solPdf')) $('#solPdf').onclick = () => exportOrder(ordenDe());
   if ($('#solPdfI')) $('#solPdfI').onclick = () => exportOrderInterno(ordenDe());
-  $$('.solq', main).forEach(i => i.oninput = tot); tot();
-  const ok = $('#solOk'); if (ok) ok.onclick = async () => { ok.disabled = true; const hecho = await aprobarSolicitud(s, qtys()); if (hecho) { u.solSel = ''; render(false); } else ok.disabled = false; };
+  $$('.solq', main).forEach(i => i.oninput = () => { dr.q[i.dataset.i] = i.value; tot(); });
+  $$('.solm', main).forEach(i => i.onchange = () => { dr.m[i.dataset.i] = i.value; tot(); });
+  $$('.solt', main).forEach(i => i.oninput = () => { dr.t[i.dataset.i] = i.value; });
+  const com = $('#solCom'); if (com) com.oninput = () => { dr.c = com.value; };
+  tot();
+  const ok = $('#solOk'); if (ok) ok.onclick = async () => { ok.disabled = true; const hecho = await aprobarSolicitud(s, qtys(), { motivos: o.lines.map((l, i) => dr.m[i] || ''), notas: o.lines.map((l, i) => (dr.t[i] || '').trim()), comentario: (dr.c || '').trim() }); if (hecho) { delete u.solDraft[s.id]; u.solSel = ''; render(false); } else ok.disabled = false; };
   const r1 = $('#solRech'); if (r1) r1.onclick = () => { u.solRech = true; viewSolDetalle(main, s); };
   const r0 = $('#solRechNo'); if (r0) r0.onclick = () => { u.solRech = false; viewSolDetalle(main, s); };
-  const r2 = $('#solRechOk'); if (r2) r2.onclick = async () => { const m = ($('#solMot').value || '').trim(); if (!m) { toast('Escribí el motivo del rechazo.'); return; } r2.disabled = true; await rechazarSolicitud(s, m); u.solRech = false; u.solSel = ''; render(false); };
+  const r2 = $('#solRechOk'); if (r2) r2.onclick = async () => { const m = ($('#solMot').value || '').trim(); if (!m) { toast('Escribí el motivo del rechazo.'); return; } r2.disabled = true; await rechazarSolicitud(s, m); delete u.solDraft[s.id]; u.solRech = false; u.solSel = ''; render(false); };
 }
 
 /* ================= arranque ================= */
