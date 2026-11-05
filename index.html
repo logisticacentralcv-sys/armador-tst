@@ -940,6 +940,7 @@
           <button class="mt-item" data-panel="historial"><span class="mi">🗓️</span><span class="mt">Historial por fechas</span></button>
           <button class="mt-item" data-panel="scoring"><span class="mi">🏆</span><span class="mt">Scoring de armadores</span></button>
           <button class="mt-item" data-panel="evolucion"><span class="mi">📈</span><span class="mt">Evolución del score</span></button>
+          <button class="mt-item" data-panel="pedidos"><span class="mi">⏱️</span><span class="mt">Tiempo por pedido</span></button>
           <div class="mt-grupo">Control</div>
           <button class="mt-item" data-panel="auditoria"><span class="mi">🔎</span><span class="mt">Auditorías de sin stock</span><span class="tile-badge" id="mt_audBadge" style="display:none;"></span></button>
           <div class="mt-grupo mt-ir-grupo">Ir a</div>
@@ -992,6 +993,11 @@
           <section class="mt-panel" data-seccion="evolucion">
             <div class="mt-titulo"><h2>Evolución del score</h2><p>Mismo score (Velocidad 50% / Continuidad 25% / Volumen 25%), calculado cada día por separado — cada día se compara solo contra quienes trabajaron ESE día.</p></div>
             <div class="card"><div id="mt_contenidoGrafico"><div class="empty-state">Cargando...</div></div></div>
+          </section>
+
+          <section class="mt-panel" data-seccion="pedidos">
+            <div class="mt-titulo"><h2>Tiempo por pedido</h2><p>Cuánto tarda armar cada sucursal (con las pausas y tolerancias) y cuánto tardarían 1, 2 o 3 personas en armar todo.</p></div>
+            <div id="tp_contenido"></div>
           </section>
 
           <section class="mt-panel" data-seccion="auditoria">
@@ -1182,7 +1188,7 @@
     };
     // Profundidad de cada pantalla: sirve para animar hacia adelante (entra por la derecha) o hacia atrás (por la izquierda)
     // Panel que se está viendo del centro de control (Logística), y sus títulos
-    const PANELES_MT = { resumen: ['Resumen', 'Lo que pasa hoy'], dia: ['Resumen por día', 'Quién armó qué, y cuánto tardó'], historial: ['Historial por fechas', 'Totales por armador'], scoring: ['Scoring de armadores', 'Comparativo del período'], evolucion: ['Evolución del score', 'Día por día'], auditoria: ['Auditorías de sin stock', 'Control de lo marcado sin stock'] };
+    const PANELES_MT = { resumen: ['Resumen', 'Lo que pasa hoy'], dia: ['Resumen por día', 'Quién armó qué, y cuánto tardó'], historial: ['Historial por fechas', 'Totales por armador'], scoring: ['Scoring de armadores', 'Comparativo del período'], pedidos: ['Tiempo por pedido', 'Cuánto tarda armar cada sucursal'], evolucion: ['Evolución del score', 'Día por día'], auditoria: ['Auditorías de sin stock', 'Control de lo marcado sin stock'] };
     let panelMetricas = 'resumen';
     let metricasApi = null, cargaMetricasPromesa = null;
     let pantallaActual = 'home';
@@ -2294,6 +2300,17 @@
       return cargaMetricasPromesa;
     }
 
+    // Tiempo por pedido (módulo tiempos_pedido.js, se carga la primera vez que se abre el panel)
+    let cargaTiemposPromesa = null;
+    function abrirTiemposPedido_() {
+      if (!cargaTiemposPromesa) {
+        cargaTiemposPromesa = import('./tiempos_pedido.js')
+          .then(m => m.iniciarTiemposPedido({ db, collection, query, where, orderBy, getDocs, Timestamp }))
+          .catch(err => { cargaTiemposPromesa = null; const h = document.getElementById('tp_contenido'); if (h) h.innerHTML = '<div class="empty-state">No se pudo cargar el panel: ' + err.message + '</div>'; return null; });
+      }
+      cargaTiemposPromesa.then(api => { if (api) api.abrir(); });
+    }
+
     async function entrarMetricas_() {
       let panel = 'resumen';
       try { panel = sessionStorage.getItem('mt_panel') || 'resumen'; } catch (e) { /* sin storage */ }
@@ -2319,6 +2336,7 @@
       const usaRango = ['historial', 'scoring', 'evolucion'].includes(panel);
       document.getElementById('mtRango').style.display = usaRango ? 'flex' : 'none';
       try { sessionStorage.setItem('mt_panel', panel); } catch (e) { /* sin storage */ }
+      if (panel === 'pedidos') abrirTiemposPedido_();
       if (usaRango && metricasApi) metricasApi.asegurarRango();
       if (pantallaActual === 'metricas') { actualizarEncabezado_(); window.scrollTo({ top: 0 }); }
     }
