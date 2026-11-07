@@ -167,6 +167,7 @@
     .ss-fila { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--border); }
     .ss-suc { flex: 1; min-width: 0; font-size: 16px; font-weight: 700; }
     .ss-pidio { font-size: 14.5px; color: var(--muted); white-space: nowrap; }
+    .ss-rep { display: block; font-size: 12.5px; font-weight: 600; color: var(--muted); margin-top: 2px; }
     .input-ss { width: 92px; padding: 11px; border: 2px solid var(--border); border-radius: var(--radius-sm); font-size: 19px; font-weight: 800; text-align: center; }
     .menu-tile.sinstock .ico { background: #dcfce7; }
     .resultado-prod { display: block; width: 100%; text-align: left; padding: 13px 14px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: white; cursor: pointer; }
@@ -3464,6 +3465,22 @@
       return esDeHoySS_(ts) ? `hoy ${hora}` : `${f.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })} ${hora}`;
     }
 
+    // Pedidos repetidos: misma sucursal, mismo producto y misma cantidad pedida. Se muestran como UNO solo; al habilitar se reabre uno
+    // y los repetidos se marcan como resueltos (duplicadoDe) para que no vuelvan a aparecer. No se borra nada.
+    function agruparSS_(docs) {
+      const ms = (ts) => (ts && ts.toMillis ? ts.toMillis() : 0), mapa = new Map();
+      docs.forEach(d => {
+        const k = [claveProvSS_(d), claveProductoSS_(d), String(d.sucursal || '').trim().toUpperCase(), d.cantidadPedida].join('|');
+        if (!mapa.has(k)) mapa.set(k, []);
+        mapa.get(k).push(d);
+      });
+      return [...mapa.values()].map(g => {
+        g.sort((a, b) => (ms(b.armadoEn) - ms(a.armadoEn)) || String(a.id).localeCompare(String(b.id)));
+        return { ...g[0], dups: g.slice(1) };
+      });
+    }
+    function fechaCortaSS_(ts) { return ts && ts.toDate ? ts.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) : ''; }
+
     function abrirHabilitarSinStock_() {
       if (!esAutorizadoGestion_()) { mostrarToast('No estás autorizado para esto', true); return; }
       irA_('sinstock');
@@ -3480,7 +3497,7 @@
         // Sin procesar y con armado en 0; de ahí, solo los que quedaron por "Falta de stock" (un armado parcial no cuenta)
         const snap = await getDocs(query(pedidosCol, where('procesado', '==', false), where('armado', '==', 0)));
         ssCargado = [];
-        snap.forEach(d => { const data = d.data(); if (data.diferencia === 'Falta de stock') ssCargado.push({ id: d.id, ...data }); });
+        snap.forEach(d => { const data = d.data(); if (data.diferencia === 'Falta de stock' && !data.duplicadoDe) ssCargado.push({ id: d.id, ...data }); });
         const ms = (ts) => (ts && ts.toMillis ? ts.toMillis() : 0);
         ssCargado.sort((a, b) => (ms(b.armadoEn) - ms(a.armadoEn)) || (a.producto || '').localeCompare(b.producto || '', 'es'));
         ssEditadas = {};
@@ -3502,34 +3519,34 @@
 
     function renderizarSinStock_() {
       const cont = document.getElementById('sinStockContenido');
-      document.getElementById('ssNTodos').textContent = ssCargado.length;
-      document.getElementById('ssNHoy').textContent = ssCargado.filter(d => esDeHoySS_(d.armadoEn)).length;
+      document.getElementById('ssNTodos').textContent = agruparSS_(ssCargado).length;
+      document.getElementById('ssNHoy').textContent = agruparSS_(ssCargado.filter(d => esDeHoySS_(d.armadoEn))).length;
       document.querySelectorAll('#chipsSinStockDia .chip').forEach(b => b.classList.toggle('activo', (b.dataset.dia === 'hoy') === ssSoloHoy));
 
-      // Desplegable de proveedores (solo si hay más de uno), con cuántos pedidos tiene cada uno
-      let { base } = calcularListaSS_();
+      // Desplegable de proveedores (solo si hay más de uno), con cuántos pedidos tiene cada uno (los repetidos cuentan una vez)
+      const baseG = agruparSS_(calcularListaSS_().base);
       const conteo = {};
-      base.forEach(d => { conteo[claveProvSS_(d)] = (conteo[claveProvSS_(d)] || 0) + 1; });
+      baseG.forEach(d => { conteo[claveProvSS_(d)] = (conteo[claveProvSS_(d)] || 0) + 1; });
       if (ssFiltroProveedor && !conteo[ssFiltroProveedor]) ssFiltroProveedor = '';
       const claves = Object.keys(conteo).sort((a, b) => ((a === SIN_PROV_SS) - (b === SIN_PROV_SS)) || a.localeCompare(b, 'es'));
       const sel = document.getElementById('ssFiltroProveedor');
-      sel.innerHTML = `<option value="">Todos los proveedores (${base.length})</option>` + claves.map(k => `<option value="${escapeHtml(k)}">${escapeHtml(k)} (${conteo[k]})</option>`).join('');
+      sel.innerHTML = `<option value="">Todos los proveedores (${baseG.length})</option>` + claves.map(k => `<option value="${escapeHtml(k)}">${escapeHtml(k)} (${conteo[k]})</option>`).join('');
       sel.value = ssFiltroProveedor;
       sel.style.display = claves.length > 1 ? 'block' : 'none';
 
-      const { lista } = calcularListaSS_();
-      document.getElementById('ssNumProductos').textContent = new Set(lista.map(claveProductoSS_)).size;
-      document.getElementById('ssNumPedidos').textContent = lista.length;
-      document.getElementById('ssNumUnidades').textContent = lista.reduce((a, d) => a + (cantidadEfectiva_(d) || 0), 0).toLocaleString('es-AR');
+      const { lista } = calcularListaSS_(), listaG = agruparSS_(lista), repetidos = lista.length - listaG.length;
+      document.getElementById('ssNumProductos').textContent = new Set(listaG.map(claveProductoSS_)).size;
+      document.getElementById('ssNumPedidos').textContent = listaG.length;
+      document.getElementById('ssNumUnidades').textContent = listaG.reduce((a, d) => a + (cantidadEfectiva_(d) || 0), 0).toLocaleString('es-AR');
 
-      if (!lista.length) {
+      if (!listaG.length) {
         cont.innerHTML = `<div class="empty-state">${ssCargado.length ? 'Nada coincide con ese filtro' : '🎉 No hay nada marcado sin stock pendiente de procesar'}</div>`;
         return;
       }
 
-      // proveedor -> producto -> pedidos (uno por sucursal)
+      // proveedor -> producto -> pedidos (uno por sucursal y cantidad)
       const porProv = {};
-      lista.forEach(d => {
+      listaG.forEach(d => {
         const p = claveProvSS_(d), k = claveProductoSS_(d);
         if (!porProv[p]) porProv[p] = {};
         if (!porProv[p][k]) porProv[p][k] = [];
@@ -3537,8 +3554,9 @@
       });
       const provs = Object.keys(porProv).sort((a, b) => ((a === SIN_PROV_SS) - (b === SIN_PROV_SS)) || a.localeCompare(b, 'es'));
       const ms = (ts) => (ts && ts.toMillis ? ts.toMillis() : 0);
+      const aviso = repetidos ? `<div class="aviso extra">Se juntaron <b>${repetidos}</b> pedido${repetidos === 1 ? '' : 's'} repetido${repetidos === 1 ? '' : 's'} (misma sucursal, mismo producto y misma cantidad). Al habilitar se reabre uno solo y los repetidos quedan resueltos.</div>` : '';
 
-      cont.innerHTML = provs.map(prov => {
+      cont.innerHTML = aviso + provs.map(prov => {
         const productos = Object.keys(porProv[prov]).sort((a, b) => (porProv[prov][a][0].producto || '').localeCompare(porProv[prov][b][0].producto || '', 'es'));
         const filasProv = productos.reduce((acc, k) => acc.concat(porProv[prov][k]), []);
         const unidades = filasProv.reduce((a, d) => a + (cantidadEfectiva_(d) || 0), 0);
@@ -3552,10 +3570,14 @@
           const filas = porProv[prov][k];
           const reciente = filas.slice().sort((a, b) => ms(b.armadoEn) - ms(a.armadoEn))[0];
           const marca = `Marcado sin stock ${etiquetaMarcadoSS_(reciente.armadoEn)}${reciente.armadoPor ? ' por ' + escapeHtml(reciente.armadoPor) : ''}`;
+          const veces = {}; // si una sucursal aparece más de una vez (con cantidades distintas), se agrega la fecha para distinguirlas
+          filas.forEach(d => { const sk = String(d.sucursal || '').trim().toUpperCase(); veces[sk] = (veces[sk] || 0) + 1; });
           const filasHtml = filas.map(d => {
             const valor = ssEditadas[d.id] !== undefined ? ssEditadas[d.id] : cantidadEfectiva_(d);
+            const cuando = veces[String(d.sucursal || '').trim().toUpperCase()] > 1 && fechaCortaSS_(d.fecha) ? ` · ${fechaCortaSS_(d.fecha)}` : '';
+            const rep = d.dups.length ? `<small class="ss-rep">${d.dups.length + 1} pedidos iguales juntados en uno (${[d, ...d.dups].map(x => fechaCortaSS_(x.fecha) || '?').join(', ')})</small>` : '';
             return `<div class="ss-fila">
-              <span class="ss-suc">${escapeHtml(d.sucursal || '(sin sucursal)')}</span>
+              <span class="ss-suc">${escapeHtml(d.sucursal || '(sin sucursal)')}${cuando}${rep}</span>
               <span class="ss-pidio">pidió ${d.cantidadPedida}</span>
               <input type="number" class="input-ss" data-id="${escapeHtml(d.id)}" min="0" inputmode="numeric" value="${valor}">
             </div>`;
@@ -3574,11 +3596,12 @@
 
     // Reabre los pedidos elegidos (con la cantidad que figura en pantalla; 0 = no se habilita), verifica que
     // nadie los haya tocado mientras tanto, y cierra las auditorías pendientes de esos pedidos como "llegó después".
+    // Si un pedido tenía repetidos (misma sucursal, producto y cantidad), se reabre UNO y los repetidos quedan marcados como resueltos.
     async function habilitarSinStockSeleccion_(btn, filtro, etiqueta) {
       if (!esAutorizadoGestion_()) { mostrarToast('No estás autorizado para esto', true); return; }
       const enPantalla = {};
       document.querySelectorAll('#sinStockContenido .input-ss').forEach(i => { enPantalla[i.dataset.id] = i.value; });
-      const elegidos = calcularListaSS_().lista.filter(filtro);
+      const elegidos = agruparSS_(calcularListaSS_().lista).filter(filtro);
       const aHabilitar = [];
       elegidos.forEach(d => {
         const cant = parseInt(enPantalla[d.id], 10);
@@ -3588,43 +3611,59 @@
 
       const unidades = aHabilitar.reduce((a, x) => a + x.cant, 0);
       const sinHabilitar = elegidos.length - aHabilitar.length;
-      if (!confirm(`¿Habilitar ${etiqueta}?\\n\\n${aHabilitar.length} pedido(s), ${unidades} unidad(es) en total. Van a volver a aparecer para armar.${sinHabilitar ? `\\n(${sinHabilitar} con cantidad 0 quedan como están.)` : ''}\\n\\nNo cuenta como incidencia de quien lo marcó sin stock.`)) return;
+      const repetidos = aHabilitar.reduce((a, x) => a + x.f.dups.length, 0);
+      if (!confirm(`¿Habilitar ${etiqueta}?\n\n${aHabilitar.length} pedido(s), ${unidades} unidad(es) en total. Van a volver a aparecer para armar.${sinHabilitar ? `\n(${sinHabilitar} con cantidad 0 quedan como están.)` : ''}${repetidos ? `\n(${repetidos} pedido(s) repetido(s) se dan por resueltos y no vuelven a aparecer.)` : ''}\n\nNo cuenta como incidencia de quien lo marcó sin stock.`)) return;
 
       btn.disabled = true;
       const textoOriginal = btn.textContent;
       btn.textContent = 'Habilitando...';
       const reabiertos = new Map(); // id -> cantidad habilitada
+      const absorbidos = new Set(); // ids de pedidos repetidos que se dieron por resueltos
+      const yaTocados = new Set();  // ids que otra persona ya había cambiado: dejan de mostrarse
       let yaNoEstaban = 0, cerradas = 0, errorAuditorias = false;
+      const sigueSinStock = (d) => !!d && d.procesado === false && d.armado === 0 && d.diferencia === 'Falta de stock' && !d.duplicadoDe;
       try {
-        // 1) Solo se reabre lo que sigue tal cual lo dejó el "sin stock" (puede haberlo tocado otra persona)
+        // 1) Solo se reabre lo que sigue tal cual lo dejó el "sin stock" (puede haberlo tocado otra persona). Igual con los repetidos.
         const vigentes = [];
         for (let i = 0; i < aHabilitar.length; i += 20) {
           const tramo = aHabilitar.slice(i, i + 20);
           const snaps = await Promise.all(tramo.map(x => getDoc(doc(db, 'pedidos', x.f.id))));
-          snaps.forEach((s, k) => {
-            const d = s.exists() ? s.data() : null;
-            if (d && d.procesado === false && d.armado === 0 && d.diferencia === 'Falta de stock') vigentes.push(tramo[k]); else yaNoEstaban++;
-          });
+          snaps.forEach((s, k) => { if (s.exists() && sigueSinStock(s.data())) vigentes.push({ ...tramo[k], dupsOk: [] }); else { yaNoEstaban++; yaTocados.add(tramo[k].f.id); } });
         }
-        // 2) Reabrir en tandas, guardando quién lo había marcado y quién lo habilitó
-        for (let i = 0; i < vigentes.length; i += 400) {
-          const tramo = vigentes.slice(i, i + 400);
-          const batch = writeBatch(db);
-          tramo.forEach(({ f, cant }) => batch.update(doc(db, 'pedidos', f.id), {
-            armado: null, diferencia: null, armadoEn: null, armadoPor: null, armadoPorDocumento: null,
-            cantidadHabilitada: cant, habilitado: true,
-            sinStockMarcadoPor: f.armadoPor || null, sinStockMarcadoPorDocumento: f.armadoPorDocumento || null,
-            rehabilitadoSinStock: true, rehabilitadoPor: personaActual.nombre, rehabilitadoPorDocumento: personaActual.documento,
-            rehabilitadoEn: serverTimestamp()
-          }));
+        const pares = vigentes.flatMap(v => v.f.dups.map(d => ({ v, d })));
+        for (let i = 0; i < pares.length; i += 20) {
+          const tramo = pares.slice(i, i + 20);
+          const snaps = await Promise.all(tramo.map(x => getDoc(doc(db, 'pedidos', x.d.id))));
+          snaps.forEach((s, k) => { if (s.exists() && sigueSinStock(s.data())) tramo[k].v.dupsOk.push(tramo[k].d); else yaTocados.add(tramo[k].d.id); });
+        }
+        // 2) Reabrir en tandas (cada pedido con sus repetidos en la misma tanda), guardando quién lo había marcado y quién lo habilitó
+        let i = 0;
+        while (i < vigentes.length) {
+          const batch = writeBatch(db), lote = []; let ops = 0;
+          while (i < vigentes.length && (ops === 0 || ops + 1 + vigentes[i].dupsOk.length <= 400)) {
+            const { f, cant, dupsOk } = vigentes[i];
+            batch.update(doc(db, 'pedidos', f.id), {
+              armado: null, diferencia: null, armadoEn: null, armadoPor: null, armadoPorDocumento: null,
+              cantidadHabilitada: cant, habilitado: true,
+              sinStockMarcadoPor: f.armadoPor || null, sinStockMarcadoPorDocumento: f.armadoPorDocumento || null,
+              rehabilitadoSinStock: true, rehabilitadoPor: personaActual.nombre, rehabilitadoPorDocumento: personaActual.documento,
+              rehabilitadoEn: serverTimestamp(),
+              ...(dupsOk.length ? { repetidosResueltos: dupsOk.map(d => d.id) } : {})
+            });
+            dupsOk.forEach(d => batch.update(doc(db, 'pedidos', d.id), {
+              duplicadoDe: f.id, duplicadoResueltoPor: personaActual.nombre, duplicadoResueltoPorDocumento: personaActual.documento, duplicadoResueltoEn: serverTimestamp()
+            }));
+            ops += 1 + dupsOk.length; lote.push(vigentes[i]); i++;
+          }
           await batch.commit();
-          tramo.forEach(({ f, cant }) => reabiertos.set(f.id, cant));
+          lote.forEach(({ f, cant, dupsOk }) => { reabiertos.set(f.id, cant); dupsOk.forEach(d => absorbidos.add(d.id)); });
         }
         // 3) Las auditorías pendientes de esos pedidos ya no tienen nada que verificar: llegó el proveedor
         if (reabiertos.size) {
-          try { cerradas = await cerrarAuditoriasPorLlegada_(reabiertos); } catch (e) { errorAuditorias = true; console.error('No se pudieron cerrar las auditorías', e); }
+          try { cerradas = await cerrarAuditoriasPorLlegada_(reabiertos, absorbidos); } catch (e) { errorAuditorias = true; console.error('No se pudieron cerrar las auditorías', e); }
         }
         const partes = [`✔ Habilitado: ${reabiertos.size} pedido(s)`];
+        if (absorbidos.size) partes.push(`${absorbidos.size} repetido(s) resuelto(s)`);
         if (yaNoEstaban) partes.push(`${yaNoEstaban} ya no estaban sin stock`);
         if (cerradas) partes.push(`${cerradas} auditoría(s) cerradas`);
         mostrarToast(partes.join(' · '), errorAuditorias);
@@ -3632,21 +3671,21 @@
       } catch (err) {
         mostrarToast(`Error: se habilitaron ${reabiertos.size} de ${aHabilitar.length}. ${err.message}`, true);
       } finally {
-        ssCargado = ssCargado.filter(d => !reabiertos.has(d.id));
+        ssCargado = ssCargado.filter(d => !reabiertos.has(d.id) && !absorbidos.has(d.id) && !yaTocados.has(d.id));
         reabiertos.forEach((_, id) => { delete ssEditadas[id]; });
         renderizarSinStock_();
         if (btn.isConnected) { btn.disabled = false; btn.textContent = textoOriginal; }
       }
     }
 
-    async function cerrarAuditoriasPorLlegada_(reabiertos) {
+    async function cerrarAuditoriasPorLlegada_(reabiertos, absorbidos = new Set()) {
       const snap = await getDocs(query(collection(db, 'auditoriaSinStock'), where('estado', '==', 'pendiente')));
       const { updateDoc } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js");
       let cerradas = 0;
       for (const d of snap.docs) {
         const a = d.data();
         const pedidos = a.pedidos || [];
-        const tocados = pedidos.filter(p => reabiertos.has(p.id));
+        const tocados = pedidos.filter(p => reabiertos.has(p.id) || absorbidos.has(p.id));
         if (!tocados.length) continue;
         await updateDoc(doc(db, 'auditoriaSinStock', d.id), {
           estado: 'auditado',
@@ -3658,8 +3697,10 @@
           origenResolucion: 'habilitar_sin_stock',
           rehabilitados: pedidos.map(p => reabiertos.has(p.id)
             ? { pedidoId: p.id, sucursal: p.sucursal || null, cantidadPedida: p.cantidadPedida || 0, cantidadHabilitada: reabiertos.get(p.id), accion: 'reabierto' }
-            : { pedidoId: p.id, sucursal: p.sucursal || null, cantidadPedida: p.cantidadPedida || 0, cantidadHabilitada: 0, accion: 'sin_cobertura' }),
-          pedidosReabiertos: tocados.length,
+            : absorbidos.has(p.id)
+              ? { pedidoId: p.id, sucursal: p.sucursal || null, cantidadPedida: p.cantidadPedida || 0, cantidadHabilitada: 0, accion: 'duplicado_absorbido' }
+              : { pedidoId: p.id, sucursal: p.sucursal || null, cantidadPedida: p.cantidadPedida || 0, cantidadHabilitada: 0, accion: 'sin_cobertura' }),
+          pedidosReabiertos: pedidos.filter(p => reabiertos.has(p.id)).length,
           faltantesCreados: 0
         });
         cerradas++;
@@ -3671,7 +3712,7 @@
       const b = document.getElementById('badgeSinStock');
       try {
         const snap = await getDocs(query(pedidosCol, where('procesado', '==', false), where('armado', '==', 0)));
-        const n = snap.docs.filter(d => d.data().diferencia === 'Falta de stock').length;
+        const n = agruparSS_(snap.docs.filter(d => d.data().diferencia === 'Falta de stock' && !d.data().duplicadoDe).map(d => ({ id: d.id, ...d.data() }))).length;
         b.textContent = n;
         b.style.display = n ? 'inline-block' : 'none';
       } catch (err) { b.style.display = 'none'; }

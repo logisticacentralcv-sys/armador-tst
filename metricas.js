@@ -736,6 +736,7 @@ export function iniciarMetricas(ctx) {
           else if (r.accion === 'reabierto') que = `Habilitado de nuevo: <b>${r.cantidadHabilitada}</b> u.`;
           else if (r.accion === 'faltante_creado') que = `Habilitado como FALTANTE nuevo: <b>${r.cantidadHabilitada}</b> u.`;
           else if (r.accion === 'sin_cobertura') que = 'Quedó cancelado (no alcanzaron las unidades)';
+          else if (r.accion === 'duplicado_absorbido') que = 'Pedido repetido (igual a otro): se resolvió habilitando uno solo';
           else que = 'Ya estaba habilitado';
           return `<div>• <b>${escapeHtml(p.sucursal || '?')}</b> pidió ${p.cantidadPedida} → ${que}</div>`;
         }).join('');
