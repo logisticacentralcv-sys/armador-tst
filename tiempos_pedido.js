@@ -1,19 +1,17 @@
-// Tiempo por pedido: cuánto tarda armar cada sucursal y cuánto tardarían 1, 2 o 3 personas.
+// Tiempo por pedido: cuánto tarda armar cada sucursal, cuánto deberían tardar y cuánto están tardando.
 // Se apoya en "eventosArmado" (una marca por artículo armado: hora, persona, sucursal y cantidades).
 // Un PEDIDO es una sucursal en un día. Lo pueden armar una o varias personas.
 
 const MIN = 60000;
 
 export const CFG_INICIAL = {
-  umbralDemora: 5,     // hasta estos minutos entre dos marcas = trabajo activo
-  umbralPausa: 20,     // entre umbralDemora y este = demora (parte del trabajo); más = pausa
-  tolerancia: 15,      // % que se suma al tiempo activo: necesidades personales, fatiga, demoras inevitables
-  inicio: '07:00',     // hora a la que empieza el turno (para decir "terminan a las ...")
-  descansos: [{ nombre: 'Desayuno', despues: 120, dura: 15 }, { nombre: 'Almuerzo', despues: 240, dura: 30 }],  // "después de N minutos de trabajo"
-  par: { 2: { recargo: null, desbalance: null }, 3: { recargo: null, desbalance: null } }   // % escritos a mano; null = lo medido (o lo supuesto si todavía no hay datos)
+  umbralDemora: 5,     // entre dos artículos seguidos: hasta estos minutos es trabajo...
+  umbralPausa: 20,     // ...de ahí hasta este valor es una demora (no cuenta como armado); más es una pausa
+  tolerancia: 15,      // margen (%) que se suma al tiempo de armado para dar un tiempo realista (demoras y necesidades personales)
+  inicio: '07:00',     // hora a la que empieza el turno (para decir "termina a las ...")
+  descansos: [{ nombre: 'Desayuno', despues: 120, dura: 15 }, { nombre: 'Almuerzo', despues: 240, dura: 30 }],  // "si el trabajo pasa de N minutos, se suma el descanso"
+  equipo: { 2: 10, 3: 15 }   // % que se pierde al armar entre varios: se coordinan y se pisan, así que el tiempo no baja justo a la mitad
 };
-// si todavía no hay pedidos armados entre varias personas para medirlo, se supone esto
-export const PARALELO_SUPUESTO = { 1: { recargo: 1, desbalance: 1 }, 2: { recargo: 1.05, desbalance: 1.10 }, 3: { recargo: 1.10, desbalance: 1.20 } };
 
 const suma = a => a.reduce((s, x) => s + x, 0);
 export const mediana = a => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
@@ -125,48 +123,19 @@ export function factoresSucursal(pedidos, modelo) {
   return out;
 }
 
-// ============================================================ 3) cuando lo arman varias personas
-// recargo: cuánto más trabajo total hay que hacer cuando se reparten el pedido (se pisan, caminan más); desbalance: cuánto más tarda el más lento que el promedio
-export function medirParalelo(pedidos, modelo, factores) {
-  const out = {};
-  [2, 3].forEach(k => {
-    const rec = [], des = [];
-    pedidos.filter(p => p.k === k && p.lineas >= 8 && p.trabajoMs > 0).forEach(p => {
-      const act = p.personas.filter(x => x.picks >= 5).map(x => x.trabajoMs); if (act.length < 2) return;
-      const e = predecir(modelo, p.lineas, p.unidades, (factores[p.sucursal] || { factor: 1 }).factor);
-      if (e > 0) rec.push(p.trabajoMs / MIN / e);
-      des.push(Math.max(...act) / (suma(act) / act.length));
-    });
-    out[k] = { n: rec.length, recargoMedido: rec.length >= 3 ? Math.min(1.5, Math.max(0.9, mediana(rec))) : null, desbalanceMedido: des.length >= 3 ? Math.max(1, mediana(des)) : null };
-  });
-  return out;
-}
-export function parametrosParalelo(medido, manual) {
-  const p = { 1: { recargo: 1, desbalance: 1, origenRecargo: '', origenDesbalance: '', n: 0 } };
-  const elegir = (man, med, sup) => (man != null && man !== '' && isFinite(man) && 1 + man / 100 > 0.1) ? { v: 1 + man / 100, o: 'manual' } : med != null ? { v: med, o: 'medido' } : { v: sup, o: 'supuesto' };
-  [2, 3].forEach(k => {
-    const m = (medido && medido[k]) || {}, o = (manual && manual[k]) || {};
-    const r = elegir(o.recargo, m.recargoMedido, PARALELO_SUPUESTO[k].recargo), d = elegir(o.desbalance, m.desbalanceMedido, PARALELO_SUPUESTO[k].desbalance);
-    p[k] = { recargo: r.v, origenRecargo: r.o, desbalance: d.v, origenDesbalance: d.o, n: m.n || 0, medidoRecargo: m.recargoMedido ?? null, medidoDesbalance: m.desbalanceMedido ?? null };
-  });
-  return p;
-}
-
 // ============================================================ 4) escenarios: 1, 2 o 3 personas
 export const conDescansos = (trabajoMin, descansos) => trabajoMin + suma(descansos.filter(d => trabajoMin > d.despues).map(d => d.dura));
-// reparten el trabajo entre k personas, paso por paso: recargo por ser varios, se divide, el más lento tarda más, tolerancias, descansos
-export function detalleDividido(total, k, par, cfg) {
-  const p = par[k] || { recargo: 1, desbalance: 1 }, recargo = k === 1 ? 1 : p.recargo, desbalance = k === 1 ? 1 : p.desbalance;
-  const conRecargo = total * recargo, porPersona = conRecargo / k, masLento = porPersona * desbalance, trabajo = masLento * (1 + cfg.tolerancia / 100);
+// el tiempo entre k personas, paso por paso: se reparte, se suma lo que se pierde por trabajar entre varios, el margen y los descansos
+export function detalleDividido(total, k, cfg) {
+  const perdida = k === 1 ? 0 : (Number((cfg.equipo || {})[k]) || 0), porPersona = total / k, cadaUna = porPersona * (1 + perdida / 100), trabajo = cadaUna * (1 + cfg.tolerancia / 100);
   const descansos = cfg.descansos.filter(d => trabajo > d.despues), descansosMin = suma(descansos.map(d => d.dura));
-  return { k, total, recargo, conRecargo, porPersona, desbalance, masLento, tolerancia: cfg.tolerancia, trabajo, descansos, descansosMin, reloj: trabajo + descansosMin };
+  return { k, total, porPersona, perdida, cadaUna, tolerancia: cfg.tolerancia, trabajo, descansos, descansosMin, reloj: trabajo + descansosMin };
 }
-export function escenarioDividido(esfuerzos, k, par, cfg) { const d = detalleDividido(suma(esfuerzos), k, par, cfg); return { k, activoMin: d.masLento, trabajoMin: d.trabajo, relojMin: d.reloj }; }
-// la cuenta de UN pedido: del modelo al reloj, para 1, 2 y 3 personas
-export function cuentaPedido(modelo, factorInfo, lineas, unidades, cfg, par, calidad) {
+// la cuenta de UN pedido: del historial al tiempo total, para 1, 2 y 3 personas
+export function cuentaPedido(modelo, factorInfo, lineas, unidades, cfg, calidad) {
   const tA = modelo.a, tB = modelo.b * lineas, tC = modelo.c * unidades, tModelo = Math.max(0, tA + tB + tC), factor = factorInfo ? factorInfo.factor : 1, tBase = tModelo * factor;
   return { modelo: { a: modelo.a, b: modelo.b, c: modelo.c, lineas, unidades, tA, tB, tC, tModelo }, factor, factorInfo: factorInfo || null, tBase,
-    rango: calidad ? { lo: tBase * calidad.p20, hi: tBase * calidad.p80 } : null, cols: [1, 2, 3].map(k => { const d = detalleDividido(tBase, k, par, cfg); return { ...d, fin: horaFin(cfg.inicio, d.reloj) }; }) };
+    rango: calidad ? { lo: tBase * calidad.p20, hi: tBase * calidad.p80 } : null, cols: [1, 2, 3].map(k => { const d = detalleDividido(tBase, k, cfg); return { ...d, fin: horaFin(cfg.inicio, d.reloj) }; }) };
 }
 // cada pedido lo arma UNA persona: se reparten los pedidos enteros (el más grande primero, a quien menos tenga)
 export function escenarioEnteros(items, k, cfg) {
@@ -192,6 +161,55 @@ export function agruparHoy(items) {
   return [...por.values()].filter(g => g.lineas > 0 || g.sinHabilitar > 0).sort((a, b) => a.sucursal.localeCompare(b.sucursal));
 }
 
+// ============================================================ gráfico: la serie día por día
+export const METRICAS = {
+  armado: { nombre: 'Tiempo de armado', ayuda: 'Minutos que se pasó armando cada pedido, sin contar pausas ni demoras largas. Si lo armaron dos personas, se suman las dos.' },
+  porArt: { nombre: 'Minutos por artículo', ayuda: 'El tiempo de armado dividido la cantidad de artículos: sirve para comparar días y pedidos de distinto tamaño.' },
+  lineas: { nombre: 'Artículos', ayuda: 'Cuántos artículos tuvo cada pedido: el tamaño del trabajo.' },
+  reloj: { nombre: 'Tiempo total', ayuda: 'Desde el primer artículo hasta el último, con pausas y demoras incluidas. La diferencia con el tiempo de armado son las pausas.' }
+};
+// modo: 'todo' (lo real contra lo esperado), 'sucursal' (una línea por sucursal) o 'armador' (una línea por persona)
+export function serieDiaria(pedidos, op) {
+  const { modo = 'todo', metrica = 'armado', sucursales = [], armadores = [], desde = '', hasta = '', esperado = null, calidad = null } = op || {};
+  const ps = pedidos.filter(p => (!desde || p.dia >= desde) && (!hasta || p.dia <= hasta) && (!sucursales.length || sucursales.includes(p.sucursal)));
+  const info = {}, lineas = []; let banda = null;
+  ps.forEach(p => { const i = info[p.dia] || (info[p.dia] = { pedidos: 0, lineas: 0, unidades: 0 }); i.pedidos++; i.lineas += p.lineas; i.unidades += p.unidades; });
+  const porDia = lista => { const m = {}; lista.forEach(p => (m[p.dia] = m[p.dia] || []).push(p)); return m; };
+  const valorDia = g => {
+    const n = g.length, L = suma(g.map(p => p.lineas)), W = suma(g.map(p => p.trabajoMs)) / MIN, R = suma(g.map(p => p.relojMs)) / MIN, Es = esperado ? suma(g.map(esperado)) : null;
+    if (metrica === 'armado') return { real: W / n, esp: Es == null ? null : Es / n };
+    if (metrica === 'porArt') return { real: L ? W / L : null, esp: Es != null && L ? Es / L : null };
+    if (metrica === 'lineas') return { real: L / n, esp: null };
+    return { real: R / n, esp: null, extra: W / n };
+  };
+  if (modo === 'todo') {
+    const real = {}, esp = {}, extra = {}, b = {}, m = porDia(ps);
+    Object.keys(m).forEach(d => { const v = valorDia(m[d]); if (v.real != null) real[d] = v.real; if (v.esp != null) { esp[d] = v.esp; if (calidad) b[d] = [v.esp * calidad.p20, v.esp * calidad.p80]; } if (v.extra != null) extra[d] = v.extra; });
+    lineas.push({ id: 'real', nombre: metrica === 'reloj' ? 'Tiempo total (con pausas)' : 'Lo que tardaron', estilo: 'real', valores: real });
+    if (metrica === 'reloj') lineas.push({ id: 'armado', nombre: 'Tiempo de armado (sin pausas)', estilo: 'real', valores: extra });
+    if (Object.keys(esp).length) { lineas.push({ id: 'esperado', nombre: 'Lo que debería tardar', estilo: 'esperado', valores: esp }); if (calidad && Object.keys(b).length) banda = b; }
+  } else if (modo === 'sucursal') {
+    const sucs = sucursales.length ? sucursales : [...new Set(ps.map(p => p.sucursal))].sort();
+    sucs.forEach(s => { const m = porDia(ps.filter(p => p.sucursal === s)), real = {}; Object.keys(m).forEach(d => { const v = valorDia(m[d]); if (v.real != null) real[d] = v.real; }); if (Object.keys(real).length) lineas.push({ id: 's:' + s, nombre: s, estilo: 'real', valores: real }); });
+  } else {
+    const acum = {}, equipo = {};
+    ps.forEach(p => p.personas.filter(x => x.picks >= 5).forEach(x => {             // una marca suelta de otra persona no cuenta
+      const e = equipo[p.dia] || (equipo[p.dia] = { w: 0, n: 0 }); e.w += x.trabajoMs / MIN; e.n += x.picks;
+      if (armadores.length && !armadores.includes(x.id)) return;
+      const a = acum[x.id] || (acum[x.id] = { nombre: x.nombre, dias: {} }), dd = a.dias[p.dia] || (a.dias[p.dia] = { w: 0, n: 0 }); dd.w += x.trabajoMs / MIN; dd.n += x.picks;
+    }));
+    Object.keys(acum).forEach(id => { const real = {}; Object.keys(acum[id].dias).forEach(d => { const { w, n } = acum[id].dias[d]; if (metrica === 'porArt') { if (n) real[d] = w / n; } else real[d] = metrica === 'lineas' ? n : w; }); if (Object.keys(real).length) lineas.push({ id: 'a:' + id, nombre: acum[id].nombre, estilo: 'real', valores: real }); });
+    if (metrica === 'porArt') { const ref = {}; Object.keys(equipo).forEach(d => { if (equipo[d].n) ref[d] = equipo[d].w / equipo[d].n; }); if (Object.keys(ref).length) lineas.push({ id: 'equipo', nombre: 'Promedio del equipo', estilo: 'esperado', valores: ref }); }
+  }
+  const dias = [...new Set(lineas.flatMap(l => Object.keys(l.valores)))].sort();
+  return { dias, lineas, banda, info, metrica, modo };
+}
+// las personas que armaron en el período (con al menos 5 marcas en un pedido), de más a menos marcas
+export function listaArmadores(pedidos) {
+  const m = {}; pedidos.forEach(p => p.personas.filter(x => x.picks >= 5).forEach(x => { const a = m[x.id] || (m[x.id] = { id: x.id, nombre: x.nombre, picks: 0 }); a.picks += x.picks; }));
+  return Object.values(m).sort((a, b) => b.picks - a.picks);
+}
+
 // ============================================================ presentación
 export const fmtMin = m => { if (m == null || !isFinite(m)) return '—'; m = Math.round(m); if (m < 60) return m + ' min'; const h = Math.floor(m / 60), r = m % 60; return h + ' h' + (r ? ' ' + String(r).padStart(2, '0') + ' min' : ''); };
 export const horaFin = (inicio, minutos) => { const [h, m] = String(inicio || '07:00').split(':').map(Number), t = (h * 60 + (m || 0) + Math.round(minutos)) % 1440; return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); };
@@ -202,36 +220,26 @@ const n0 = x => (x == null || !isFinite(x)) ? '—' : Math.round(x).toLocaleStri
 export function iniciarTiemposPedido(ctx) {
   const { db, collection, query, where, orderBy, getDocs, Timestamp } = ctx;
   const $ = id => document.getElementById(id);
-  const E = { cfg: null, semanas: 4, eventos: [], pedidos: [], modelo: null, factores: {}, calidad: null, medido: null, plan: null, planEditado: false, planOrigen: '', planElegido: '', cargado: false, filtroSuc: '', filasVis: [],
-    hoy: { items: [], grupos: [], cargado: false, error: '', modo: 'todo' }, cuenta: null };
+  const E = { cfg: null, semanas: 4, eventos: [], pedidos: [], modelo: null, factores: {}, calidad: null, cargado: false, filtroSuc: '', filasVis: [], filasDia: [], ajustesAbierto: false,
+    hoy: { items: [], grupos: [], cargado: false, error: '', modo: 'todo' }, cuenta: null, calc: { sucursal: '', lineas: 0, unidades: 0 },
+    graf: { modo: 'todo', metrica: 'armado', desde: '', hasta: '', sucSel: null, armSel: null, ocultas: new Set(), diaSel: '' } };
   let guardado = {}; try { guardado = JSON.parse(localStorage.getItem('tp_cfg') || '{}') || {}; } catch (e) { /* sin storage */ }
-  E.cfg = { ...CFG_INICIAL, ...guardado };
+  E.cfg = { ...CFG_INICIAL, ...guardado }; delete E.cfg.par;
   E.cfg.descansos = (Array.isArray(guardado.descansos) ? guardado.descansos : CFG_INICIAL.descansos).map(d => ({ ...d }));   // copia: no se toca la constante
-  E.cfg.par = { 2: { recargo: null, desbalance: null, ...((guardado.par || {})[2] || {}) }, 3: { recargo: null, desbalance: null, ...((guardado.par || {})[3] || {}) } };
+  E.cfg.equipo = { ...CFG_INICIAL.equipo, ...(guardado.equipo || {}) };
   const guardarCfg = () => { try { localStorage.setItem('tp_cfg', JSON.stringify(E.cfg)); } catch (e) { /* sin storage */ } };
   const n2 = x => (x == null || !isFinite(x)) ? '—' : (Math.round(x * 100) / 100).toLocaleString('es-AR');
   const n3 = x => (x == null || !isFinite(x)) ? '—' : (Math.round(x * 1000) / 1000).toLocaleString('es-AR');
   const fac = s => (E.factores[s] || { factor: 1 }).factor;
-  const parUso = () => parametrosParalelo(E.medido, E.cfg.par);
-  const trabajoPor = (min, k) => detalleDividido(min, k, parUso(), E.cfg).trabajo;
   const esperado = p => E.modelo ? predecir(E.modelo, p.lineas, p.unidades, fac(p.sucursal)) : null;
   const usoHoy = g => E.hoy.modo === 'falta' ? { l: g.faltanLineas, u: g.faltanUnidades } : { l: g.lineas, u: g.unidades };
-  const origenPar = k => { const p = parUso()[k]; return (p.origenRecargo === 'manual' || p.origenDesbalance === 'manual') ? 'manual' : (p.origenRecargo === 'supuesto' || p.origenDesbalance === 'supuesto') ? 'supuesto' : 'medido'; };
-  const TXT_ORIGEN = { manual: 'lo que escribiste', supuesto: 'lo supuesto', medido: 'lo medido' };
-
-  // ---------------- casilleros que se pueden editar (todos escriben en E.cfg y se guardan en este navegador)
-  const num = (path, v, ancho = 56, paso = 1) => `<input type="number" data-cfg="${path}" value="${v ?? ''}" step="${paso}" style="width:${ancho}px">`;
-  function campoPar(k, campo) {
-    const p = parUso()[k], o = campo === 'recargo' ? p.origenRecargo : p.origenDesbalance, v = Math.round(((campo === 'recargo' ? p.recargo : p.desbalance) - 1) * 1000) / 10;
-    const tag = o === 'medido' ? `medido en ${p.n} pedidos` : o === 'supuesto' ? 'supuesto' : 'escrito por vos';
-    return `${num('par.' + k + '.' + campo, v, 62, 0.5)} % <span class="tp-tag ${o}">${tag}</span>${o === 'manual' ? ` <a href="#" data-reset="par.${k}.${campo}" title="Volver a lo medido o supuesto">↺</a>` : ''}`;
-  }
-  function aplicarCfg(el) {
+  const tipico = s => { const ult = E.pedidos.filter(p => p.sucursal === s).slice(0, 10); return ult.length ? { lineas: Math.round(mediana(ult.map(p => p.lineas))), unidades: Math.round(mediana(ult.map(p => p.unidades))) } : { lineas: 0, unidades: 0 }; };
+  const num = (path, v, ancho = 56, paso = 1) => `<input type="number" data-cfg="${path}" value="${v ?? ''}" step="${paso}" min="0" style="width:${ancho}px">`;
+  function aplicarCfg(el) {      // todos los casilleros escriben en E.cfg y se guardan en este navegador
     const path = el.dataset.cfg, partes = path.split('.'); let o = E.cfg;
     for (let i = 0; i < partes.length - 1; i++) { if (o[partes[i]] === undefined || o[partes[i]] === null) o[partes[i]] = {}; o = o[partes[i]]; }
     const ult = partes[partes.length - 1];
-    if (el.type === 'time') o[ult] = el.value || '07:00';
-    else { const v = el.value === '' ? null : +el.value; o[ult] = path.startsWith('par.') ? (v != null && isFinite(v) ? v : null) : (v != null && isFinite(v) ? Math.max(0, v) : 0); }
+    if (el.type === 'time') o[ult] = el.value || '07:00'; else { const v = el.value === '' ? null : +el.value; o[ult] = v != null && isFinite(v) ? Math.max(0, v) : 0; }
     guardarCfg();
   }
 
@@ -241,7 +249,7 @@ export function iniciarTiemposPedido(ctx) {
       const hasta = new Date(), desde = new Date(); desde.setDate(desde.getDate() - E.semanas * 7); desde.setHours(0, 0, 0, 0);
       const snap = await getDocs(query(collection(db, 'eventosArmado'), where('timestamp', '>=', Timestamp.fromDate(desde)), where('timestamp', '<=', Timestamp.fromDate(hasta)), orderBy('timestamp', 'asc')));
       const evs = []; snap.forEach(d => { const x = d.data(); if (x.timestamp && x.timestamp.toMillis) evs.push({ ...x, timestampMs: x.timestamp.toMillis() }); });
-      E.eventos = evs; if (!E.planEditado) E.plan = null; recalcular();
+      E.eventos = evs; E.graf.desde = E.graf.hasta = ''; E.graf.diaSel = ''; recalcular();
       st.textContent = `Se leyeron ${evs.length.toLocaleString('es-AR')} marcas de armado de las últimas ${E.semanas} semanas (${E.pedidos.length.toLocaleString('es-AR')} pedidos).`;
     } catch (err) { st.textContent = 'No se pudieron leer las marcas: ' + err.message; }
     btn.disabled = false;
@@ -251,11 +259,9 @@ export function iniciarTiemposPedido(ctx) {
     E.modelo = ajustarModelo(E.pedidos);
     E.factores = E.modelo ? factoresSucursal(E.pedidos, E.modelo) : {};
     E.calidad = E.modelo ? calidadModelo(E.pedidos, E.modelo, E.factores) : null;
-    E.medido = E.modelo ? medirParalelo(E.pedidos, E.modelo, E.factores) : null;
     E.cargado = true; refrescar();
   }
-  function refrescar() { renderHoy(); renderEstimador(); renderModelo(); renderPedidos(); if (E.cuenta) renderCuenta(); }
-
+  function refrescar() { renderGrafico(); renderHoy(); renderCalc(); renderAjustes(); renderPedidos(); if (E.cuenta) renderCuenta(); }
   async function cargarHoy() {
     E.hoy.error = ''; E.hoy.cargado = false; renderHoy();
     try {
@@ -263,213 +269,296 @@ export function iniciarTiemposPedido(ctx) {
       const items = []; snap.forEach(d => { const x = d.data(); items.push({ ...x, id: d.id, fechaMs: x.fecha && x.fecha.toMillis ? x.fecha.toMillis() : null }); });
       E.hoy.items = items; E.hoy.grupos = agruparHoy(items); E.hoy.cargado = true;
     } catch (err) { E.hoy.error = err.message; }
-    if (!E.planEditado) E.plan = null;
-    renderHoy(); renderEstimador();
+    renderHoy();
   }
 
-  // ---------------- pedidos de hoy
+  // ======================================================== el gráfico
+  const COLORES = ['#2563eb', '#ea580c', '#16a34a', '#9333ea', '#0891b2', '#dc2626', '#ca8a04', '#db2777', '#4b5563', '#65a30d'];
+  const etiquetaDia = (d, larga) => { const [y, m, dd] = d.split('-').map(Number), corta = String(dd).padStart(2, '0') + '/' + String(m).padStart(2, '0'); return larga ? new Date(y, m - 1, dd).toLocaleDateString('es-AR', { weekday: 'short' }) + ' ' + corta : corta; };
+  const fmtVal = (m, v) => v == null ? '—' : (m === 'armado' || m === 'reloj') ? fmtMin(v) : m === 'porArt' ? n2(v) + ' min' : n0(v);
+  function escalaNice(max) { if (!(max > 0)) return { max: 1, paso: 0.2 }; const raw = max / 5, mag = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / mag, nf = f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10, paso = nf * mag; return { max: Math.ceil(max / paso - 1e-9) * paso, paso }; }
+  function sucActivas() {   // [] = todas
+    const g = E.graf; if (g.sucSel && g.sucSel.size) return [...g.sucSel];
+    if (g.modo === 'sucursal') { const t = {}; E.pedidos.forEach(p => { t[p.sucursal] = (t[p.sucursal] || 0) + p.lineas; }); return Object.keys(t).sort((a, b) => t[b] - t[a]).slice(0, 4).sort(); }
+    return [];
+  }
+  function armActivos() { const g = E.graf; return g.armSel && g.armSel.size ? [...g.armSel] : listaArmadores(E.pedidos).slice(0, 4).map(a => a.id); }
+  const opcionesGraf = () => ({ modo: E.graf.modo, metrica: E.graf.metrica, sucursales: sucActivas(), armadores: E.graf.modo === 'armador' ? armActivos() : [], desde: E.graf.desde, hasta: E.graf.hasta, esperado: E.modelo ? esperado : null, calidad: E.calidad });
+
+  function tablaPedidos(lista, pref, conDia) {
+    return `<div style="overflow-x:auto"><table class="tp-t"><tr>${conDia ? '<th>Día</th>' : ''}<th>Sucursal</th><th>Artículos</th><th>Sin stock</th><th>Personas</th><th>Tiempo de armado</th><th>Tiempo total</th><th>Min por artículo</th><th>Debería tardar</th></tr>
+      ${lista.map((p, i) => { const e = esperado(p), real = p.trabajoMs / MIN, dv = e ? (real / e - 1) * 100 : null, quienes = p.personas.filter(x => x.picks >= 5).map(x => esc(x.nombre.split(' ')[0]) + ' ' + fmtMin(x.trabajoMs / MIN)).join(' · ');
+        return `<tr class="tp-click" data-cuenta="${pref}:${i}">${conDia ? `<td style="white-space:nowrap">${esc(p.dia)}</td>` : ''}<td><b>${esc(p.sucursal)}</b>${quienes ? `<div class="contador">${quienes}</div>` : ''}</td><td>${n0(p.lineas)}<div class="contador">${n0(p.unidades)} unid.</div></td><td>${p.picks ? n0(p.sinStock / p.picks * 100) + '%' : '—'}</td><td>${p.k}</td>
+          <td><b>${fmtMin(real)}</b><div class="contador">demoras ${fmtMin(p.demoraMs / MIN)} · pausas ${fmtMin(p.pausaMs / MIN)}</div></td><td style="white-space:nowrap">${fmtMin(p.relojMs / MIN)}</td><td>${p.lineas ? n1(real / p.lineas) : '—'}</td>
+          <td style="white-space:nowrap">${e == null ? '—' : fmtMin(e)}${dv == null ? '' : `<div style="font-size:12px;color:${dv > 25 ? 'var(--red)' : dv < -15 ? 'var(--green)' : 'var(--muted)'}">${Math.abs(dv) < 0.5 ? '0' : (dv > 0 ? '+' : '') + n0(dv)}%</div>`}</td></tr>`; }).join('')}</table></div>`;
+  }
+
+  function renderGrafico() {
+    const host = $('tp_graf'); if (!host) return;
+    if (!E.pedidos.length) { host.innerHTML = `<div class="empty-state">${E.cargado ? 'No hay marcas de armado en este período.' : 'Leyendo las marcas de armado...'}</div>`; return; }
+    const g = E.graf, todos = [...new Set(E.pedidos.map(p => p.dia))].sort(), primero = todos[0], ultimo = todos[todos.length - 1];
+    if (g.modo === 'armador' && g.metrica === 'reloj') g.metrica = 'armado';
+    const S = serieDiaria(E.pedidos, opcionesGraf()), visibles = S.lineas.filter(l => !g.ocultas.has(l.id)), n = S.dias.length;
+    S.lineas.forEach((l, i) => { l.color = l.estilo === 'esperado' ? '#64748b' : (g.modo === 'todo' ? (l.id === 'real' ? '#2563eb' : '#0891b2') : COLORES[i % COLORES.length]); });
+    const seg = (items, actual, tipo) => `<div class="tp-seg">${items.map(([v, t]) => `<button class="${v === actual ? 'on' : ''}" data-g="${tipo}:${v}">${t}</button>`).join('')}</div>`;
+    const metricas = Object.keys(METRICAS).filter(k => !(g.modo === 'armador' && k === 'reloj')).map(k => [k, METRICAS[k].nombre]);
+    const sucs = [...new Set(E.pedidos.map(p => p.sucursal))].sort(), activasS = sucActivas(), armadores = listaArmadores(E.pedidos), activosA = armActivos();
+    const chip = (tipo, v, txt, on) => `<button class="tp-chip ${on ? 'on' : ''}" data-g="${tipo}:${esc(v)}">${esc(txt)}</button>`;
+    const ayuda = METRICAS[g.metrica].ayuda + (g.modo === 'todo' ? (E.modelo ? ' La línea punteada es lo que debería tardar según tu propio historial, y la franja es el rango en el que suele caer.' : '') : g.modo === 'sucursal' ? ' Cada línea es una sucursal.' : ' Cada línea es una persona' + (g.metrica === 'porArt' ? '; si está por encima del promedio del equipo, esa persona tarda más por artículo.' : '.'));
+    // ---- el dibujo
+    const W = Math.max(320, Math.round(host.clientWidth || 900)), H = W < 560 ? 260 : 340, ML = 46, MR = 14, MT = 14, MB = 30, IW = W - ML - MR, IH = H - MT - MB;
+    const valores = visibles.flatMap(l => Object.values(l.valores)), conBanda = S.banda && visibles.some(l => l.id === 'esperado');
+    const todosV = [...valores, ...(conBanda ? Object.values(S.banda).flat() : [])], maxY = Math.max(...todosV, 0), minV = todosV.length ? Math.min(...todosV) : 0;
+    let yMin = 0, esc_ = escalaNice(maxY);   // el eje arranca en 0; solo en 'minutos por artículo' se ajusta a lo que hay, para que se vean las diferencias
+    if (g.metrica === 'porArt' && maxY > 0) { const base = minV * 0.8; esc_ = escalaNice(maxY - base); yMin = Math.max(0, Math.floor(base / esc_.paso) * esc_.paso); esc_.max = Math.max(yMin + esc_.paso, Math.ceil(maxY / esc_.paso - 1e-9) * esc_.paso); }
+    const top = esc_.max, xi = i => ML + (n === 1 ? IW / 2 : i * IW / (n - 1)), yv = v => MT + IH - ((v - yMin) / (top - yMin || 1)) * IH, fmtY = v => esc_.paso < 1 ? n2(v) : n0(v);
+    let svg = `<svg class="tp-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Gráfico de tiempos por día">`;
+    for (let v = yMin; v <= top + 1e-9; v += esc_.paso) svg += `<line x1="${ML}" y1="${yv(v)}" x2="${W - MR}" y2="${yv(v)}" stroke="#e5e7eb"/><text x="${ML - 8}" y="${yv(v) + 4}" font-size="11" fill="#6b7280" text-anchor="end">${fmtY(v)}</text>`;
+    const cada = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(IW / 58))));
+    S.dias.forEach((d, i) => { if (i % cada === 0 || i === n - 1) svg += `<text x="${xi(i)}" y="${H - 10}" font-size="11" fill="#6b7280" text-anchor="middle">${etiquetaDia(d)}</text>`; });
+    const dsel = g.diaSel && S.dias.includes(g.diaSel) ? g.diaSel : S.dias[n - 1]; g.diaSel = dsel || '';
+    if (dsel) { const i = S.dias.indexOf(dsel); svg += `<rect x="${xi(i) - Math.max(6, IW / n / 2 - 1)}" y="${MT}" width="${Math.max(12, IW / n - 2)}" height="${IH}" fill="rgba(37,99,235,.08)"/>`; }
+    if (conBanda) { const idx = S.dias.map((d, i) => S.banda[d] ? i : -1).filter(i => i >= 0); if (idx.length > 1) svg += `<polygon points="${idx.map(i => `${xi(i)},${yv(S.banda[S.dias[i]][1])}`).concat(idx.slice().reverse().map(i => `${xi(i)},${yv(S.banda[S.dias[i]][0])}`)).join(' ')}" fill="rgba(37,99,235,.13)"/>`; }
+    visibles.forEach(l => {
+      let seg_ = []; const cerrar = () => { if (seg_.length > 1) svg += `<polyline points="${seg_.join(' ')}" fill="none" stroke="${l.color}" stroke-width="${l.estilo === 'esperado' ? 2 : 2.6}" ${l.estilo === 'esperado' ? 'stroke-dasharray="7 5"' : ''} stroke-linejoin="round" stroke-linecap="round"/>`; seg_ = []; };
+      S.dias.forEach((d, i) => { const v = l.valores[d]; if (v == null) cerrar(); else seg_.push(`${xi(i)},${yv(v)}`); }); cerrar();
+      if (l.estilo !== 'esperado') S.dias.forEach((d, i) => { const v = l.valores[d]; if (v != null) svg += `<circle cx="${xi(i)}" cy="${yv(v)}" r="${n > 40 ? 2.4 : 3.6}" fill="${l.color}" stroke="#fff" stroke-width="1.2"/>`; });
+    });
+    svg += `<line class="tp-cross" x1="0" y1="${MT}" x2="0" y2="${MT + IH}" stroke="#94a3b8" stroke-dasharray="3 3" style="display:none"/><rect class="tp-selrect" x="0" y="${MT}" width="0" height="${IH}" fill="rgba(37,99,235,.15)" style="display:none"/><rect class="tp-gover" x="${ML}" y="${MT}" width="${IW}" height="${IH}" fill="transparent" style="touch-action:pan-y;cursor:crosshair"/></svg>`;
+    const leyenda = S.lineas.map(l => `<button class="tp-leg ${g.ocultas.has(l.id) ? 'off' : ''}" data-g="linea:${esc(l.id)}" title="Tocá para mostrar u ocultar"><span class="tp-sw" style="${l.estilo === 'esperado' ? `background:repeating-linear-gradient(90deg,${l.color} 0 5px,transparent 5px 8px)` : `background:${l.color}`}"></span>${esc(l.nombre)}</button>`).join('') + (conBanda ? '<span class="tp-leg tp-leg-b"><span class="tp-sw" style="background:rgba(37,99,235,.25)"></span>Rango en el que suele caer</span>' : '');
+    // ---- el detalle del día elegido
+    const delDia = dsel ? E.pedidos.filter(p => p.dia === dsel && (!activasS.length || activasS.includes(p.sucursal))) : []; E.filasDia = delDia;
+    const resumenDia = dsel && S.info[dsel] ? `${S.info[dsel].pedidos} pedido${S.info[dsel].pedidos === 1 ? '' : 's'} · ${n0(S.info[dsel].lineas)} artículos · ${n0(S.info[dsel].unidades)} unidades` : '';
+    host.innerHTML = `<div class="tp-ctl"><span class="tp-lbl">Ver</span>${seg([['todo', 'Todo junto'], ['sucursal', 'Por sucursal'], ['armador', 'Por armador']], g.modo, 'modo')}</div>
+      <div class="tp-ctl"><span class="tp-lbl">Qué mirar</span>${seg(metricas, g.metrica, 'metrica')}</div>
+      <div class="tp-ayuda">${ayuda}</div>
+      <div class="tp-ctl"><span class="tp-lbl">Días</span><input type="date" data-g="desde" value="${g.desde || primero}" min="${primero}" max="${ultimo}"> a <input type="date" data-g="hasta" value="${g.hasta || ultimo}" min="${primero}" max="${ultimo}">
+        <button class="tp-chip" data-g="rango:7">Últimos 7 días</button><button class="tp-chip" data-g="rango:14">14 días</button><button class="tp-chip ${!g.desde && !g.hasta ? 'on' : ''}" data-g="rango:todo">Todo el período</button></div>
+      <div class="tp-ctl"><span class="tp-lbl">Sucursales</span>${chip('suc', '__todas__', 'Todas', !activasS.length || activasS.length === sucs.length)}${sucs.map(s => chip('suc', s, s, activasS.includes(s) && activasS.length !== sucs.length)).join('')}</div>
+      ${g.modo === 'armador' ? `<div class="tp-ctl"><span class="tp-lbl">Armadores</span>${chip('arm', '__todos__', 'Todos', activosA.length === armadores.length)}${armadores.map(a => chip('arm', a.id, a.nombre, activosA.includes(a.id) && activosA.length !== armadores.length)).join('')}</div>` : ''}
+      ${n ? `<div class="tp-gwrap">${svg}<div class="tp-tip" hidden></div></div><div class="tp-leyenda">${leyenda}</div>
+      <div class="tp-ayuda">Pasá el mouse (o el dedo) por un día para ver los números. Tocá un día para ver sus pedidos. Arrastrá sobre el gráfico para acercar${g.desde || g.hasta ? ' · <a href="#" data-g="rango:todo">Quitar el zoom</a>' : ''}.</div>
+      <h4 class="tp-h4">${dsel ? `Pedidos del ${esc(etiquetaDia(dsel, true))}` : ''} <span class="contador">${resumenDia}</span></h4>${delDia.length ? tablaPedidos(delDia, 'dia', false) : '<div class="empty-state">Tocá un día del gráfico para ver sus pedidos.</div>'}` : '<div class="empty-state">No hay datos con esos filtros.</div>'}`;
+    if (!n) return;
+    // ---- interacción: números al pasar, tocar un día, arrastrar para acercar
+    const ov = host.querySelector('.tp-gover'), svgEl = host.querySelector('.tp-svg'), tip = host.querySelector('.tp-tip'), wrap = host.querySelector('.tp-gwrap'), cross = host.querySelector('.tp-cross'), sel = host.querySelector('.tp-selrect');
+    const px = cx => { const r = svgEl.getBoundingClientRect(); return (cx - r.left) * (W / r.width); };
+    const idxDe = cx => Math.max(0, Math.min(n - 1, n === 1 ? 0 : Math.round((px(cx) - ML) / IW * (n - 1))));
+    const mostrar = i => {
+      const d = S.dias[i], inf = S.info[d] || { pedidos: 0, lineas: 0 }, x = xi(i);
+      cross.setAttribute('x1', x); cross.setAttribute('x2', x); cross.style.display = '';
+      tip.innerHTML = `<b>${esc(etiquetaDia(d, true))}</b>` + visibles.map(l => l.valores[d] == null ? '' : `<div><span class="tp-sw" style="background:${l.color}"></span>${esc(l.nombre)}: <b>${fmtVal(g.metrica, l.valores[d])}</b></div>`).join('') + (S.banda && S.banda[d] && visibles.some(l => l.id === 'esperado') ? `<div class="tp-ti">suele caer entre ${fmtVal(g.metrica, S.banda[d][0])} y ${fmtVal(g.metrica, S.banda[d][1])}</div>` : '') + `<div class="tp-ti">${inf.pedidos} pedido${inf.pedidos === 1 ? '' : 's'} · ${n0(inf.lineas)} artículos</div>`;
+      tip.hidden = false; const k = wrap.getBoundingClientRect().width / W; let left = x * k + 14; if (left + tip.offsetWidth > wrap.getBoundingClientRect().width - 4) left = x * k - tip.offsetWidth - 14; tip.style.left = Math.max(4, left) + 'px'; tip.style.top = '10px';
+    };
+    let arr = null;
+    ov.addEventListener('pointerdown', ev => { arr = { x0: px(ev.clientX), i0: idxDe(ev.clientX), mov: false }; try { ov.setPointerCapture(ev.pointerId); } catch (e) { /* sin captura */ } });
+    ov.addEventListener('pointermove', ev => {
+      mostrar(idxDe(ev.clientX));
+      if (arr) { const x1 = px(ev.clientX); if (Math.abs(x1 - arr.x0) > 10) { arr.mov = true; sel.style.display = ''; sel.setAttribute('x', Math.min(arr.x0, x1)); sel.setAttribute('width', Math.abs(x1 - arr.x0)); } }
+    });
+    ov.addEventListener('pointerup', ev => {
+      if (!arr) return; const i1 = idxDe(ev.clientX), a = arr; arr = null; sel.style.display = 'none';
+      if (a.mov && Math.abs(i1 - a.i0) >= 1) { g.desde = S.dias[Math.min(a.i0, i1)]; g.hasta = S.dias[Math.max(a.i0, i1)]; g.diaSel = ''; renderGrafico(); }
+      else { g.diaSel = S.dias[i1]; renderGrafico(); }
+    });
+    ov.addEventListener('pointerleave', () => { if (arr) return; tip.hidden = true; cross.style.display = 'none'; });
+    ov.addEventListener('pointercancel', () => { arr = null; sel.style.display = 'none'; tip.hidden = true; cross.style.display = 'none'; });
+  }
+  function accionGraf(a) {
+    const g = E.graf, i = a.indexOf(':'), tipo = i < 0 ? a : a.slice(0, i), v = i < 0 ? '' : a.slice(i + 1), todos = [...new Set(E.pedidos.map(p => p.dia))].sort();
+    if (tipo === 'modo') { g.modo = v; g.sucSel = null; g.armSel = null; g.ocultas.clear(); }
+    else if (tipo === 'metrica') { g.metrica = v; g.ocultas.clear(); }
+    else if (tipo === 'rango') { if (v === 'todo') { g.desde = g.hasta = ''; } else { const ult = todos[todos.length - 1], [y, m, d] = ult.split('-').map(Number), f = new Date(y, m - 1, d - (+v - 1)); g.hasta = ult; g.desde = fechaLocal(f.getTime()) < todos[0] ? '' : fechaLocal(f.getTime()); } g.diaSel = ''; }
+    else if (tipo === 'suc') { if (v === '__todas__') g.sucSel = null; else { const s = new Set(sucActivas()); if (g.modo !== 'sucursal' && !(g.sucSel && g.sucSel.size)) s.clear(); s.has(v) ? s.delete(v) : s.add(v); g.sucSel = s.size ? s : null; } }
+    else if (tipo === 'arm') { if (v === '__todos__') g.armSel = new Set(listaArmadores(E.pedidos).map(x => x.id)); else { const s = new Set(armActivos()); s.has(v) ? s.delete(v) : s.add(v); g.armSel = s.size ? s : null; } }
+    else if (tipo === 'linea') { g.ocultas.has(v) ? g.ocultas.delete(v) : g.ocultas.add(v); }
+    renderGrafico();
+  }
+
+  // ======================================================== pedidos de hoy
   function renderHoy() {
     const host = $('tp_hoy'); if (!host) return; const h = E.hoy;
     if (h.error) { host.innerHTML = `<div class="empty-state">No se pudieron leer los pedidos: ${esc(h.error)} <button class="btn-chico" id="tp_btnHoy">Reintentar</button></div>`; return; }
     if (!h.cargado) { host.innerHTML = '<div class="empty-state">Leyendo los pedidos de hoy...</div>'; return; }
     if (!h.grupos.length) { host.innerHTML = '<div class="mt-barra">No hay pedidos sin procesar en este momento. <button class="btn-chico" id="tp_btnHoy">Actualizar</button></div>'; return; }
-    const m = E.modelo, cfg = E.cfg, par = parUso(), inicioHoy = new Date().setHours(0, 0, 0, 0), grupos = h.grupos;
+    const m = E.modelo, cfg = E.cfg, inicioHoy = new Date().setHours(0, 0, 0, 0), grupos = h.grupos;
     const est = g => { const u = usoHoy(g); return m ? (u.l > 0 ? predecir(m, u.l, u.u, fac(g.sucursal)) : 0) : null; };
     const viejos = grupos.filter(g => g.desde && g.desde < inicioHoy), tot = { lineas: suma(grupos.map(g => g.lineas)), unidades: suma(grupos.map(g => g.unidades)), armadas: suma(grupos.map(g => g.armadas)), sinHab: suma(grupos.map(g => g.sinHabilitar)), est: m ? suma(grupos.map(est)) : null };
     const aviso = !m ? (E.cargado ? 'Todavía no hay suficiente historial de armado para estimar el tiempo (hacen falta al menos 3 pedidos de 5 artículos o más).' : 'Calculando el historial para estimar el tiempo...') : '';
+    const items = m ? grupos.map(g => ({ nombre: g.sucursal, min: est(g) })).filter(x => x.min > 0) : [];
     host.innerHTML = `<div class="mt-barra" style="flex-wrap:wrap;gap:8px 16px"><b>Contar</b> <label><input type="radio" name="tp_modo" value="todo" ${h.modo === 'todo' ? 'checked' : ''}> todo el pedido</label> <label><input type="radio" name="tp_modo" value="falta" ${h.modo === 'falta' ? 'checked' : ''}> solo lo que falta armar</label>
         <button class="btn-chico" id="tp_btnHoy">Actualizar</button> <span class="contador">${n0(h.items.length)} renglones sin procesar${tot.sinHab ? ` · ${n0(tot.sinHab)} esperan habilitación y no se cuentan` : ''}${viejos.length ? ` · hay pedidos de días anteriores sin procesar (desde ${fechaLocal(Math.min(...viejos.map(g => g.desde)))})` : ''}</span></div>
       ${aviso ? `<div class="note" style="margin-bottom:10px">${aviso}</div>` : ''}
-      <div style="overflow-x:auto"><table class="tp-t"><tr><th>Sucursal</th><th>Artículos</th><th>Armados</th><th>Una persona</th><th>Entre 2, cada una</th><th>Entre 3, cada una</th></tr>
+      <div style="overflow-x:auto"><table class="tp-t"><tr><th>Sucursal</th><th>Artículos</th><th>Armados</th><th>Debería tardar<div class="contador">una persona</div></th><th>Entre 2<div class="contador">cada una</div></th><th>Entre 3<div class="contador">cada una</div></th></tr>
       ${grupos.map((g, i) => { const e = est(g), u = usoHoy(g);
         return `<tr class="tp-click" data-cuenta="hoy:${i}" title="Tocá para ver la cuenta"><td><b>${esc(g.sucursal)}</b>${g.sinHabilitar ? `<div class="contador">${g.sinHabilitar} sin habilitar</div>` : ''}${g.desde && g.desde < inicioHoy ? `<div class="contador">desde ${fechaLocal(g.desde)}</div>` : ''}</td>
           <td>${n0(u.l)}<div class="contador">${n0(u.u)} unid.</div></td><td>${n0(g.armadas)} de ${n0(g.lineas)}<div class="contador">${g.lineas ? n0(g.armadas / g.lineas * 100) : 0}%${g.sinStock ? ` · ${g.sinStock} sin stock` : ''}</div></td>
-          ${[1, 2, 3].map(k => `<td>${e == null ? '—' : '<b>' + fmtMin(trabajoPor(e, k)) + '</b>'}</td>`).join('')}</tr>`; }).join('')}
+          ${[1, 2, 3].map(k => `<td>${e == null ? '—' : '<b>' + fmtMin(detalleDividido(e, k, cfg).cadaUna) + '</b>'}</td>`).join('')}</tr>`; }).join('')}
       <tr style="border-top:2px solid var(--border, #e2e8f0)"><td><b>Todo junto</b></td><td><b>${n0(tot.lineas)}</b><div class="contador">${n0(tot.unidades)} unid.</div></td><td>${n0(tot.armadas)} de ${n0(tot.lineas)}</td>
-        ${[1, 2, 3].map(k => { if (tot.est == null) return '<td>—</td>'; const d = detalleDividido(tot.est, k, par, cfg); return `<td><b>${fmtMin(d.trabajo)}</b><div class="contador">reloj ${fmtMin(d.reloj)} · termina ${horaFin(cfg.inicio, d.reloj)}</div></td>`; }).join('')}</tr></table></div>
-      <div class="mt-barra" style="flex-wrap:wrap;gap:8px 16px;margin-top:10px"><button class="btn-chico azul" id="tp_btnUsarHoy">Usar estos pedidos en la comparación de 1, 2 o 3 personas</button>
-        <span class="contador">Tocá un pedido para ver cómo está hecha la cuenta. Los tiempos incluyen la tolerancia (${n0(cfg.tolerancia)}%); "reloj" suma además los descansos.</span></div>`;
+        ${[1, 2, 3].map(k => { if (tot.est == null) return '<td>—</td>'; const d = detalleDividido(tot.est, k, cfg); return `<td><b>${fmtMin(d.cadaUna)}</b><div class="contador">con margen y descansos: ${fmtMin(d.reloj)} · termina a las ${horaFin(cfg.inicio, d.reloj)}</div></td>`; }).join('')}</tr></table></div>
+      ${items.length ? `<div class="contador" style="margin-top:8px">Si en vez de repartirse cada pedido, cada pedido lo arma una sola persona: ${[2, 3].map(k => { const e = escenarioEnteros(items, k, cfg); return `con ${k} personas terminan a las ${horaFin(cfg.inicio, e.relojMin)} (${e.cargas.map((c, j) => `persona ${j + 1}: ${c.items.map(x => esc(x.nombre)).join(', ') || '—'}`).join(' · ')})`; }).join('; ')}.</div>` : ''}
+      <div class="contador" style="margin-top:8px">"Debería tardar" es el tiempo de armado según tu historial, sin pausas. "Entre 2" y "Entre 3" dividen el trabajo y suman ${n0(cfg.equipo[2])}% y ${n0(cfg.equipo[3])}% por trabajar entre varios. Tocá un pedido para ver la cuenta. Todo se puede cambiar en Ajustes.</div>`;
   }
 
-  // ---------------- pedidos armados (historial)
+  // ======================================================== calculadora de un pedido
+  function renderCalc() {
+    const host = $('tp_calc'); if (!host) return;
+    if (!E.modelo) { host.innerHTML = `<div class="empty-state">${E.cargado ? 'No hay historial suficiente para estimar.' : 'Calculando el historial...'}</div>`; return; }
+    const sucs = [...new Set(E.pedidos.map(p => p.sucursal))].sort(), c = E.calc;
+    if (!c.sucursal || !sucs.includes(c.sucursal)) { c.sucursal = sucs[0]; Object.assign(c, tipico(c.sucursal)); }
+    host.innerHTML = `<div class="mt-barra" style="flex-wrap:wrap;gap:10px 16px"><span><b>Sucursal</b> <select id="tp_calcSuc">${sucs.map(s => `<option ${s === c.sucursal ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select></span>
+        <span><b>Artículos</b> <input type="number" data-calc="lineas" value="${c.lineas}" min="0" style="width:70px"></span> <span><b>Unidades</b> <input type="number" data-calc="unidades" value="${c.unidades}" min="0" style="width:80px"></span>
+        <span class="contador">Arranca con el tamaño típico de esa sucursal (mediana de sus últimos 10 pedidos).</span></div><div id="tp_calcRes"></div>`;
+    renderCalcRes();
+  }
+  function renderCalcRes() {
+    const host = $('tp_calcRes'); if (!host || !E.modelo) return; const c = E.calc, cfg = E.cfg;
+    if (!(c.lineas > 0)) { host.innerHTML = '<div class="empty-state">Poné cuántos artículos tiene el pedido.</div>'; return; }
+    const cu = cuentaPedido(E.modelo, E.factores[c.sucursal], c.lineas, c.unidades, cfg, E.calidad);
+    host.innerHTML = `<div class="tp-resumen">Un pedido de <b>${esc(c.sucursal)}</b> con <b>${n0(c.lineas)} artículos</b> y ${n0(c.unidades)} unidades <b>debería tardar ${fmtMin(cu.tBase)}</b> si lo arma una sola persona${cu.rango ? ` (en la práctica, entre ${fmtMin(cu.rango.lo)} y ${fmtMin(cu.rango.hi)})` : ''}, sin contar pausas.</div>
+      <table class="tp-t"><tr><th></th><th>1 persona</th><th>2 personas</th><th>3 personas</th></tr>
+        <tr><td>Cada una arma</td>${cu.cols.map(d => `<td><b>${fmtMin(d.cadaUna)}</b></td>`).join('')}</tr>
+        <tr><td>Tiempo total estimado<div class="contador">con margen y descansos</div></td>${cu.cols.map(d => `<td>${fmtMin(d.reloj)}</td>`).join('')}</tr>
+        <tr><td>Terminan a las</td>${cu.cols.map(d => `<td>${d.fin}</td>`).join('')}</tr></table>
+      <div style="margin-top:8px"><button class="btn-chico" data-cuenta="calc:0">Ver la cuenta paso a paso</button></div>`;
+  }
+
+  // ======================================================== ajustes (con explicación)
+  function renderAjustes() {
+    const host = $('tp_ajustes'); if (!host) return; const c = E.cfg, m = E.modelo, q = E.calidad;
+    let modeloTxt = '<p>Todavía no hay historial suficiente para estimar (hacen falta al menos 3 pedidos de 5 artículos o más).</p>';
+    if (m) {
+      const juntos = m.rho > 0.95 && m.terminos > 1, porArt = m.b + m.c * m.uPorArt, demoraPct = suma(E.pedidos.map(p => p.demoraMs)) / Math.max(1, suma(E.pedidos.map(p => p.trabajoMs))) * 100, sucs = Object.keys(E.factores).sort((a, b) => E.factores[b].factor - E.factores[a].factor);
+      modeloTxt = `<p>Con tu historial (${m.n.toLocaleString('es-AR')} pedidos${m.soloUnaPersona ? ' armados por una sola persona' : ''}), armar un pedido lleva <b>${juntos ? `≈ ${n1(porArt)} min por artículo (con ${n1(m.uPorArt)} unidades por artículo en promedio)` : `${m.a > 0.05 ? n1(m.a) + ' min fijos + ' : ''}${n1(m.b)} min por artículo${m.c > 0.0005 ? ' + ' + n3(m.c) + ' min por unidad' : ''}`}</b>, con un ajuste para cada sucursal (unas son más lentas que otras).
+        La estimación se equivoca en promedio ${n0(q.mape * 100)}% por pedido, y un pedido real suele quedar entre ${n0((q.p20 - 1) * 100)}% y +${n0((q.p80 - 1) * 100)}% de lo estimado. Las demoras de ${c.umbralDemora} a ${c.umbralPausa} min equivalen a ${n0(demoraPct)}% del tiempo de armado.</p>
+        <p class="contador">No incluye el arranque (ir al primer pasillo, preparar el pallet) ni el cierre (envolver, etiquetar): hoy el Armador no los marca. El tiempo de armado suma los tiempos entre artículos seguidos y agrega un artículo promedio por persona, porque el primero no tiene uno anterior.</p>
+        ${sucs.length ? `<table class="tp-t"><tr><th>Sucursal</th><th>Pedidos (1 persona)</th><th>Tarda respecto del promedio</th></tr>${sucs.map(s => { const f = E.factores[s]; return `<tr><td style="font-weight:700">${esc(s)}</td><td>${f.n}</td><td>${f.bruto >= 1 ? '+' : ''}${n0((f.bruto - 1) * 100)}%</td></tr>`; }).join('')}</table>` : ''}`;
+    }
+    host.innerHTML = `<details id="tp_detAj" ${E.ajustesAbierto ? 'open' : ''}><summary>⚙️ Ajustes y cómo se calcula</summary><div class="tp-aj">
+      <div class="tp-ajf"><b>Margen</b> ${num('tolerancia', c.tolerancia, 58)} %<p>Tiempo extra que se suma al tiempo de armado para dar un tiempo realista, porque siempre hay demoras y necesidades personales. Ejemplo: si armar son 100 min y el margen es 15%, el tiempo total estimado es 115 min.</p></div>
+      <div class="tp-ajf"><b>Pérdida por armar entre varios</b> Entre 2: ${num('equipo.2', c.equipo[2], 54)} % Entre 3: ${num('equipo.3', c.equipo[3], 54)} %<p>Si varias personas arman el mismo pedido, el tiempo no baja justo a la mitad (o a un tercio): se coordinan y se pisan. Ejemplo: 100 min entre 2 personas son 50 min cada una, más 10% = 55 min cada una.</p></div>
+      <div class="tp-ajf"><b>Empiezan a las</b> <input type="time" data-cfg="inicio" value="${esc(c.inicio)}"><p>Sirve para calcular a qué hora terminan.</p></div>
+      <div class="tp-ajf"><b>Descansos</b>${c.descansos.map((d, i) => `<div>${esc(d.nombre)}: si el trabajo de una persona pasa de ${num('descansos.' + i + '.despues', d.despues, 58)} min, se suma un descanso de ${num('descansos.' + i + '.dura', d.dura, 50)} min</div>`).join('')}<p>Se suman al tiempo total estimado. Ponelos en 0 si no querés contarlos.</p></div>
+      <div class="tp-ajf"><b>Demoras y pausas</b> Entre dos artículos seguidos, hasta ${num('umbralDemora', c.umbralDemora, 46)} min cuenta como trabajo; de ahí hasta ${num('umbralPausa', c.umbralPausa, 46)} min es una demora (no cuenta como armado); más es una pausa.<p>Al cambiarlo se recalcula todo el historial.</p></div>
+      <div class="tp-ajf"><b>Cómo se calcula lo que debería tardar</b>${modeloTxt}</div></div></details>`;
+  }
+
+  // ======================================================== todos los pedidos armados
   function renderPedidos() {
-    const host = $('tp_pedidos'); if (!E.pedidos.length) { host.innerHTML = '<div class="empty-state">No hay marcas de armado en este período.</div>'; return; }
+    const host = $('tp_pedidos'); if (!host) return; if (!E.pedidos.length) { host.innerHTML = '<div class="empty-state">No hay marcas de armado en este período.</div>'; return; }
     const sucs = [...new Set(E.pedidos.map(p => p.sucursal))].sort(), filas = E.pedidos.filter(p => !E.filtroSuc || p.sucursal === E.filtroSuc), tope = 150; E.filasVis = filas.slice(0, tope);
     host.innerHTML = `<div class="mt-barra"><b>Sucursal</b> <select id="tp_filtroSuc"><option value="">Todas</option>${sucs.map(s => `<option ${s === E.filtroSuc ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select> <button class="btn-chico" id="tp_btnCSV">⬇ CSV</button> <span class="contador">${filas.length.toLocaleString('es-AR')} pedidos · tocá uno para ver la cuenta</span></div>
-      <div style="overflow-x:auto"><table class="tp-t"><tr><th>Día</th><th>Sucursal</th><th>Artículos</th><th>Sin stock</th><th>Personas</th><th>Tiempo de armado</th><th>Reloj</th><th>Min por artículo</th><th>Esperado</th></tr>
-      ${E.filasVis.map((p, i) => { const e = esperado(p), real = p.trabajoMs / MIN, dv = e ? (real / e - 1) * 100 : null, quienes = p.personas.filter(x => x.picks >= 5).map(x => esc(x.nombre.split(' ')[0]) + ' ' + fmtMin(x.trabajoMs / MIN)).join(' · ');
-        return `<tr class="tp-click" data-cuenta="ped:${i}"><td style="white-space:nowrap">${esc(p.dia)}</td><td><b>${esc(p.sucursal)}</b>${quienes ? `<div class="contador">${quienes}</div>` : ''}</td><td>${n0(p.lineas)}<div class="contador">${n0(p.unidades)} unid.</div></td><td>${p.picks ? n0(p.sinStock / p.picks * 100) + '%' : '—'}</td><td>${p.k}</td>
-          <td><b>${fmtMin(real)}</b><div class="contador">demoras ${fmtMin(p.demoraMs / MIN)} · pausas ${fmtMin(p.pausaMs / MIN)}</div></td><td style="white-space:nowrap">${fmtMin(p.relojMs / MIN)}</td><td>${p.lineas ? n1(real / p.lineas) : '—'}</td>
-          <td style="white-space:nowrap">${e == null ? '—' : fmtMin(e)}${dv == null ? '' : `<div style="font-size:12px;color:${dv > 25 ? 'var(--red)' : dv < -15 ? 'var(--green)' : 'var(--muted)'}">${Math.abs(dv) < 0.5 ? '0' : (dv > 0 ? '+' : '') + n0(dv)}%</div>`}</td></tr>`; }).join('')}</table></div>
-      ${filas.length > tope ? `<div class="contador" style="margin-top:8px">Se muestran los ${tope} más recientes; el CSV trae todos.</div>` : ''}`;
+      ${tablaPedidos(E.filasVis, 'ped', true)}${filas.length > tope ? `<div class="contador" style="margin-top:8px">Se muestran los ${tope} más recientes; el CSV trae todos.</div>` : ''}`;
     $('tp_filtroSuc').onchange = e => { E.filtroSuc = e.target.value; renderPedidos(); };
     $('tp_btnCSV').onclick = descargarCSV;
   }
   function descargarCSV() {
     const cel = v => { const s = String(v ?? ''); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-    const enc = ['Día', 'Sucursal', 'Artículos', 'Unidades', 'Marcas', 'Sin stock', 'Personas', 'Tiempo de armado (min)', 'Demoras (min)', 'Pausas (min)', 'Reloj (min)', 'Min por artículo', 'Esperado 1 persona (min)', 'Desvío %', 'Detalle por persona'];
+    const enc = ['Día', 'Sucursal', 'Artículos', 'Unidades', 'Marcas', 'Sin stock', 'Personas', 'Tiempo de armado (min)', 'Demoras (min)', 'Pausas (min)', 'Tiempo total (min)', 'Min por artículo', 'Debería tardar 1 persona (min)', 'Desvío %', 'Detalle por persona'];
     const filas = E.pedidos.filter(p => !E.filtroSuc || p.sucursal === E.filtroSuc).map(p => { const e = esperado(p), real = p.trabajoMs / MIN; return [p.dia, p.sucursal, p.lineas, p.unidades, p.picks, p.sinStock, p.k, n1(real), n1(p.demoraMs / MIN), n1(p.pausaMs / MIN), n1(p.relojMs / MIN), p.lineas ? n1(real / p.lineas) : '', e == null ? '' : n1(e), e ? n0((real / e - 1) * 100) : '', p.personas.map(x => x.nombre + ': ' + n1(x.trabajoMs / MIN) + ' min de armado, ' + x.picks + ' marcas').join(' | ')]; });
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + [enc, ...filas].map(f => f.map(cel).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
     a.download = 'pedidos_tiempos_' + fechaLocal(Date.now()) + '.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   }
 
-  // ---------------- el modelo
-  function renderModelo() {
-    const host = $('tp_modelo'), m = E.modelo, q = E.calidad; if (!m) { host.innerHTML = '<div class="empty-state">Hacen falta al menos 3 pedidos de 5 artículos o más para ajustar el modelo.</div>'; return; }
-    const demoraPct = suma(E.pedidos.map(p => p.demoraMs)) / Math.max(1, suma(E.pedidos.map(p => p.trabajoMs))) * 100, par = parUso();
-    const med = E.medido || {}, linea = k => { const x = med[k] || {}, p = par[k], quien = k === 2 ? 'dos personas' : 'tres personas';
-      const base = x.n >= 3 ? `Cuando ${quien} armaron el mismo pedido (${x.n} pedidos): ${x.recargoMedido != null ? 'el trabajo total fue ' + n0((x.recargoMedido - 1) * 100) + '% ' + (x.recargoMedido >= 1 ? 'mayor' : 'menor') + ' que si lo armaba una sola' : 'sin dato suficiente de trabajo total'}, y ${x.desbalanceMedido != null ? 'el más lento tardó ' + n0((x.desbalanceMedido - 1) * 100) + '% más que el promedio' : 'sin dato de desbalance'}.` : `${k === 2 ? 'Dos' : 'Tres'} personas en el mismo pedido: todavía hay ${x.n || 0} pedidos armados así (hacen falta 3 o más).`;
-      return `${base} <b>Se usa para ${k} personas:</b> +${n1((p.recargo - 1) * 100)}% de trabajo (${p.origenRecargo === 'manual' ? 'lo escribiste vos' : p.origenRecargo}) y ${n1((p.desbalance - 1) * 100)}% de desbalance (${p.origenDesbalance === 'manual' ? 'lo escribiste vos' : p.origenDesbalance}).`; };
-    const sucs = Object.keys(E.factores).sort((a, b) => E.factores[b].factor - E.factores[a].factor);
-    const juntos = m.rho > 0.95 && m.terminos > 1, porArt = m.b + m.c * m.uPorArt;   // si artículos y unidades crecen a la par, no se pueden separar: se da el tiempo por artículo en conjunto
-    const titular = juntos ? `Tiempo de armado de un pedido ≈ ${n1(porArt)} min por artículo (con ${n1(m.uPorArt)} unidades por artículo en promedio)`
-      : `Tiempo de armado de un pedido ≈ ${m.a > 0.05 ? n1(m.a) + ' min fijos + ' : ''}${n1(m.b)} min por artículo${m.c > 0.0005 ? ' + ' + n3(m.c) + ' min por unidad' : ''}`;
-    host.innerHTML = `<div class="note" style="margin-bottom:12px"><b>${titular}</b>.
-        Se ajustó con ${m.n.toLocaleString('es-AR')} pedidos${m.soloUnaPersona ? ' armados por una sola persona' : ''}. Error medio: ${n0(q.mape * 100)}% por pedido (R² ${q.r2.toFixed(2).replace('.', ',')}), usando además el factor de cada sucursal. Un pedido real suele quedar entre ${n0((q.p20 - 1) * 100)}% y +${n0((q.p80 - 1) * 100)}% de lo estimado.${m.terminos === 1 ? ' Con pocos pedidos solo se ajusta el tiempo por artículo.' : ''}${juntos ? ' En tus pedidos los artículos y las unidades crecen casi a la par, así que no se puede separar cuánto tarda cada uno; sí se puede estimar el pedido completo.' : ''}</div>
-      <div class="contador" style="margin-bottom:8px">No incluye el arranque (ir al primer pasillo, preparar el pallet) ni el cierre (envolver, etiquetar): hoy no se marcan. Las demoras de ${E.cfg.umbralDemora} a ${E.cfg.umbralPausa} min son ${n0(demoraPct)}% del tiempo de armado medido. El tiempo de armado suma los tiempos entre marcas seguidas (hasta ${E.cfg.umbralDemora} min) más un artículo promedio por persona, porque la primera marca no tiene una anterior.</div>
-      <div style="font-size:14px;line-height:1.6;margin-bottom:12px">${linea(2)}<br>${linea(3)}</div>
-      ${sucs.length ? `<table class="tp-t"><tr><th>Sucursal</th><th>Pedidos (1 persona)</th><th>Tarda vs. el modelo</th><th>Factor que se usa</th></tr>${sucs.map(s => { const f = E.factores[s]; return `<tr><td style="font-weight:700">${esc(s)}</td><td>${f.n}</td><td>${f.bruto >= 1 ? '+' : ''}${n0((f.bruto - 1) * 100)}%</td><td>${f.factor.toFixed(2).replace('.', ',')}</td></tr>`; }).join('')}</table>` : ''}`;
-  }
-
-  // ---------------- 1, 2 o 3 personas
-  function armarPlan() {
-    const h = E.hoy;
-    if (h.cargado && h.grupos.some(g => g.lineas > 0) && E.planElegido !== 'tipico') { E.planOrigen = 'hoy'; return h.grupos.filter(g => g.lineas > 0).map(g => { const u = usoHoy(g); return { sucursal: g.sucursal, incluir: u.l > 0, lineas: u.l, unidades: u.u }; }); }
-    E.planOrigen = 'tipico';
-    return [...new Set(E.pedidos.map(p => p.sucursal))].sort().map(s => { const ult = E.pedidos.filter(p => p.sucursal === s).slice(0, 10); return { sucursal: s, incluir: true, lineas: Math.round(mediana(ult.map(p => p.lineas))), unidades: Math.round(mediana(ult.map(p => p.unidades))) }; });
-  }
-  const htmlEquipo = () => `<div class="mt-barra" style="flex-wrap:wrap;gap:10px 22px"><b>Trabajo en equipo</b>
-        <span>Entre 2: <span class="contador">+ trabajo</span> ${campoPar(2, 'recargo')} <span class="contador">desbalance</span> ${campoPar(2, 'desbalance')}</span>
-        <span>Entre 3: <span class="contador">+ trabajo</span> ${campoPar(3, 'recargo')} <span class="contador">desbalance</span> ${campoPar(3, 'desbalance')}</span></div>`;
-  const renderEquipo = () => { const h = $('tp_equipo'); if (h) h.innerHTML = htmlEquipo(); };
-  function renderEstimador() {
-    const host = $('tp_estim'); if (!host) return; if (!E.modelo) { host.innerHTML = `<div class="empty-state">${E.cargado ? 'No hay historial suficiente para estimar.' : 'Calculando el historial...'}</div>`; return; }
-    if (!E.plan) E.plan = armarPlan();
-    const c = E.cfg, hayHoy = E.hoy.cargado && E.hoy.grupos.some(g => g.lineas > 0);
-    host.innerHTML = `<details class="tp-como"><summary>¿Cómo se calcula? (en palabras)</summary><ol>
-        <li>Con tu historial se calcula cuánto tarda una persona por artículo, con un ajuste para cada sucursal (unas son más lentas que otras). Eso da el <b>tiempo de armado</b> del pedido, sin pausas ni demoras.</li>
-        <li>Se le suma la <b>tolerancia</b>: tiempo extra por necesidades personales, fatiga y demoras inevitables.</li>
-        <li>Si lo arman varias personas: el trabajo total aumenta un poco (<b>más trabajo por ser varios</b>: se pisan, caminan más), se divide entre las personas, y el que más tarda termina después que el promedio (<b>desbalance</b>).</li>
-        <li>Si el trabajo pasa de cierto tiempo, se suman los <b>descansos</b> (por ejemplo, el desayuno cuando lleva más de 2 horas trabajando).</li>
-        <li>El resultado es el <b>reloj</b>; sumado a la hora de inicio da a qué hora terminan.</li></ol>Tocá un pedido de cualquier tabla para ver esa cuenta con números, y cambiar los valores ahí mismo.</details>
-      <div class="mt-barra" style="flex-wrap:wrap;gap:10px 18px">
-        <span><b>Tolerancias</b> ${num('tolerancia', c.tolerancia, 58)} %</span>
-        <span><b>Empiezan a las</b> <input type="time" data-cfg="inicio" value="${esc(c.inicio)}"></span>
-        <span><b>Demora desde</b> ${num('umbralDemora', c.umbralDemora, 46)} min <b>y pausa desde</b> ${num('umbralPausa', c.umbralPausa, 46)} min</span></div>
-      <div class="mt-barra" style="flex-wrap:wrap;gap:10px 18px">${c.descansos.map((d, i) => `<span><b>${esc(d.nombre)}</b> después de ${num('descansos.' + i + '.despues', d.despues, 54)} min de trabajo, dura ${num('descansos.' + i + '.dura', d.dura, 46)} min</span>`).join('')}</div>
-      <div id="tp_equipo">${htmlEquipo()}</div>
-      <div class="mt-barra" style="flex-wrap:wrap;gap:8px 14px"><b>Tamaño de los pedidos</b>
-        <button class="btn-chico ${E.planOrigen === 'hoy' ? 'azul' : ''}" data-origen="hoy" ${hayHoy ? '' : 'disabled'}>Los de hoy</button><button class="btn-chico ${E.planOrigen === 'tipico' ? 'azul' : ''}" data-origen="tipico">Típico de cada sucursal (mediana de los últimos 10)</button>
-        <span class="contador">${E.planEditado ? 'Cambiaste números a mano. ' : ''}Elegí qué sucursales entran y cuántos artículos y unidades tiene cada pedido.</span></div>
-      <div style="overflow-x:auto"><table id="tp_tablaPlan" class="tp-t"><tr><th></th><th>Sucursal</th><th>Artículos</th><th>Unidades</th><th>1 persona</th><th>Entre 2, cada una</th><th>Entre 3, cada una</th></tr>
-        ${E.plan.map((x, i) => `<tr data-i="${i}"><td><input type="checkbox" data-c="incluir" ${x.incluir ? 'checked' : ''}></td><td class="tp-click" data-cuenta="plan:${i}" title="Tocá para ver la cuenta"><b>${esc(x.sucursal)}</b><div class="contador">ver la cuenta</div></td><td><input type="number" data-c="lineas" value="${x.lineas}" min="0" style="width:64px"></td><td><input type="number" data-c="unidades" value="${x.unidades}" min="0" style="width:70px"></td><td data-r="1"></td><td data-r="2"></td><td data-r="3"></td></tr>`).join('')}</table></div>
-      <div id="tp_resultados" style="margin-top:16px"></div>`;
-    renderResultados();
-  }
-  function renderResultados() {
-    const host = $('tp_resultados'); if (!host || !E.modelo || !E.plan) return;
-    const c = E.cfg, par = parUso();
-    const items = E.plan.filter(x => x.incluir && x.lineas > 0).map(x => ({ nombre: x.sucursal, min: predecir(E.modelo, x.lineas, x.unidades, fac(x.sucursal)) }));
-    E.plan.forEach((x, i) => { const fila = document.querySelector(`#tp_tablaPlan tr[data-i="${i}"]`); if (!fila) return; const e = predecir(E.modelo, x.lineas, x.unidades, fac(x.sucursal));
-      [1, 2, 3].forEach(k => { fila.querySelector(`[data-r="${k}"]`).innerHTML = x.lineas > 0 ? `<b>${fmtMin(trabajoPor(e, k))}</b>` + (k === 1 ? `<div class="contador">entre ${fmtMin(trabajoPor(e * E.calidad.p20, 1))} y ${fmtMin(trabajoPor(e * E.calidad.p80, 1))}</div>` : '') : '—'; }); });
-    if (!items.length) { host.innerHTML = '<div class="empty-state">Elegí al menos una sucursal.</div>'; return; }
-    const efs = items.map(i => i.min), filas = [1, 2, 3].map(k => ({ d: escenarioDividido(efs, k, par, c), e: escenarioEnteros(items, k, c) }));
-    const base = filas[0].d.relojMin, ahorro = m => base - m >= 0.5 ? `<span style="color:var(--green)">−${fmtMin(base - m)}</span>` : '';
-    host.innerHTML = `<h4 style="margin:0 0 8px">Cuánto tardarían en armar los ${items.length} pedidos</h4>
-      <table class="tp-t"><tr><th>Personas</th><th>Se reparten cada pedido entre todas</th><th>Cada pedido lo arma una sola persona</th></tr>
-      ${filas.map(({ d, e }) => `<tr><td style="font-weight:700">${d.k}</td>
-        <td><b>${fmtMin(d.relojMin)}</b> ${ahorro(d.relojMin)}<div class="contador">terminan a las ${horaFin(c.inicio, d.relojMin)} · cada una trabaja ${fmtMin(d.trabajoMin)}${d.k > 1 ? ' (con ' + TXT_ORIGEN[origenPar(d.k)] + ': +' + n0((par[d.k].recargo - 1) * 100) + '% de trabajo, ' + n0((par[d.k].desbalance - 1) * 100) + '% de desbalance)' : ''}</div></td>
-        <td><b>${fmtMin(e.relojMin)}</b> ${ahorro(e.relojMin)}<div class="contador">terminan a las ${horaFin(c.inicio, e.relojMin)}</div></td></tr>`).join('')}</table>
-      <div class="contador" style="margin-top:8px">${[2, 3].map(k => `Con ${k} personas y pedidos enteros: ` + filas[k - 1].e.cargas.map((x, j) => `persona ${j + 1}: ${x.items.map(i => esc(i.nombre)).join(', ') || '—'} (${fmtMin(x.relojMin)})`).join(' · ')).join('<br>')}</div>`;
-  }
-
-  // ---------------- la cuenta de un pedido (ventana)
+  // ======================================================== la cuenta de un pedido (ventana)
   function abrirCuenta(info) { E.cuenta = info; $('tp_modal').hidden = false; renderCuenta(); }
   function cerrarCuenta() { E.cuenta = null; const mo = $('tp_modal'); if (mo) mo.hidden = true; }
   function renderCuenta() {
     const host = $('tp_cuenta'), c = E.cuenta; if (!host || !c) return;
     if (!E.modelo) { host.innerHTML = '<div class="empty-state">Todavía no hay modelo para hacer la cuenta.</div>'; return; }
-    const cfg = E.cfg, par = parUso(), fi = E.factores[c.sucursal], cu = cuentaPedido(E.modelo, fi, c.lineas, c.unidades, cfg, par, E.calidad), m = cu.modelo, juntos = E.modelo.rho > 0.95 && E.modelo.terminos > 1;
-    const infoFactor = fi ? `${esc(c.sucursal)} tardó ${n0(Math.abs(fi.bruto - 1) * 100)}% ${fi.bruto >= 1 ? 'más' : 'menos'} que el modelo en ${fi.n} pedidos${fi.n < 12 ? '; con pocos pedidos el ajuste se acerca prudentemente a 1' : ''}` : `${esc(c.sucursal)} no tiene historial de una sola persona: no se ajusta`;
-    const real = c.real != null ? `<tr class="tp-real"><td colspan="2">Lo que tardó de verdad ese día (tiempo de armado)</td><td><b>${n1(c.real)} min</b> (${(c.real / cu.tBase - 1) * 100 >= 0 ? '+' : ''}${n0((c.real / cu.tBase - 1) * 100)}% contra lo esperado${c.realReloj != null ? '; de reloj, ' + fmtMin(c.realReloj) : ''})</td></tr>` : '';
-    const cols = cu.cols, cel = fn => cols.map(d => `<td>${fn(d)}</td>`).join('');
+    const cfg = E.cfg, fi = E.factores[c.sucursal], cu = cuentaPedido(E.modelo, fi, c.lineas, c.unidades, cfg, E.calidad), m = cu.modelo, juntos = E.modelo.rho > 0.95 && E.modelo.terminos > 1, cols = cu.cols;
+    const infoFactor = fi ? `${esc(c.sucursal)} tardó ${n0(Math.abs(fi.bruto - 1) * 100)}% ${fi.bruto >= 1 ? 'más' : 'menos'} que el promedio en ${fi.n} pedidos${fi.n < 12 ? '; con pocos pedidos el ajuste se acerca prudentemente a 1' : ''}` : `${esc(c.sucursal)} no tiene historial de una sola persona: no se ajusta`;
+    const real = c.real != null ? `<tr class="tp-real"><td colspan="2">Lo que tardó de verdad ese día (tiempo de armado)</td><td><b>${n1(c.real)} min</b> (${(c.real / cu.tBase - 1) * 100 >= 0 ? '+' : ''}${n0((c.real / cu.tBase - 1) * 100)}% contra lo esperado${c.realReloj != null ? '; tiempo total, ' + fmtMin(c.realReloj) : ''})</td></tr>` : '';
+    const cel = fn => cols.map(d => `<td>${fn(d)}</td>`).join('');
     host.innerHTML = `<h3 style="margin:0 0 4px">La cuenta: ${esc(c.sucursal)}</h3>
-      <div class="contador" style="margin-bottom:12px">${esc(c.titulo || '')} · ${n0(c.lineas)} artículos · ${n0(c.unidades)} unidades${c.nota ? ' · ' + esc(c.nota) : ''}. Los números con casillero los podés cambiar: se guarda y se recalcula todo el panel.</div>
-      <h4 style="margin:0 0 6px">1. Cuánto tardaría una persona, sin pausas</h4>
+      <div class="contador" style="margin-bottom:12px">${esc(c.titulo || '')} · ${n0(c.lineas)} artículos · ${n0(c.unidades)} unidades${c.nota ? ' · ' + esc(c.nota) : ''}. Los números con casillero los podés cambiar: se guarda y se recalcula todo.</div>
+      <h4 style="margin:0 0 6px">1. Cuánto debería tardar una persona armando (sin pausas)</h4>
       <table class="tp-t"><tr><th>Paso</th><th>Cuenta</th><th>Resultado</th></tr>
         <tr><td>Artículos</td><td>${n0(m.lineas)} artículos × ${n2(m.b)} min</td><td>${n1(m.tB)} min</td></tr>
         ${m.c > 0.0005 ? `<tr><td>Unidades</td><td>${n0(m.unidades)} unidades × ${n3(m.c)} min</td><td>${n1(m.tC)} min</td></tr>` : ''}
         ${Math.abs(m.a) > 0.05 ? `<tr><td>Tiempo fijo</td><td>arranque y cierre promedio</td><td>${n1(m.tA)} min</td></tr>` : ''}
         <tr><td><b>Según el historial</b></td><td>la suma de lo anterior${juntos ? ' (los artículos y las unidades crecen a la par: lo que vale es el total, no cada parte)' : ''}</td><td><b>${n1(m.tModelo)} min</b></td></tr>
         <tr><td>Ajuste de la sucursal</td><td>× ${n2(cu.factor)} (${infoFactor})</td><td>${n1(cu.tBase)} min</td></tr>
-        <tr class="tp-total"><td><b>Tiempo de armado esperado</b></td><td>una persona, sin pausas ni demoras${cu.rango ? `; un pedido real suele quedar entre ${n1(cu.rango.lo)} y ${n1(cu.rango.hi)} min` : ''}</td><td><b>${n1(cu.tBase)} min</b></td></tr>${real}</table>
+        <tr class="tp-total"><td><b>Debería tardar</b></td><td>una persona, sin pausas ni demoras${cu.rango ? `; un pedido real suele quedar entre ${n1(cu.rango.lo)} y ${n1(cu.rango.hi)} min` : ''}</td><td><b>${n1(cu.tBase)} min</b></td></tr>${real}</table>
       <h4 style="margin:16px 0 6px">2. Entre 1, 2 o 3 personas</h4>
       <div style="overflow-x:auto"><table class="tp-t"><tr><th>Paso</th><th>1 persona</th><th>2 personas</th><th>3 personas</th></tr>
-        <tr><td>Tiempo de armado esperado</td>${cel(d => n1(d.total) + ' min')}</tr>
-        <tr><td>Más trabajo por ser varios<div class="contador">se pisan y caminan más</div></td><td>—</td>${[2, 3].map(k => `<td>× ${campoPar(k, 'recargo')}<div class="contador">→ ${n1(cols[k - 1].conRecargo)} min</div></td>`).join('')}</tr>
+        <tr><td>Debería tardar</td>${cel(d => n1(d.total) + ' min')}</tr>
         <tr><td>Se reparte entre las personas</td><td>—</td>${[2, 3].map(k => `<td>÷ ${k}<div class="contador">→ ${n1(cols[k - 1].porPersona)} min cada una</div></td>`).join('')}</tr>
-        <tr><td>El más lento tarda más que el promedio<div class="contador">no terminan parejos</div></td><td>—</td>${[2, 3].map(k => `<td>× ${campoPar(k, 'desbalance')}<div class="contador">→ ${n1(cols[k - 1].masLento)} min</div></td>`).join('')}</tr>
-        <tr><td>Tolerancias ${num('tolerancia', cfg.tolerancia, 52)} %<div class="contador">necesidades personales, fatiga, demoras</div></td>${cel(d => '× ' + n2(1 + d.tolerancia / 100) + '<div class="contador">→ <b>' + n1(d.trabajo) + ' min</b> de trabajo</div>')}</tr>
+        <tr><td>Pérdida por armar entre varios<div class="contador">se coordinan y se pisan</div></td><td>—</td>${[2, 3].map(k => `<td>+ ${num('equipo.' + k, cfg.equipo[k], 50)} %<div class="contador">→ ${n1(cols[k - 1].cadaUna)} min cada una</div></td>`).join('')}</tr>
+        <tr class="tp-total"><td><b>Cada persona arma</b></td>${cel(d => '<b>' + n1(d.cadaUna) + ' min</b>')}</tr>
+        <tr><td>Margen ${num('tolerancia', cfg.tolerancia, 52)} %<div class="contador">demoras y necesidades personales</div></td>${cel(d => '+ ' + n0(d.tolerancia) + '%<div class="contador">→ ' + n1(d.trabajo) + ' min de trabajo</div>')}</tr>
         <tr><td>Descansos que caen en el turno${cfg.descansos.map((d, i) => `<div class="contador">${esc(d.nombre)}: si pasa de ${num('descansos.' + i + '.despues', d.despues, 50)} min, suma ${num('descansos.' + i + '.dura', d.dura, 42)} min</div>`).join('')}</td>${cel(d => d.descansosMin ? '+ ' + n0(d.descansosMin) + ' min<div class="contador">' + d.descansos.map(x => esc(x.nombre)).join(' y ') + '</div>' : 'ninguno')}</tr>
-        <tr class="tp-total"><td><b>Reloj total</b></td>${cel(d => '<b>' + fmtMin(d.reloj) + '</b>')}</tr>
+        <tr class="tp-total"><td><b>Tiempo total estimado</b></td>${cel(d => '<b>' + fmtMin(d.reloj) + '</b>')}</tr>
         <tr><td>Terminan a las<div class="contador">empiezan a las <input type="time" data-cfg="inicio" value="${esc(cfg.inicio)}"></div></td>${cel(d => d.fin)}</tr></table></div>`;
   }
 
-  // ---------------- armado del panel y eventos
+  // ======================================================== armado del panel y eventos
   function abrir() {
     const host = $('tp_contenido'); if (!host || host.dataset.listo) return; host.dataset.listo = '1';
     host.innerHTML = `<style>.tp-t th,.tp-t td{padding:9px 8px;vertical-align:top}.tp-t td{font-size:14px}.tp-t .contador{font-size:12px;margin-top:2px}.tp-t td:nth-child(2) b{white-space:nowrap}
-        .tp-click{cursor:pointer}.tp-click:hover td{background:rgba(46,91,255,.06)}.tp-tag{font-size:12px}.tp-tag.supuesto{color:#b45309}.tp-tag.manual{color:#1d4ed8}.tp-tag.medido{color:#15803d}
-        .tp-como{margin-bottom:12px;font-size:14px;line-height:1.55}.tp-como summary{cursor:pointer;font-weight:700}.tp-como ol{margin:8px 0 8px 18px;padding:0}
+        .tp-click{cursor:pointer}.tp-click:hover td{background:rgba(46,91,255,.06)}
+        .tp-ctl{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:0 0 10px}.tp-lbl{font-weight:800;min-width:78px}
+        .tp-seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#fff}.tp-seg button{border:0;background:#fff;padding:8px 14px;font:inherit;font-size:14px;font-weight:700;cursor:pointer;color:var(--text)}.tp-seg button+button{border-left:1px solid var(--border)}.tp-seg button.on{background:var(--primary);color:#fff}
+        .tp-chip{border:1px solid var(--border);background:#fff;border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)}.tp-chip.on{background:var(--primary-soft);border-color:var(--primary);color:var(--primary-dark)}
+        .tp-ctl input[type=date],.tp-ctl input[type=time]{border:1px solid var(--border);border-radius:8px;padding:5px 8px;font:inherit;font-size:14px}
+        .tp-ayuda{font-size:13.5px;color:var(--muted);margin:2px 0 12px;line-height:1.5}.tp-ayuda a{color:var(--primary);font-weight:700}
+        .tp-gwrap{position:relative;width:100%}.tp-svg{display:block;width:100%;height:auto;font-family:inherit;user-select:none}
+        .tp-tip{position:absolute;pointer-events:none;background:#0f172a;color:#fff;border-radius:10px;padding:9px 11px;font-size:13px;line-height:1.5;z-index:5;box-shadow:0 6px 20px rgba(0,0,0,.25);white-space:nowrap}.tp-tip[hidden]{display:none}.tp-tip b{color:#fff}.tp-ti{color:#cbd5e1;font-size:12px}
+        .tp-sw{display:inline-block;width:18px;height:4px;border-radius:2px;vertical-align:middle;margin-right:6px}
+        .tp-leyenda{display:flex;flex-wrap:wrap;gap:6px 14px;margin:8px 0 6px}.tp-leg{border:0;background:none;font:inherit;font-size:13.5px;font-weight:700;cursor:pointer;color:var(--text);padding:3px 0}.tp-leg.off{opacity:.4;text-decoration:line-through}.tp-leg-b{cursor:default;font-weight:600;color:var(--muted)}
+        .tp-h4{margin:16px 0 8px;font-size:16px}.tp-resumen{background:var(--primary-soft);border-radius:12px;padding:12px 14px;margin-bottom:10px;line-height:1.55}
+        #tp_ajustes summary{cursor:pointer;font-weight:800;font-size:16px}.tp-aj{margin-top:12px}.tp-ajf{margin:0 0 14px;line-height:1.7}.tp-ajf p{margin:2px 0 0;font-size:13.5px;color:var(--muted);line-height:1.5}
         .tp-modal{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow:auto}.tp-modal[hidden]{display:none}
         .tp-box{background:#fff;border-radius:16px;max-width:1000px;width:100%;padding:22px 24px;position:relative;box-shadow:0 20px 60px rgba(0,0,0,.3)}.tp-x{position:absolute;top:12px;right:14px;border:0;background:#eef2f7;border-radius:999px;width:34px;height:34px;font-size:16px;cursor:pointer}
         .tp-box table{width:100%;border-collapse:collapse;font-size:15px}.tp-box th{text-align:left;padding:10px 8px;font-size:12.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border);white-space:nowrap}
         .tp-box td{padding:9px 8px;border-bottom:1px solid var(--border);vertical-align:top}.tp-box h3,.tp-box h4{color:var(--text,#0f172a)}.tp-box input[type=number],.tp-box input[type=time]{padding:3px 5px;border:1px solid var(--border);border-radius:6px;font:inherit;font-size:13px}
         .tp-total td{background:rgba(46,91,255,.06)}.tp-real td{background:rgba(245,158,11,.12)}</style>
       <div class="card"><div class="mt-barra"><b>Período</b> <select id="tp_semanas"><option value="4">Últimas 4 semanas</option><option value="8">Últimas 8 semanas</option><option value="12">Últimas 12 semanas</option></select>
-        <button class="btn-chico azul" id="tp_btnCalcular">Calcular</button> <span class="contador" id="tp_estado">Leyendo las marcas de armado del período...</span></div></div>
+        <button class="btn-chico azul" id="tp_btnCalcular">Actualizar</button> <span class="contador" id="tp_estado">Leyendo las marcas de armado del período...</span></div></div>
+      <div class="card"><h3 class="mt-h3">📈 Cuánto están tardando</h3><div id="tp_graf"><div class="empty-state">Leyendo las marcas de armado...</div></div></div>
       <div class="card"><h3 class="mt-h3">📅 Pedidos de hoy: cuánto deberían tardar</h3><div id="tp_hoy"><div class="empty-state">Leyendo los pedidos de hoy...</div></div></div>
-      <div class="card"><h3 class="mt-h3">👥 ¿Cuánto tardan 1, 2 o 3 personas?</h3><div id="tp_estim"><div class="empty-state">Calculando el historial...</div></div></div>
-      <div class="card"><h3 class="mt-h3">🧮 Modelo de tiempo</h3><div id="tp_modelo"><div class="empty-state">Calculando el historial...</div></div></div>
-      <div class="card"><h3 class="mt-h3">📋 Pedidos armados</h3><div id="tp_pedidos"><div class="empty-state">Calculando el historial...</div></div></div>`;
+      <div class="card"><h3 class="mt-h3">🧮 ¿Cuánto debería tardar un pedido?</h3><div id="tp_calc"><div class="empty-state">Calculando el historial...</div></div></div>
+      <div class="card" id="tp_ajustes"></div>
+      <div class="card"><h3 class="mt-h3">📋 Todos los pedidos armados</h3><div id="tp_pedidos"><div class="empty-state">Calculando el historial...</div></div></div>`;
     let modal = $('tp_modal');
     if (!modal) { modal = document.createElement('div'); modal.className = 'tp-modal'; modal.id = 'tp_modal'; modal.hidden = true; modal.innerHTML = '<div class="tp-box"><button class="tp-x" id="tp_cerrar" aria-label="Cerrar">✕</button><div id="tp_cuenta"></div></div>'; document.body.appendChild(modal); }
-    $('tp_semanas').onchange = e => { E.semanas = +e.target.value; };
-    $('tp_btnCalcular').onclick = calcular;
+    renderAjustes();
+    $('tp_semanas').onchange = e => { E.semanas = +e.target.value; calcular(); };
+    $('tp_btnCalcular').onclick = () => { calcular(); cargarHoy(); };
     const cuentaDe = ref => { const [t, i] = ref.split(':'), n = +i;
       if (t === 'hoy') { const g = E.hoy.grupos[n], u = usoHoy(g); return { sucursal: g.sucursal, lineas: u.l, unidades: u.u, titulo: 'Pedido de hoy' + (E.hoy.modo === 'falta' ? ' (solo lo que falta armar)' : ''), nota: `${g.armadas} de ${g.lineas} artículos ya armados` }; }
-      if (t === 'plan') { const x = E.plan[n]; return { sucursal: x.sucursal, lineas: x.lineas, unidades: x.unidades, titulo: 'Pedido de la comparación' }; }
-      const p = E.filasVis[n]; return { sucursal: p.sucursal, lineas: p.lineas, unidades: p.unidades, titulo: 'Pedido del ' + p.dia, real: p.trabajoMs / MIN, realReloj: p.relojMs / MIN }; };
+      if (t === 'calc') return { sucursal: E.calc.sucursal, lineas: E.calc.lineas, unidades: E.calc.unidades, titulo: 'Pedido de la calculadora' };
+      const p = (t === 'dia' ? E.filasDia : E.filasVis)[n]; return { sucursal: p.sucursal, lineas: p.lineas, unidades: p.unidades, titulo: 'Pedido del ' + p.dia, real: p.trabajoMs / MIN, realReloj: p.relojMs / MIN }; };
     const onClick = ev => {
       const t = ev.target;
       if (t.closest('#tp_cerrar') || t.id === 'tp_modal') { cerrarCuenta(); return; }
-      const rs = t.closest('[data-reset]'); if (rs) { ev.preventDefault(); const p = rs.dataset.reset.split('.'); E.cfg.par[p[1]][p[2]] = null; guardarCfg(); refrescar(); return; }
+      const gb = t.closest('[data-g]'); if (gb && gb.tagName !== 'INPUT') { ev.preventDefault(); accionGraf(gb.dataset.g); return; }
       if (t.closest('#tp_btnHoy')) { cargarHoy(); return; }
-      if (t.closest('#tp_btnUsarHoy')) { E.planElegido = 'hoy'; E.planEditado = false; E.plan = null; renderEstimador(); $('tp_estim').closest('.card').scrollIntoView({ behavior: 'smooth' }); return; }
-      const og = t.closest('[data-origen]'); if (og && !og.disabled) { E.planElegido = og.dataset.origen; E.planEditado = false; E.plan = null; renderEstimador(); return; }
+      const b = t.closest('button[data-cuenta]'); if (b) { abrirCuenta(cuentaDe(b.dataset.cuenta)); return; }
       if (t.closest('input, select, button, a, label')) return;
       const fila = t.closest('[data-cuenta]'); if (fila) abrirCuenta(cuentaDe(fila.dataset.cuenta));
     };
-    host.addEventListener('click', onClick); modal.addEventListener('click', onClick);
-    const onInput = ev => {                         // mientras se escribe: se actualizan los números sin rearmar los casilleros ni las tablas que vas a tocar
+    const onInput = ev => {                         // mientras se escribe: se actualizan los números sin rearmar los casilleros
       const el = ev.target;
-      if (el.dataset.c !== undefined) { const i = +el.closest('tr').dataset.i, k = el.dataset.c; E.plan[i][k] = k === 'incluir' ? el.checked : Math.max(0, Math.round(+el.value || 0)); E.planEditado = true; renderResultados(); return; }
+      if (el.dataset.calc !== undefined) { E.calc[el.dataset.calc] = Math.max(0, Math.round(+el.value || 0)); renderCalcRes(); return; }
       if (el.dataset.cfg === undefined || el.closest('#tp_modal') || /^umbral/.test(el.dataset.cfg)) return;
-      aplicarCfg(el); renderResultados(); renderHoy(); renderModelo();
+      aplicarCfg(el); renderHoy(); renderCalcRes();
     };
-    host.addEventListener('input', onInput); modal.addEventListener('input', onInput);
     const onChange = ev => {                        // al salir del casillero
       const el = ev.target;
-      if (el.name === 'tp_modo') { E.hoy.modo = el.value; if (!E.planEditado) E.plan = null; refrescar(); return; }
-      if (el.dataset.c !== undefined) { if (el.dataset.c === 'incluir') { E.plan[+el.closest('tr').dataset.i].incluir = el.checked; E.planEditado = true; renderResultados(); } return; }
+      if (el.id === 'tp_calcSuc') { E.calc.sucursal = el.value; Object.assign(E.calc, tipico(el.value)); renderCalc(); return; }
+      if (el.name === 'tp_modo') { E.hoy.modo = el.value; renderHoy(); return; }
+      if (el.dataset.g === 'desde' || el.dataset.g === 'hasta') { E.graf[el.dataset.g] = el.value; if (E.graf.desde && E.graf.hasta && E.graf.desde > E.graf.hasta) [E.graf.desde, E.graf.hasta] = [E.graf.hasta, E.graf.desde]; E.graf.diaSel = ''; renderGrafico(); return; }
       if (el.dataset.cfg === undefined) return;
       aplicarCfg(el);
-      if (el.closest('#tp_modal')) { refrescar(); return; }                     // dentro de la cuenta: se rearma todo (lo que ves se actualiza)
+      if (el.closest('#tp_modal')) { refrescar(); return; }
       if (/^umbral/.test(el.dataset.cfg)) { E.cfg.umbralDemora = Math.max(1, E.cfg.umbralDemora || 5); E.cfg.umbralPausa = Math.max(E.cfg.umbralDemora + 1, E.cfg.umbralPausa || 20); guardarCfg(); recalcular(); return; }
-      if (el.dataset.cfg.startsWith('par.')) renderEquipo();                    // solo se actualiza el rótulo (medido / escrito por vos)
+      renderHoy(); renderCalcRes();
     };
-    host.addEventListener('change', onChange); modal.addEventListener('change', onChange);
+    [host, modal].forEach(x => { x.addEventListener('click', onClick); x.addEventListener('input', onInput); x.addEventListener('change', onChange); });
+    host.addEventListener('toggle', ev => { if (ev.target.id === 'tp_detAj') E.ajustesAbierto = ev.target.open; }, true);
     if (!document.__tpEsc) { document.__tpEsc = true; document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarCuenta(); }); }
+    if (!window.__tpResize) { window.__tpResize = true; let t; window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => { const h = $('tp_graf'); if (h && h.clientWidth) renderGrafico(); }, 200); }); }
     calcular(); cargarHoy();
   }
   return { abrir };
