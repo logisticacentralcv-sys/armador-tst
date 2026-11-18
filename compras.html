@@ -948,9 +948,9 @@ window.addEventListener('resize', () => { moveInd(); });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(moveInd);
 function renderStatus() {
   if (!S.ready) { $('#status').innerHTML = ''; return; }
-  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 23/10 · motivos en solicitudes</span>`; return; }
+  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 18/11 · reportes por mail</span>`; return; }
   const part = isPartial() ? `<span class="pill warn" title="La última semana tiene datos hasta el ${dnFmt(S.lastDn)}; se completa con el perfil por día de la semana">semana en curso parcial</span>` : '';
-  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 23/10 · motivos en solicitudes</span>${part}`;
+  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 18/11 · reportes por mail</span>${part}`;
 }
 function render(anim) {
   renderTabs(); renderStatus(); badgeSol();
@@ -959,6 +959,7 @@ function render(anim) {
   if (!S.ready || !S.master.length || !S.meta) { main.innerHTML = ''; viewDatos(main, true); return; }
   ({ home: viewHome, orden: viewOrden, stock: viewStock, sol: viewSol, tend: viewTend, fc: viewFc, ana: viewAna, prov: viewProv, cat: viewCat, datos: viewDatos, teoria: viewTeoria })[S.ui.tab](main);
   if (S.meta && S.meta.virtual && S.ui.tab !== 'datos') { main.insertAdjacentHTML('afterbegin', '<div class="note warn"><b>Todavía no hay ventas cargadas.</b> Ves el stock y los parámetros de cada proveedor; el pronóstico y el pedido sugerido se calculan cuando pegás las ventas en <a href="#" id="irDatos" style="font-weight:700">Datos</a>.</div>'); const g = $('#irDatos'); if (g) g.onclick = e => { e.preventDefault(); S.ui.tab = 'datos'; render(true); window.scrollTo({ top: 0 }); }; }
+  if (S.ui.tab !== 'datos') ponerBannerBuzon(main);
   if (anim) [...main.children].forEach((el, i) => { el.classList.add('rise'); el.style.setProperty('--i', i); });
   countUp(main);
 }
@@ -2200,6 +2201,7 @@ function viewDatos(main, empty) {
   <section>${heroHead('Datos', 'Cargá y actualizá la información', 'El stock y el catálogo se leen de tu Firebase. Las ventas las pegás desde Excel una vez por semana. Todo lo que configurás queda guardado en Firebase.')}</section>
   ${S.sinVentas ? '<div class="note"><b>Falta un solo paso:</b> pegá las ventas (abajo). El catálogo, los proveedores y el stock ya se leen solos del depósito.</div>' : ''}
   ${dataStatusHtml()}
+  ${buzonCardHtml()}
   ${ventasCargadasHtml()}
   <div class="grid2">
     <div class="card"><h3>1. Ventas</h3>
@@ -2228,12 +2230,12 @@ function viewDatos(main, empty) {
 }
 function renderPending() {
   const v = PEND.ventas, s = PEND.stock, m = PEND.master;
-  if ($('#pendV')) $('#pendV').innerHTML = v ? `${v.partes && v.partes.length > 1 ? tablaCola(v) : ''}<div class="note"><b>${esc(v.file)}</b>: ${nf(v.n)} filas de ventas ${v.rangosNuevos && v.rangosNuevos.length > 1 ? v.rangosNuevos.map(fmtRango).join(' y ') : 'del ' + dnFmt(v.minD) + ' al ' + dnFmt(v.maxD)} (${nf(v.nDays)} días${v.partialWeek ? ', la última semana incompleta: hasta ' + DOWN[dowOf(v.maxD)] : ''}).${v.ignored.size ? ` ${nf(v.ignored.size)} códigos no están en el catálogo y se ignoran${ignoradosTop(v)}.` : ''}${v.bad ? ` ${v.bad} filas sin dato válido (totales o vacías) se saltean.` : ''}${v.overlap ? `<br>Hay ${nf(v.overlap)} días en común con lo ya cargado: los datos de este archivo reemplazan a los anteriores para esos mismos productos, sucursales y días; lo demás no se toca.` : ''}${v.huecos && v.huecos.length ? `<br><b>Atención:</b> con este archivo quedarían sin datos ${v.huecos.map(fmtRango).join(' y ')}. Esos días no se toman como cero: mientras falten, el pronóstico usa solo desde el ${dnFmt(v.validFromDn)}. Cargá también ese período cuando lo tengas.` : ''}${v.missing.length ? `<br><b>Atención:</b> ${v.missing.length} días del rango no tienen ninguna venta en el archivo (ej. ${v.missing.slice(0, 4).map(dnFmtS).join(', ')}).` : ''}${v.shorter && !(v.huecos && v.huecos.length) ? '<br>Este archivo termina antes de la última fecha cargada (' + dnFmt(S.lastDn) + '): se suma a lo que ya hay.' : ''}${v.extiende ? `<br><b>⚠ Este archivo trae solo ${nf(v.agg.size)} de los ${nf(v.conVentas)} productos con ventas y estira el período cargado ${v.extiende}.</b> Para los demás productos esos días se tomarían como cero y cambiaría su pronóstico. Si es de un solo proveedor, usá un archivo que no pase de las fechas ya cargadas (${v.rangoActual}).` : ''}${v.ciDesdePedidos ? `<br>Los productos de Firebase no traían el código interno: lo tomé de los pedidos (${nf(v.ciDesdePedidos)} productos).` : ''}${v.truncado ? `<br><b>⚠ Archivo incompleto:</b> trae el aviso “Exported data exceeded the allowed volume”: el sistema cortó la exportación y faltan datos${v.familias && v.familias.length ? ` (las familias llegan hasta ${esc(v.familias[v.familias.length - 1])})` : ''}. Exportalo por partes —por familia o con menos días— y cargá cada parte: se suman sin pisarse.` : ''}${v.maxD < todayDn() - 7 ? `<br><b>Ojo:</b> las ventas llegan hasta el ${dnFmt(v.maxD)}, hace ${todayDn() - v.maxD} días: el pronóstico parte de datos viejos. Cargá también las ventas más recientes.` : ''}</div><div class="flex" style="margin-top:8px"><button class="btn pri" id="okV">${textoConfirmar()}</button><button class="btn" id="noV">Cancelar</button></div><div class="muted small" style="margin-top:6px">Podés seguir agregando archivos: se suman a esta lista y se guardan todos juntos.</div><div class="pbar" id="pbV" style="margin-top:8px;display:none"><i></i></div>` : '';
+  if ($('#pendV')) $('#pendV').innerHTML = v ? `${v.partes && v.partes.length > 1 ? tablaCola(v) : ''}<div class="note"><b>${esc(v.file)}</b>: ${nf(v.n)} filas de ventas ${v.rangosNuevos && v.rangosNuevos.length > 1 ? v.rangosNuevos.map(fmtRango).join(' y ') : 'del ' + dnFmt(v.minD) + ' al ' + dnFmt(v.maxD)} (${nf(v.nDays)} días${v.partialWeek ? ', la última semana incompleta: hasta ' + DOWN[dowOf(v.maxD)] : ''}).${v.ignored.size ? ` ${nf(v.ignored.size)} códigos no están en el catálogo y se ignoran${ignoradosTop(v)}.` : ''}${v.bad ? ` ${v.bad} filas sin dato válido (totales o vacías) se saltean.` : ''}${v.overlap ? `<br>Hay ${nf(v.overlap)} días en común con lo ya cargado: los datos de este archivo reemplazan a los anteriores para esos mismos productos, sucursales y días; lo demás no se toca.` : ''}${v.huecos && v.huecos.length ? `<br><b>Atención:</b> con este archivo quedarían sin datos ${v.huecos.map(fmtRango).join(' y ')}. Esos días no se toman como cero: mientras falten, el pronóstico usa solo desde el ${dnFmt(v.validFromDn)}. Cargá también ese período cuando lo tengas.` : ''}${v.missing.length ? `<br><b>Atención:</b> ${v.missing.length} días del rango no tienen ninguna venta en el archivo (ej. ${v.missing.slice(0, 4).map(dnFmtS).join(', ')}).` : ''}${v.shorter && !(v.huecos && v.huecos.length) ? '<br>Este archivo termina antes de la última fecha cargada (' + dnFmt(S.lastDn) + '): se suma a lo que ya hay.' : ''}${v.extiende ? `<br><b>⚠ Este archivo trae solo ${nf(v.agg.size)} de los ${nf(v.conVentas)} productos con ventas y estira el período cargado ${v.extiende}.</b> Para los demás productos esos días se tomarían como cero y cambiaría su pronóstico. Si es de un solo proveedor, usá un archivo que no pase de las fechas ya cargadas (${v.rangoActual}).` : ''}${v.buzon && v.buzon.length ? `<br><b>📧 Llegó por mail</b>${BUZON.revisar.length ? ' y no se guardó sola porque ' + BUZON.revisar.map(esc).join('; ') : ''}. Revisalo y confirmá, o cancelá para descartarlo.` : ''}${v.ciDesdePedidos ? `<br>Los productos de Firebase no traían el código interno: lo tomé de los pedidos (${nf(v.ciDesdePedidos)} productos).` : ''}${v.truncado ? `<br><b>⚠ Archivo incompleto:</b> trae el aviso “Exported data exceeded the allowed volume”: el sistema cortó la exportación y faltan datos${v.familias && v.familias.length ? ` (las familias llegan hasta ${esc(v.familias[v.familias.length - 1])})` : ''}. Exportalo por partes —por familia o con menos días— y cargá cada parte: se suman sin pisarse.` : ''}${v.maxD < todayDn() - 7 ? `<br><b>Ojo:</b> las ventas llegan hasta el ${dnFmt(v.maxD)}, hace ${todayDn() - v.maxD} días: el pronóstico parte de datos viejos. Cargá también las ventas más recientes.` : ''}</div><div class="flex" style="margin-top:8px"><button class="btn pri" id="okV">${textoConfirmar()}</button><button class="btn" id="noV">Cancelar</button></div><div class="muted small" style="margin-top:6px">Podés seguir agregando archivos: se suman a esta lista y se guardan todos juntos.</div><div class="pbar" id="pbV" style="margin-top:8px;display:none"><i></i></div>` : '';
   if ($('#pendS')) $('#pendS').innerHTML = s ? (() => { const keep = { stock: S.stock, map: S.stockMap, mis: S.stockMissing, unk: S.stockUnknown, dn: S.stockDn }; S.stock = s.data; buildStock(); const info = { unk: S.stockUnknown.slice(), mis: S.stockMissing.length, n: Object.keys(S.stockMap).length, zero: Object.values(S.stockMap).every(x => x === 0) }; S.stock = keep.stock; S.stockMap = keep.map; S.stockMissing = keep.mis; S.stockUnknown = keep.unk; S.stockDn = keep.dn; return `<div class="note"><b>${esc(s.file)}</b>: ${s.data.rows.length} filas, ${info.n} productos reconocidos.${info.unk.length ? ` <b>Códigos que no están en la base:</b> ${info.unk.slice(0, 8).map(esc).join(', ')}.` : ''}${info.mis ? ` ${info.mis} productos de la base no están en el archivo (se toman con stock 0).` : ''}${info.zero ? ' <b>Todas las cantidades son 0.</b>' : ''}</div><div class="flex" style="margin-top:8px"><button class="btn pri" id="okS">Usar este stock</button><button class="btn" id="noS">Cancelar</button></div>`; })() : '';
   if ($('#pendM')) $('#pendM').innerHTML = m ? `<div class="note"><b>${esc(m.file)}</b>: ${m.items.length} productos, ${[...new Set(m.items.map(x => x.prov))].length} proveedores. ${(() => { const nu = m.items.filter(x => !S.mm[x.cod]).length, ya = m.items.length - nu; return nu + ' ' + (nu === 1 ? 'nuevo' : 'nuevos') + (ya ? ' y ' + ya + ' que ya estaban (se actualizan con lo que trae el archivo)' : '') + '. Los demás productos del catálogo no se tocan.'; })()}</div><div class="flex" style="margin-top:8px"><button class="btn pri" id="okM">Agregar a la base de productos</button><button class="btn" id="noM">Cancelar</button></div>` : '';
-  $('#okV') && ($('#okV').onclick = async () => { const bar = $('#pbV'); bar.style.display = ''; $('#okV').disabled = true; $$('[data-quitar]').forEach(b => b.disabled = true); $('#okV').textContent = 'Guardando…'; try { await commitSales(v, p => { bar.firstChild.style.width = Math.round(p * 100) + '%'; $('#okV').textContent = 'Guardando… ' + Math.round(p * 100) + '%'; }); PEND.ventas = null; PEND.cola = []; toast('Ventas guardadas. Datos hasta el ' + dnFmt(S.lastDn) + '.'); render(); } catch (e) { toast('Error al guardar: ' + (e.message || e.code || e) + '. Las ventas NO quedaron guardadas; los archivos siguen en la lista: probá de nuevo.', 12000); $('#okV').disabled = false; $$('[data-quitar]').forEach(b => b.disabled = false); $('#okV').textContent = textoConfirmar(); } });
-  $$('[data-quitar]').forEach(b => b.onclick = () => { PEND.cola.splice(+b.dataset.quitar, 1); armarPendiente(); });
-  $('#noV') && ($('#noV').onclick = () => { PEND.ventas = null; PEND.cola = []; renderPending(); });
+  $('#okV') && ($('#okV').onclick = async () => { const bar = $('#pbV'); bar.style.display = ''; $('#okV').disabled = true; $$('[data-quitar]').forEach(b => b.disabled = true); $('#okV').textContent = 'Guardando…'; try { await commitSales(v, p => { bar.firstChild.style.width = Math.round(p * 100) + '%'; $('#okV').textContent = 'Guardando… ' + Math.round(p * 100) + '%'; }); PEND.ventas = null; PEND.cola = []; try { if (v.buzon && v.buzon.length) { BUZON.revisar = []; await cerrarBuzon(v.buzon, 'cargado', resumenBuzon(v)); } } catch (e) { /* ya está guardado: el buzón se reintenta solo */ } toast('Ventas guardadas. Datos hasta el ' + dnFmt(S.lastDn) + '.'); render(); } catch (e) { toast('Error al guardar: ' + (e.message || e.code || e) + '. Las ventas NO quedaron guardadas; los archivos siguen en la lista: probá de nuevo.', 12000); $('#okV').disabled = false; $$('[data-quitar]').forEach(b => b.disabled = false); $('#okV').textContent = textoConfirmar(); } });
+  $$('[data-quitar]').forEach(b => b.onclick = () => { const q = PEND.cola.splice(+b.dataset.quitar, 1)[0]; if (q && q.buzon) { BUZON.revisar = []; cerrarBuzon([q.buzon], 'descartado'); } armarPendiente(); });
+  $('#noV') && ($('#noV').onclick = () => { const bz = PEND.cola.filter(x => x.buzon).map(x => x.buzon); PEND.ventas = null; PEND.cola = []; if (bz.length) { BUZON.revisar = []; cerrarBuzon(bz, 'descartado'); } renderPending(); });
   $('#okS') && ($('#okS').onclick = async () => { const dt = $('#sDate').value || dnToStr(todayDn()); S.stock = { date: dt, file: s.file, rows: s.data.rows }; PEND.stock = null; buildStock(); invalidate(); try { await saveStock(); toast('Stock cargado (' + dnFmt(strToDn(dt)) + ').'); } catch (e) { toast('No se pudo guardar el stock: ' + (e.message || e.code)); } render(); });
   $('#noS') && ($('#noS').onclick = () => { PEND.stock = null; renderPending(); });
   $('#okM') && ($('#okM').onclick = async () => { S.master = mezclarMaster(S.base || {}, S.master.concat(m.items)); PEND.master = null; S.master.forEach(x => { if (!S.params.prov[x.prov]) S.params.prov[x.prov] = { ...DEFAULT_PROV }; }); S.mm = {}; S.master.forEach(x => S.mm[x.cod] = x); if (S.meta) setup(); saveParams(); try { await saveMaster(); } catch (e) { toast('No se pudo guardar: ' + (e.message || e.code)); } toast('Base de productos actualizada.'); render(); });
@@ -2262,9 +2264,10 @@ function armarPendiente() {
   p.partes = PEND.cola.map(resumenParte);
   p.file = PEND.cola.length === 1 ? PEND.cola[0].file : PEND.cola.length + ' archivos';
   p.ciDesdePedidos = Math.max(0, ...PEND.cola.map(x => x.desdePedidos || 0));
+  p.buzon = PEND.cola.filter(x => x.buzon).map(x => x.buzon);   // los reportes que llegaron por mail y están en esta carga
   PEND.ventas = p; renderPending();
 }
-async function agregarArchivoVentas(rows, nombre) {
+async function agregarArchivoVentas(rows, nombre, buzon) {
   if (!S.master.length) throw new Error('Primero cargá la base de productos.');
   let parsed, desdePedidos = 0;
   try { parsed = parseSales(rows); }
@@ -2276,7 +2279,7 @@ async function agregarArchivoVentas(rows, nombre) {
   }
   const clave = nombre + '|' + parsed.n + '|' + parsed.minD + '|' + parsed.maxD;
   PEND.cola = PEND.cola.filter(x => x.clave !== clave);          // el mismo archivo elegido dos veces queda una sola vez
-  PEND.cola.push({ clave, file: nombre, parsed, desdePedidos });
+  PEND.cola.push({ clave, file: nombre, parsed, desdePedidos, buzon });
   armarPendiente();
 }
 const textoConfirmar = () => PEND.cola.length > 1 ? 'Confirmar y guardar los ' + PEND.cola.length + ' archivos' : 'Confirmar y guardar';
@@ -2537,6 +2540,94 @@ function viewSolDetalle(main, s) {
   const r2 = $('#solRechOk'); if (r2) r2.onclick = async () => { const m = ($('#solMot').value || '').trim(); if (!m) { toast('Escribí el motivo del rechazo.'); return; } r2.disabled = true; await rechazarSolicitud(s, m); delete u.solDraft[s.id]; u.solRech = false; u.solSel = ''; render(false); };
 }
 
+/* ================= buzón: reportes que llegan por mail ================= */
+// Un Apps Script lee el mail con el reporte y lo deja en Firebase (documentos "inbox" y "inboxdata" de comprasConfig). Acá se levanta y se
+// carga con la misma carga de siempre. Se guarda sola SOLO si ningún control da aviso; si alguno da aviso, queda lista para revisar y confirmar.
+const BUZON = { cargando: false, items: [], revisar: [], error: '' };
+const b64ABytes = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+async function gunzipTexto(bytes) { return new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text(); }
+const fmtMailFecha = iso => iso ? new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+const nombreBuzon = it => (it.nombre || 'reporte') + ' (por mail, ' + fmtMailFecha(it.recibido) + ')';
+async function leerBuzon(it) {   // junta los pedazos, descomprime y arma las filas
+  const docs = await Promise.all(Array.from({ length: it.partes || 0 }, (_, i) => S.db.doc('inboxdata/' + it.id + '_' + i).get()));
+  if (!docs.length || docs.some(d => !d.exists)) throw new Error('faltan pedazos del reporte en Firebase');
+  return parseDelimited(await gunzipTexto(b64ABytes(docs.map(d => d.data().d).join(''))));
+}
+async function marcarBuzon(it, estado, extra) {
+  Object.assign(it, { estado }, extra || {});
+  try { await S.db.doc('inbox/' + it.id).set(it); } catch (e) { /* si no se puede anotar, se reintenta la próxima vez */ }
+}
+async function cerrarBuzon(items, estado, extra) {
+  for (const it of items) {
+    await marcarBuzon(it, estado, { cerradoEn: new Date().toISOString(), cerradoPor: (S.user && S.user.nombre) || '', ...(extra || {}) });
+    try { await S.db.deleteIds(Array.from({ length: it.partes || 0 }, (_, i) => 'inboxdata__' + it.id + '_' + i)); } catch (e) { /* lo limpia el script */ }
+  }
+}
+// Cuándo NO conviene guardar sola: cualquiera de estos avisos deja la carga lista para revisar.
+function motivosRevision(p) {
+  const m = [];
+  if (p.extiende) m.push(`trae solo ${nf(p.agg.size)} de los ${nf(p.conVentas)} productos con ventas y estira el período cargado ${p.extiende}`);
+  if (p.huecos && p.huecos.length) m.push('dejaría días sin datos (' + p.huecos.map(fmtRango).join(' y ') + ')');
+  if (p.missing && p.missing.length > 1) m.push(`${p.missing.length} días del rango no tienen ninguna venta`);
+  if (p.shorter) m.push('termina antes de la última fecha ya cargada (' + dnFmt(S.lastDn) + ')');
+  if (p.bad > Math.max(10, 0.01 * (p.n + p.bad))) m.push(`${nf(p.bad)} filas sin dato válido`);
+  if (p.truncado) m.push('el archivo parece estar cortado');
+  return m;
+}
+const resumenBuzon = p => ({ resumen: { desde: dnToStr(p.minD), hasta: dnToStr(p.maxD), filas: p.n, productos: p.agg.size } });
+async function revisarBuzon() {
+  if (BUZON.cargando || !S.db || !S.ready || !S.master.length) return;
+  BUZON.cargando = true; BUZON.error = '';
+  try {
+    const todos = (await S.db.collection('inbox').get()).docs.map(d => d.data());
+    BUZON.items = todos.sort((a, b) => (b.recibido || '').localeCompare(a.recibido || ''));
+    const pend = todos.filter(x => x.tipo === 'ventas' && x.estado === 'pendiente').sort((a, b) => (a.recibido || '').localeCompare(b.recibido || ''));
+    if (!pend.length || PEND.cola.some(q => q.buzon)) return;               // nada nuevo, o ya hay uno esperando que lo revises
+    for (const it of pend) {
+      try { await agregarArchivoVentas(await leerBuzon(it), nombreBuzon(it), it); }
+      catch (e) { if (e && e.name === 'FirebaseError') throw e; await marcarBuzon(it, 'revisar', { motivo: String(e.message || e).slice(0, 300) }); }   // un error de Firebase (red) se reintenta solo; un reporte mal armado queda para revisar
+    }
+    const p = PEND.ventas;
+    if (!p || !(p.buzon && p.buzon.length)) return;
+    BUZON.revisar = motivosRevision(p);
+    if (BUZON.revisar.length) return;                                        // queda lista para revisar (la ves en Datos)
+    const items = p.buzon;
+    try { await commitSales(p, null); }
+    catch (e) { PEND.ventas = null; PEND.cola = []; throw e; }               // no se pudo guardar: los reportes siguen pendientes y se reintentan
+    PEND.ventas = null; PEND.cola = [];
+    await cerrarBuzon(items, 'cargado', resumenBuzon(p));
+    toast('Ventas cargadas desde el mail. Datos hasta el ' + dnFmt(S.lastDn) + '.', 7000);
+  } catch (e) { BUZON.error = String(e.message || e); }
+  finally { BUZON.cargando = false; renderBuzonUI(); }
+}
+function renderBuzonUI() { if (!S.ready) return; if (S.ui.tab === 'datos') render(); else ponerBannerBuzon($('#main')); }
+function ponerBannerBuzon(main) {
+  const v = $('#buzonBanner'); if (v) v.remove();
+  if (!main || !(BUZON.revisar.length || BUZON.items.some(x => x.tipo === 'ventas' && x.estado === 'revisar'))) return;
+  const motivo = BUZON.revisar.length ? BUZON.revisar.join('; ') : ((BUZON.items.find(x => x.tipo === 'ventas' && x.estado === 'revisar') || {}).motivo || '');
+  main.insertAdjacentHTML('afterbegin', `<div class="note warn" id="buzonBanner">📧 <b>Llegó un reporte de ventas por mail y necesita tu revisión</b>${motivo ? ': ' + esc(motivo) : ''}. <button class="btn sm" data-bz="ir">Revisar en Datos</button></div>`);
+}
+function buzonCardHtml() {
+  const est = x => x.estado === 'cargado' ? `<span class="chip ok">Cargado${x.cerradoEn ? ' ' + fmtMailFecha(x.cerradoEn) : ''}</span>` : x.estado === 'pendiente' ? (x.tipo === 'ventas' ? '<span class="chip">Pendiente</span>' : '<span class="chip">Recibido</span>') : x.estado === 'descartado' ? '<span class="chip">Descartado</span>'
+    : x.estado === 'error' ? '<span class="chip crit">Error</span>' : '<span class="chip warn">Para revisar</span>';
+  const nota = x => x.tipo === 'ventas' ? (x.resumen ? `ventas del ${esc(x.resumen.desde)} al ${esc(x.resumen.hasta)}, ${nf(x.resumen.productos)} productos` : (x.desde ? `ventas del ${esc(x.desde)} al ${esc(x.hasta)}` : ''))
+    : x.tipo === 'stock' ? 'reporte de stock: todavía no se carga solo. Columnas: ' + esc(x.columnas || '') : x.tipo === 'error' ? esc(x.error || '') : 'no lo reconozco: revisá el mail de aviso. Columnas: ' + esc(x.columnas || '');
+  const filas = BUZON.items.slice(0, 6);
+  return `<div class="card"><div class="flex"><h3>📧 Reportes que llegan por mail</h3><span style="flex:1"></span><button class="btn sm" data-bz="act" ${BUZON.cargando ? 'disabled' : ''}>${BUZON.cargando ? 'Buscando…' : 'Buscar reportes nuevos'}</button></div>
+    <div class="muted small" style="margin:6px 0 10px">Un script de Google lee el mail con el reporte y lo deja en Firebase. Esta página lo carga sola al abrirse, con los mismos controles que la carga manual: si todo cierra se guarda, y si algo no cierra te lo deja listo para que lo revises.</div>
+    ${BUZON.error ? `<div class="note crit" style="margin-bottom:8px">No se pudo revisar el buzón: ${esc(BUZON.error)}</div>` : ''}
+    ${filas.length ? `<div class="tw" style="max-height:none"><table><thead><tr><th>Recibido</th><th>Archivo</th><th>Estado</th><th>Detalle</th></tr></thead><tbody>${filas.map(x => `<tr><td style="white-space:nowrap">${fmtMailFecha(x.recibido)}</td><td>${esc(x.nombre || '')}</td><td>${est(x)}</td><td class="small">${nota(x)}${x.motivo ? ' · ' + esc(x.motivo) : ''}${x.estado === 'revisar' || x.estado === 'error' ? ` <button class="btn sm" data-bz="desc:${esc(x.id)}">Descartar</button>${x.tipo === 'ventas' ? ` <button class="btn sm" data-bz="reint:${esc(x.id)}">Reintentar</button>` : ''}` : ''}</td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="muted small">Todavía no llegó ningún reporte. Cuando el script deje uno, aparece acá.</div>'}</div>`;
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-bz]'); if (!b) return;
+  const [acc, id] = [b.dataset.bz.split(':')[0], b.dataset.bz.split(':').slice(1).join(':')], it = BUZON.items.find(x => x.id === id);
+  if (acc === 'ir') { S.ui.tab = 'datos'; render(true); }
+  else if (acc === 'act') revisarBuzon();
+  else if (acc === 'desc' && it) cerrarBuzon([it], 'descartado').then(renderBuzonUI);
+  else if (acc === 'reint' && it) marcarBuzon(it, 'pendiente', { motivo: '' }).then(() => revisarBuzon());
+});
+
 /* ================= arranque ================= */
 async function boot() {
   renderTabs();
@@ -2572,6 +2663,7 @@ async function boot() {
   } catch (e) { $('#main').innerHTML = '<div class="note crit">Error al cargar los datos: ' + esc(e.message || e.code || e) + '</div>'; return; }
   S.ui.tab = tabInicial();
   render(true);
+  revisarBuzon();   // reportes que llegaron por mail: se cargan solos si todo cierra
 }
 boot();
 /* ================= Análisis del pronóstico: todos los números ================= */
