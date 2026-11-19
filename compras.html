@@ -2584,7 +2584,6 @@ function motivosRevision(p) {
   if (p.extiende) m.push(`trae solo ${nf(p.agg.size)} de los ${nf(p.conVentas)} productos con ventas y estira el período cargado ${p.extiende}`);
   if (p.huecos && p.huecos.length) m.push('dejaría días sin datos (' + p.huecos.map(fmtRango).join(' y ') + ')');
   if (p.missing && p.missing.length > 1) m.push(`${p.missing.length} días del rango no tienen ninguna venta`);
-  if (p.shorter) m.push('termina antes de la última fecha ya cargada (' + dnFmt(S.lastDn) + ')');
   if (p.bad > Math.max(10, 0.01 * (p.n + p.bad))) m.push(`${nf(p.bad)} filas sin dato válido`);
   if (p.truncado) m.push('el archivo parece estar cortado');
   return m;
