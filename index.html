@@ -2305,8 +2305,8 @@
     let cargaTiemposPromesa = null;
     function abrirTiemposPedido_() {
       if (!cargaTiemposPromesa) {
-        cargaTiemposPromesa = import('./tiempos_pedido.js')
-          .then(m => m.iniciarTiemposPedido({ db, collection, query, where, orderBy, getDocs, Timestamp }))
+        cargaTiemposPromesa = Promise.all([import('./tiempos_pedido.js'), import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js")])   // updateDoc se importa así en todo el Armador
+          .then(([m, fs]) => m.iniciarTiemposPedido({ db, collection, query, where, orderBy, getDocs, Timestamp, doc, updateDoc: fs.updateDoc, serverTimestamp, puedeCorregir: () => esAutorizadoGestion_(), quien: () => (personaActual && personaActual.nombre) || '' }))
           .catch(err => { cargaTiemposPromesa = null; const h = document.getElementById('tp_contenido'); if (h) h.innerHTML = '<div class="empty-state">No se pudo cargar el panel: ' + err.message + '</div>'; return null; });
       }
       cargaTiemposPromesa.then(api => { if (api) api.abrir(); });

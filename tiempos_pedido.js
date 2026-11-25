@@ -7,9 +7,10 @@ const MIN = 60000;
 export const CFG_INICIAL = {
   umbralDemora: 5,     // entre dos artículos seguidos: hasta estos minutos es trabajo...
   umbralPausa: 20,     // ...de ahí hasta este valor es una demora (no cuenta como armado); más es una pausa
-  tolerancia: 15,      // margen (%) que se suma al tiempo de armado para dar un tiempo realista (demoras y necesidades personales)
+  tolerancia: 15,      // % de holgura: tiempo extra que se suma a lo que arma cada persona (demoras chicas y necesidades personales)
   inicio: '07:00',     // hora a la que empieza el turno (para decir "termina a las ...")
-  descansos: [{ nombre: 'Desayuno', despues: 120, dura: 15 }, { nombre: 'Almuerzo', despues: 240, dura: 30 }],  // "si el trabajo pasa de N minutos, se suma el descanso"
+  descansos: [{ nombre: 'Desayuno', dura: 15 }, { nombre: 'Almuerzo', dura: 30 }],  // minutos de cada descanso: se suman completos al tiempo total de cada persona
+  ajusteSucursal: true,   // corrige el tiempo según lo que históricamente tarda cada sucursal
   equipo: { 2: 10, 3: 15 }   // % que se pierde al armar entre varios: se coordinan y se pisan, así que el tiempo no baja justo a la mitad
 };
 
@@ -18,24 +19,32 @@ export const mediana = a => { if (!a.length) return null; const s = [...a].sort(
 const fechaLocal = ms => { const d = new Date(ms); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 
 // ============================================================ 1) de las marcas a los pedidos
+// ¿La cantidad armada es imposible? (p. ej. un código de barras escrito en el casillero de cantidad, o un cero de más)
+export function esCantidadDudosa(pedida, armada) {
+  const a = Number(armada), p = Number(pedida);
+  if (!isFinite(a) || a < 0 || a >= 100000) return true;
+  return p > 0 ? a > Math.max(20 * p, 500) : a > 5000;
+}
 // eventos: [{ timestampMs, personaDocumento, personaNombre, sucursal, codigo, cantidadArmada, diferencia }]
 export function agruparPedidos(eventos, cfg) {
   const uD = cfg.umbralDemora * MIN, uP = cfg.umbralPausa * MIN, grupos = new Map();
   for (const ev of eventos) {
-    if (!ev.timestampMs) continue;
+    if (!ev.timestampMs || ev.excluido) continue;          // una marca sacada de las estadísticas no cuenta
     const suc = ev.sucursal || '(sin sucursal)', dia = fechaLocal(ev.timestampMs), k = dia + '|' + suc;
     let g = grupos.get(k); if (!g) grupos.set(k, g = { dia, sucursal: suc, evs: [] });
     g.evs.push(ev);
   }
   return [...grupos.values()].map(g => {
     g.evs.sort((a, b) => a.timestampMs - b.timestampMs);
-    const porPersona = new Map(), codigos = new Set(); let unidades = 0, sinStock = 0;
+    const porPersona = new Map(), codigos = new Set(), porCodigo = new Map(), dudosas = []; let unidades = 0, sinStock = 0;
     g.evs.forEach((ev, i) => {
       const id = ev.personaDocumento || ev.personaNombre || '?';
       let p = porPersona.get(id); if (!p) porPersona.set(id, p = { id, nombre: ev.personaNombre || id, evs: [] });
       p.evs.push(ev);
-      codigos.add(ev.codigo || ev.producto || ('?' + i));
-      const u = Number(ev.cantidadArmada); if (u > 0) unidades += u;
+      const cod = ev.codigo || ev.producto || ('?' + i), ped = Number(ev.cantidadPedida), pedOk = ped > 0 && ped < 100000 ? ped : 0;
+      codigos.add(cod); if (!porCodigo.has(cod)) porCodigo.set(cod, pedOk);          // lo que se pidió de cada artículo (el estimado al empezar)
+      if (esCantidadDudosa(ev.cantidadPedida, ev.cantidadArmada)) { dudosas.push(ev); unidades += pedOk; }   // un número imposible se reemplaza por lo pedido hasta que se corrija
+      else { const u = Number(ev.cantidadArmada); if (u > 0) unidades += u; }
       if (ev.diferencia === 'Falta de stock') sinStock++;
     });
     const personas = [...porPersona.values()].map(p => {
@@ -50,7 +59,7 @@ export function agruparPedidos(eventos, cfg) {
     }).sort((a, b) => b.picks - a.picks);
     const participan = personas.filter(p => p.picks >= 5).length;       // una marca suelta de otra persona no cuenta como "equipo"
     const desde = g.evs[0].timestampMs, hasta = g.evs[g.evs.length - 1].timestampMs;
-    return { dia: g.dia, sucursal: g.sucursal, picks: g.evs.length, lineas: codigos.size, unidades, sinStock, personas, k: Math.max(1, participan),
+    return { dia: g.dia, sucursal: g.sucursal, picks: g.evs.length, lineas: codigos.size, unidades, unidadesPed: suma([...porCodigo.values()]), dudosas, sinStock, personas, k: Math.max(1, participan),
       activoMs: suma(personas.map(p => p.activoMs)), trabajoMs: suma(personas.map(p => p.trabajoMs)), demoraMs: suma(personas.map(p => p.demoraMs)), pausaMs: suma(personas.map(p => p.pausaMs)), desde, hasta, relojMs: hasta - desde };
   }).sort((a, b) => b.dia.localeCompare(a.dia) || a.sucursal.localeCompare(b.sucursal));
 }
@@ -124,11 +133,11 @@ export function factoresSucursal(pedidos, modelo) {
 }
 
 // ============================================================ 4) escenarios: 1, 2 o 3 personas
-export const conDescansos = (trabajoMin, descansos) => trabajoMin + suma(descansos.filter(d => trabajoMin > d.despues).map(d => d.dura));
-// el tiempo entre k personas, paso por paso: se reparte, se suma lo que se pierde por trabajar entre varios, el margen y los descansos
+export const conDescansos = (trabajoMin, descansos) => trabajoMin + suma((descansos || []).map(d => Number(d.dura) || 0));   // cada descanso es solo una duración: se suma completo
+// el tiempo entre k personas, paso por paso: se reparte, se suma lo que se pierde por trabajar entre varios, la holgura y los descansos
 export function detalleDividido(total, k, cfg) {
   const perdida = k === 1 ? 0 : (Number((cfg.equipo || {})[k]) || 0), porPersona = total / k, cadaUna = porPersona * (1 + perdida / 100), trabajo = cadaUna * (1 + cfg.tolerancia / 100);
-  const descansos = cfg.descansos.filter(d => trabajo > d.despues), descansosMin = suma(descansos.map(d => d.dura));
+  const descansos = (cfg.descansos || []).filter(d => Number(d.dura) > 0), descansosMin = suma(descansos.map(d => Number(d.dura)));
   return { k, total, porPersona, perdida, cadaUna, tolerancia: cfg.tolerancia, trabajo, descansos, descansosMin, reloj: trabajo + descansosMin };
 }
 // la cuenta de UN pedido: del historial al tiempo total, para 1, 2 y 3 personas
@@ -170,24 +179,24 @@ export const METRICAS = {
 };
 // modo: 'todo' (lo real contra lo esperado), 'sucursal' (una línea por sucursal) o 'armador' (una línea por persona)
 export function serieDiaria(pedidos, op) {
-  const { modo = 'todo', metrica = 'armado', sucursales = [], armadores = [], desde = '', hasta = '', esperado = null, calidad = null } = op || {};
+  const { modo = 'todo', metrica = 'armado', sucursales = [], armadores = [], desde = '', hasta = '', esperado = null, esperadoInicial = null, calidad = null } = op || {};
   const ps = pedidos.filter(p => (!desde || p.dia >= desde) && (!hasta || p.dia <= hasta) && (!sucursales.length || sucursales.includes(p.sucursal)));
   const info = {}, lineas = []; let banda = null;
   ps.forEach(p => { const i = info[p.dia] || (info[p.dia] = { pedidos: 0, lineas: 0, unidades: 0 }); i.pedidos++; i.lineas += p.lineas; i.unidades += p.unidades; });
   const porDia = lista => { const m = {}; lista.forEach(p => (m[p.dia] = m[p.dia] || []).push(p)); return m; };
   const valorDia = g => {
-    const n = g.length, L = suma(g.map(p => p.lineas)), W = suma(g.map(p => p.trabajoMs)) / MIN, R = suma(g.map(p => p.relojMs)) / MIN, Es = esperado ? suma(g.map(esperado)) : null;
-    if (metrica === 'armado') return { real: W / n, esp: Es == null ? null : Es / n };
-    if (metrica === 'porArt') return { real: L ? W / L : null, esp: Es != null && L ? Es / L : null };
+    const n = g.length, L = suma(g.map(p => p.lineas)), W = suma(g.map(p => p.trabajoMs)) / MIN, R = suma(g.map(p => p.relojMs)) / MIN, Es = esperado ? suma(g.map(esperado)) : null, E0 = esperadoInicial ? suma(g.map(esperadoInicial)) : null;
+    if (metrica === 'armado') return { real: W / n, esp: Es == null ? null : Es / n, ini: E0 == null ? null : E0 / n };
+    if (metrica === 'porArt') return { real: L ? W / L : null, esp: Es != null && L ? Es / L : null, ini: E0 != null && L ? E0 / L : null };
     if (metrica === 'lineas') return { real: L / n, esp: null };
     return { real: R / n, esp: null, extra: W / n };
   };
   if (modo === 'todo') {
-    const real = {}, esp = {}, extra = {}, b = {}, m = porDia(ps);
-    Object.keys(m).forEach(d => { const v = valorDia(m[d]); if (v.real != null) real[d] = v.real; if (v.esp != null) { esp[d] = v.esp; if (calidad) b[d] = [v.esp * calidad.p20, v.esp * calidad.p80]; } if (v.extra != null) extra[d] = v.extra; });
+    const real = {}, esp = {}, ini = {}, extra = {}, b = {}, m = porDia(ps);
+    Object.keys(m).forEach(d => { const v = valorDia(m[d]); if (v.real != null) real[d] = v.real; if (v.ini != null) ini[d] = v.ini; if (v.esp != null) { esp[d] = v.esp; if (calidad) b[d] = [v.esp * calidad.p20, v.esp * calidad.p80]; } if (v.extra != null) extra[d] = v.extra; });
     lineas.push({ id: 'real', nombre: metrica === 'reloj' ? 'Tiempo total (con pausas)' : 'Lo que tardaron', estilo: 'real', valores: real });
     if (metrica === 'reloj') lineas.push({ id: 'armado', nombre: 'Tiempo de armado (sin pausas)', estilo: 'real', valores: extra });
-    if (Object.keys(esp).length) { lineas.push({ id: 'esperado', nombre: 'Lo que debería tardar', estilo: 'esperado', valores: esp }); if (calidad && Object.keys(b).length) banda = b; }
+    if (Object.keys(esp).length) { lineas.push({ id: 'esperado', nombre: 'Debería haber tardado (con lo realmente armado)', estilo: 'esperado', valores: esp }); if (Object.keys(ini).length) lineas.push({ id: 'inicial', nombre: 'Estimado al empezar (con lo pedido)', estilo: 'inicial', valores: ini }); if (calidad && Object.keys(b).length) banda = b; }
   } else if (modo === 'sucursal') {
     const sucs = sucursales.length ? sucursales : [...new Set(ps.map(p => p.sucursal))].sort();
     sucs.forEach(s => { const m = porDia(ps.filter(p => p.sucursal === s)), real = {}; Object.keys(m).forEach(d => { const v = valorDia(m[d]); if (v.real != null) real[d] = v.real; }); if (Object.keys(real).length) lineas.push({ id: 's:' + s, nombre: s, estilo: 'real', valores: real }); });
@@ -218,9 +227,9 @@ const n1 = x => (x == null || !isFinite(x)) ? '—' : (Math.round(x * 10) / 10).
 const n0 = x => (x == null || !isFinite(x)) ? '—' : Math.round(x).toLocaleString('es-AR');
 
 export function iniciarTiemposPedido(ctx) {
-  const { db, collection, query, where, orderBy, getDocs, Timestamp } = ctx;
+  const { db, collection, query, where, orderBy, getDocs, Timestamp, doc, updateDoc, serverTimestamp } = ctx;
   const $ = id => document.getElementById(id);
-  const E = { cfg: null, semanas: 4, eventos: [], pedidos: [], modelo: null, factores: {}, calidad: null, cargado: false, filtroSuc: '', filasVis: [], filasDia: [], ajustesAbierto: false,
+  const E = { cfg: null, semanas: 4, eventos: [], pedidos: [], modelo: null, factores: {}, calidad: null, cargado: false, filtroSuc: '', filasVis: [], filasDia: [], ajustesAbierto: false, editMarca: '', msgMarca: '', soloDudosas: true, revisar: [],
     hoy: { items: [], grupos: [], cargado: false, error: '', modo: 'todo' }, cuenta: null, calc: { sucursal: '', lineas: 0, unidades: 0 },
     graf: { modo: 'todo', metrica: 'armado', desde: '', hasta: '', sucSel: null, armSel: null, ocultas: new Set(), diaSel: '' } };
   let guardado = {}; try { guardado = JSON.parse(localStorage.getItem('tp_cfg') || '{}') || {}; } catch (e) { /* sin storage */ }
@@ -230,8 +239,11 @@ export function iniciarTiemposPedido(ctx) {
   const guardarCfg = () => { try { localStorage.setItem('tp_cfg', JSON.stringify(E.cfg)); } catch (e) { /* sin storage */ } };
   const n2 = x => (x == null || !isFinite(x)) ? '—' : (Math.round(x * 100) / 100).toLocaleString('es-AR');
   const n3 = x => (x == null || !isFinite(x)) ? '—' : (Math.round(x * 1000) / 1000).toLocaleString('es-AR');
+  const puede = () => { try { return !!ctx.puedeCorregir && !!ctx.puedeCorregir(); } catch (e) { return false; } };
+  const quienSoy = () => { try { return (ctx.quien && ctx.quien()) || ''; } catch (e) { return ''; } };
   const fac = s => (E.factores[s] || { factor: 1 }).factor;
-  const esperado = p => E.modelo ? predecir(E.modelo, p.lineas, p.unidades, fac(p.sucursal)) : null;
+  const esperado = p => E.modelo ? predecir(E.modelo, p.lineas, p.unidades, fac(p.sucursal)) : null;                 // debería haber tardado: con lo realmente armado
+  const esperadoIni = p => E.modelo ? predecir(E.modelo, p.lineas, p.unidadesPed, fac(p.sucursal)) : null;          // estimado al empezar: con lo pedido
   const usoHoy = g => E.hoy.modo === 'falta' ? { l: g.faltanLineas, u: g.faltanUnidades } : { l: g.lineas, u: g.unidades };
   const tipico = s => { const ult = E.pedidos.filter(p => p.sucursal === s).slice(0, 10); return ult.length ? { lineas: Math.round(mediana(ult.map(p => p.lineas))), unidades: Math.round(mediana(ult.map(p => p.unidades))) } : { lineas: 0, unidades: 0 }; };
   const num = (path, v, ancho = 56, paso = 1) => `<input type="number" data-cfg="${path}" value="${v ?? ''}" step="${paso}" min="0" style="width:${ancho}px">`;
@@ -248,7 +260,7 @@ export function iniciarTiemposPedido(ctx) {
     try {
       const hasta = new Date(), desde = new Date(); desde.setDate(desde.getDate() - E.semanas * 7); desde.setHours(0, 0, 0, 0);
       const snap = await getDocs(query(collection(db, 'eventosArmado'), where('timestamp', '>=', Timestamp.fromDate(desde)), where('timestamp', '<=', Timestamp.fromDate(hasta)), orderBy('timestamp', 'asc')));
-      const evs = []; snap.forEach(d => { const x = d.data(); if (x.timestamp && x.timestamp.toMillis) evs.push({ ...x, timestampMs: x.timestamp.toMillis() }); });
+      const evs = []; snap.forEach(d => { const x = d.data(); if (x.timestamp && x.timestamp.toMillis) evs.push({ ...x, id: d.id, timestampMs: x.timestamp.toMillis() }); });
       E.eventos = evs; E.graf.desde = E.graf.hasta = ''; E.graf.diaSel = ''; recalcular();
       st.textContent = `Se leyeron ${evs.length.toLocaleString('es-AR')} marcas de armado de las últimas ${E.semanas} semanas (${E.pedidos.length.toLocaleString('es-AR')} pedidos).`;
     } catch (err) { st.textContent = 'No se pudieron leer las marcas: ' + err.message; }
@@ -257,11 +269,11 @@ export function iniciarTiemposPedido(ctx) {
   function recalcular() {   // con los mismos datos, otros umbrales
     E.pedidos = agruparPedidos(E.eventos, E.cfg);
     E.modelo = ajustarModelo(E.pedidos);
-    E.factores = E.modelo ? factoresSucursal(E.pedidos, E.modelo) : {};
+    E.factores = E.modelo && E.cfg.ajusteSucursal !== false ? factoresSucursal(E.pedidos, E.modelo) : {};
     E.calidad = E.modelo ? calidadModelo(E.pedidos, E.modelo, E.factores) : null;
     E.cargado = true; refrescar();
   }
-  function refrescar() { renderGrafico(); renderHoy(); renderCalc(); renderAjustes(); renderPedidos(); if (E.cuenta) renderCuenta(); }
+  function refrescar() { renderRevisar(); renderGrafico(); renderHoy(); renderCalc(); renderAjustes(); renderPedidos(); if (E.cuenta) renderCuenta(); }
   async function cargarHoy() {
     E.hoy.error = ''; E.hoy.cargado = false; renderHoy();
     try {
@@ -283,14 +295,15 @@ export function iniciarTiemposPedido(ctx) {
     return [];
   }
   function armActivos() { const g = E.graf; return g.armSel && g.armSel.size ? [...g.armSel] : listaArmadores(E.pedidos).slice(0, 4).map(a => a.id); }
-  const opcionesGraf = () => ({ modo: E.graf.modo, metrica: E.graf.metrica, sucursales: sucActivas(), armadores: E.graf.modo === 'armador' ? armActivos() : [], desde: E.graf.desde, hasta: E.graf.hasta, esperado: E.modelo ? esperado : null, calidad: E.calidad });
+  const opcionesGraf = () => ({ modo: E.graf.modo, metrica: E.graf.metrica, sucursales: sucActivas(), armadores: E.graf.modo === 'armador' ? armActivos() : [], desde: E.graf.desde, hasta: E.graf.hasta, esperado: E.modelo ? esperado : null, esperadoInicial: E.modelo ? esperadoIni : null, calidad: E.calidad });
 
   function tablaPedidos(lista, pref, conDia) {
-    return `<div style="overflow-x:auto"><table class="tp-t"><tr>${conDia ? '<th>Día</th>' : ''}<th>Sucursal</th><th>Artículos</th><th>Sin stock</th><th>Personas</th><th>Tiempo de armado</th><th>Tiempo total</th><th>Min por artículo</th><th>Debería tardar</th></tr>
-      ${lista.map((p, i) => { const e = esperado(p), real = p.trabajoMs / MIN, dv = e ? (real / e - 1) * 100 : null, quienes = p.personas.filter(x => x.picks >= 5).map(x => esc(x.nombre.split(' ')[0]) + ' ' + fmtMin(x.trabajoMs / MIN)).join(' · ');
-        return `<tr class="tp-click" data-cuenta="${pref}:${i}">${conDia ? `<td style="white-space:nowrap">${esc(p.dia)}</td>` : ''}<td><b>${esc(p.sucursal)}</b>${quienes ? `<div class="contador">${quienes}</div>` : ''}</td><td>${n0(p.lineas)}<div class="contador">${n0(p.unidades)} unid.</div></td><td>${p.picks ? n0(p.sinStock / p.picks * 100) + '%' : '—'}</td><td>${p.k}</td>
+    return `<div style="overflow-x:auto"><table class="tp-t"><tr>${conDia ? '<th>Día</th>' : ''}<th>Sucursal</th><th>Artículos</th><th>Sin stock</th><th>Personas</th><th>Tiempo de armado</th><th>Tiempo total</th><th>Min por artículo</th><th>Debería haber tardado</th></tr>
+      ${lista.map((p, i) => { const e = esperado(p), e0 = esperadoIni(p), real = p.trabajoMs / MIN, dv = e ? (real / e - 1) * 100 : null, quienes = p.personas.filter(x => x.picks >= 5).map(x => esc(x.nombre.split(' ')[0]) + ' ' + fmtMin(x.trabajoMs / MIN)).join(' · ');
+        const dud = p.dudosas.length ? `<div><span class="chip crit" style="font-size:11px;padding:0 8px" title="Una cantidad armada parece mal cargada. Tocá el pedido para corregirla.">⚠ ${p.dudosas.length} cantidad${p.dudosas.length === 1 ? '' : 'es'} dudosa${p.dudosas.length === 1 ? '' : 's'}</span></div>` : '';
+        return `<tr class="tp-click" data-cuenta="${pref}:${i}">${conDia ? `<td style="white-space:nowrap">${esc(p.dia)}</td>` : ''}<td><b>${esc(p.sucursal)}</b>${dud}${quienes ? `<div class="contador">${quienes}</div>` : ''}</td><td>${n0(p.lineas)}<div class="contador">${n0(p.unidades)} unid.</div></td><td>${p.picks ? n0(p.sinStock / p.picks * 100) + '%' : '—'}</td><td>${p.k}</td>
           <td><b>${fmtMin(real)}</b><div class="contador">demoras ${fmtMin(p.demoraMs / MIN)} · pausas ${fmtMin(p.pausaMs / MIN)}</div></td><td style="white-space:nowrap">${fmtMin(p.relojMs / MIN)}</td><td>${p.lineas ? n1(real / p.lineas) : '—'}</td>
-          <td style="white-space:nowrap">${e == null ? '—' : fmtMin(e)}${dv == null ? '' : `<div style="font-size:12px;color:${dv > 25 ? 'var(--red)' : dv < -15 ? 'var(--green)' : 'var(--muted)'}">${Math.abs(dv) < 0.5 ? '0' : (dv > 0 ? '+' : '') + n0(dv)}%</div>`}</td></tr>`; }).join('')}</table></div>`;
+          <td style="white-space:nowrap">${e == null ? '—' : fmtMin(e)}${e0 == null ? '' : `<div class="contador">al empezar: ${fmtMin(e0)}</div>`}${dv == null ? '' : `<div style="font-size:12px;color:${dv > 25 ? 'var(--red)' : dv < -15 ? 'var(--green)' : 'var(--muted)'}">${Math.abs(dv) < 0.5 ? '0' : (dv > 0 ? '+' : '') + n0(dv)}%</div>`}</td></tr>`; }).join('')}</table></div>`;
   }
 
   function renderGrafico() {
@@ -299,12 +312,12 @@ export function iniciarTiemposPedido(ctx) {
     const g = E.graf, todos = [...new Set(E.pedidos.map(p => p.dia))].sort(), primero = todos[0], ultimo = todos[todos.length - 1];
     if (g.modo === 'armador' && g.metrica === 'reloj') g.metrica = 'armado';
     const S = serieDiaria(E.pedidos, opcionesGraf()), visibles = S.lineas.filter(l => !g.ocultas.has(l.id)), n = S.dias.length;
-    S.lineas.forEach((l, i) => { l.color = l.estilo === 'esperado' ? '#64748b' : (g.modo === 'todo' ? (l.id === 'real' ? '#2563eb' : '#0891b2') : COLORES[i % COLORES.length]); });
+    S.lineas.forEach((l, i) => { l.color = l.estilo === 'inicial' ? '#94a3b8' : l.estilo === 'esperado' ? '#64748b' : (g.modo === 'todo' ? (l.id === 'real' ? '#2563eb' : '#0891b2') : COLORES[i % COLORES.length]); });
     const seg = (items, actual, tipo) => `<div class="tp-seg">${items.map(([v, t]) => `<button class="${v === actual ? 'on' : ''}" data-g="${tipo}:${v}">${t}</button>`).join('')}</div>`;
     const metricas = Object.keys(METRICAS).filter(k => !(g.modo === 'armador' && k === 'reloj')).map(k => [k, METRICAS[k].nombre]);
     const sucs = [...new Set(E.pedidos.map(p => p.sucursal))].sort(), activasS = sucActivas(), armadores = listaArmadores(E.pedidos), activosA = armActivos();
     const chip = (tipo, v, txt, on) => `<button class="tp-chip ${on ? 'on' : ''}" data-g="${tipo}:${esc(v)}">${esc(txt)}</button>`;
-    const ayuda = METRICAS[g.metrica].ayuda + (g.modo === 'todo' ? (E.modelo ? ' La línea punteada es lo que debería tardar según tu propio historial, y la franja es el rango en el que suele caer.' : '') : g.modo === 'sucursal' ? ' Cada línea es una sucursal.' : ' Cada línea es una persona' + (g.metrica === 'porArt' ? '; si está por encima del promedio del equipo, esa persona tarda más por artículo.' : '.'));
+    const ayuda = METRICAS[g.metrica].ayuda + (g.modo === 'todo' ? (E.modelo ? ' La línea de rayas es lo que debería haber tardado según tu historial (con las unidades realmente armadas) y la franja es el rango en el que suele caer; la de puntitos es el estimado al empezar (con lo que se pidió).' : '') : g.modo === 'sucursal' ? ' Cada línea es una sucursal.' : ' Cada línea es una persona' + (g.metrica === 'porArt' ? '; si está por encima del promedio del equipo, esa persona tarda más por artículo.' : '.'));
     // ---- el dibujo
     const W = Math.max(320, Math.round(host.clientWidth || 900)), H = W < 560 ? 260 : 340, ML = 46, MR = 14, MT = 14, MB = 30, IW = W - ML - MR, IH = H - MT - MB;
     const valores = visibles.flatMap(l => Object.values(l.valores)), conBanda = S.banda && visibles.some(l => l.id === 'esperado');
@@ -320,12 +333,12 @@ export function iniciarTiemposPedido(ctx) {
     if (dsel) { const i = S.dias.indexOf(dsel); svg += `<rect x="${xi(i) - Math.max(6, IW / n / 2 - 1)}" y="${MT}" width="${Math.max(12, IW / n - 2)}" height="${IH}" fill="rgba(37,99,235,.08)"/>`; }
     if (conBanda) { const idx = S.dias.map((d, i) => S.banda[d] ? i : -1).filter(i => i >= 0); if (idx.length > 1) svg += `<polygon points="${idx.map(i => `${xi(i)},${yv(S.banda[S.dias[i]][1])}`).concat(idx.slice().reverse().map(i => `${xi(i)},${yv(S.banda[S.dias[i]][0])}`)).join(' ')}" fill="rgba(37,99,235,.13)"/>`; }
     visibles.forEach(l => {
-      let seg_ = []; const cerrar = () => { if (seg_.length > 1) svg += `<polyline points="${seg_.join(' ')}" fill="none" stroke="${l.color}" stroke-width="${l.estilo === 'esperado' ? 2 : 2.6}" ${l.estilo === 'esperado' ? 'stroke-dasharray="7 5"' : ''} stroke-linejoin="round" stroke-linecap="round"/>`; seg_ = []; };
+      let seg_ = []; const cerrar = () => { if (seg_.length > 1) svg += `<polyline points="${seg_.join(' ')}" fill="none" stroke="${l.color}" stroke-width="${l.estilo === 'esperado' || l.estilo === 'inicial' ? 2 : 2.6}" ${l.estilo === 'esperado' ? 'stroke-dasharray="7 5"' : l.estilo === 'inicial' ? 'stroke-dasharray="2 5"' : ''} stroke-linejoin="round" stroke-linecap="round"/>`; seg_ = []; };
       S.dias.forEach((d, i) => { const v = l.valores[d]; if (v == null) cerrar(); else seg_.push(`${xi(i)},${yv(v)}`); }); cerrar();
-      if (l.estilo !== 'esperado') S.dias.forEach((d, i) => { const v = l.valores[d]; if (v != null) svg += `<circle cx="${xi(i)}" cy="${yv(v)}" r="${n > 40 ? 2.4 : 3.6}" fill="${l.color}" stroke="#fff" stroke-width="1.2"/>`; });
+      if (l.estilo !== 'esperado' && l.estilo !== 'inicial') S.dias.forEach((d, i) => { const v = l.valores[d]; if (v != null) svg += `<circle cx="${xi(i)}" cy="${yv(v)}" r="${n > 40 ? 2.4 : 3.6}" fill="${l.color}" stroke="#fff" stroke-width="1.2"/>`; });
     });
     svg += `<line class="tp-cross" x1="0" y1="${MT}" x2="0" y2="${MT + IH}" stroke="#94a3b8" stroke-dasharray="3 3" style="display:none"/><rect class="tp-selrect" x="0" y="${MT}" width="0" height="${IH}" fill="rgba(37,99,235,.15)" style="display:none"/><rect class="tp-gover" x="${ML}" y="${MT}" width="${IW}" height="${IH}" fill="transparent" style="touch-action:pan-y;cursor:crosshair"/></svg>`;
-    const leyenda = S.lineas.map(l => `<button class="tp-leg ${g.ocultas.has(l.id) ? 'off' : ''}" data-g="linea:${esc(l.id)}" title="Tocá para mostrar u ocultar"><span class="tp-sw" style="${l.estilo === 'esperado' ? `background:repeating-linear-gradient(90deg,${l.color} 0 5px,transparent 5px 8px)` : `background:${l.color}`}"></span>${esc(l.nombre)}</button>`).join('') + (conBanda ? '<span class="tp-leg tp-leg-b"><span class="tp-sw" style="background:rgba(37,99,235,.25)"></span>Rango en el que suele caer</span>' : '');
+    const leyenda = S.lineas.map(l => `<button class="tp-leg ${g.ocultas.has(l.id) ? 'off' : ''}" data-g="linea:${esc(l.id)}" title="Tocá para mostrar u ocultar"><span class="tp-sw" style="${l.estilo === 'esperado' || l.estilo === 'inicial' ? `background:repeating-linear-gradient(90deg,${l.color} 0 5px,transparent 5px 8px)` : `background:${l.color}`}"></span>${esc(l.nombre)}</button>`).join('') + (conBanda ? '<span class="tp-leg tp-leg-b"><span class="tp-sw" style="background:rgba(37,99,235,.25)"></span>Rango en el que suele caer</span>' : '');
     // ---- el detalle del día elegido
     const delDia = dsel ? E.pedidos.filter(p => p.dia === dsel && (!activasS.length || activasS.includes(p.sucursal))) : []; E.filasDia = delDia;
     const resumenDia = dsel && S.info[dsel] ? `${S.info[dsel].pedidos} pedido${S.info[dsel].pedidos === 1 ? '' : 's'} · ${n0(S.info[dsel].lineas)} artículos · ${n0(S.info[dsel].unidades)} unidades` : '';
@@ -395,9 +408,9 @@ export function iniciarTiemposPedido(ctx) {
           <td>${n0(u.l)}<div class="contador">${n0(u.u)} unid.</div></td><td>${n0(g.armadas)} de ${n0(g.lineas)}<div class="contador">${g.lineas ? n0(g.armadas / g.lineas * 100) : 0}%${g.sinStock ? ` · ${g.sinStock} sin stock` : ''}</div></td>
           ${[1, 2, 3].map(k => `<td>${e == null ? '—' : '<b>' + fmtMin(detalleDividido(e, k, cfg).cadaUna) + '</b>'}</td>`).join('')}</tr>`; }).join('')}
       <tr style="border-top:2px solid var(--border, #e2e8f0)"><td><b>Todo junto</b></td><td><b>${n0(tot.lineas)}</b><div class="contador">${n0(tot.unidades)} unid.</div></td><td>${n0(tot.armadas)} de ${n0(tot.lineas)}</td>
-        ${[1, 2, 3].map(k => { if (tot.est == null) return '<td>—</td>'; const d = detalleDividido(tot.est, k, cfg); return `<td><b>${fmtMin(d.cadaUna)}</b><div class="contador">con margen y descansos: ${fmtMin(d.reloj)} · termina a las ${horaFin(cfg.inicio, d.reloj)}</div></td>`; }).join('')}</tr></table></div>
+        ${[1, 2, 3].map(k => { if (tot.est == null) return '<td>—</td>'; const d = detalleDividido(tot.est, k, cfg); return `<td><b>${fmtMin(d.cadaUna)}</b><div class="contador">con holgura y descansos: ${fmtMin(d.reloj)} · termina a las ${horaFin(cfg.inicio, d.reloj)}</div></td>`; }).join('')}</tr></table></div>
       ${items.length ? `<div class="contador" style="margin-top:8px">Si en vez de repartirse cada pedido, cada pedido lo arma una sola persona: ${[2, 3].map(k => { const e = escenarioEnteros(items, k, cfg); return `con ${k} personas terminan a las ${horaFin(cfg.inicio, e.relojMin)} (${e.cargas.map((c, j) => `persona ${j + 1}: ${c.items.map(x => esc(x.nombre)).join(', ') || '—'}`).join(' · ')})`; }).join('; ')}.</div>` : ''}
-      <div class="contador" style="margin-top:8px">"Debería tardar" es el tiempo de armado según tu historial, sin pausas. "Entre 2" y "Entre 3" dividen el trabajo y suman ${n0(cfg.equipo[2])}% y ${n0(cfg.equipo[3])}% por trabajar entre varios. Tocá un pedido para ver la cuenta. Todo se puede cambiar en Ajustes.</div>`;
+      <div class="contador" style="margin-top:8px">"Debería tardar" es el tiempo de armado según tu historial, sin pausas ni descansos. "Entre 2" y "Entre 3" dividen el trabajo y suman ${n0(cfg.equipo[2])}% y ${n0(cfg.equipo[3])}% por trabajar entre varios. Tocá un pedido para ver la cuenta. Todo se puede cambiar en Ajustes.</div>`;
   }
 
   // ======================================================== calculadora de un pedido
@@ -418,7 +431,7 @@ export function iniciarTiemposPedido(ctx) {
     host.innerHTML = `<div class="tp-resumen">Un pedido de <b>${esc(c.sucursal)}</b> con <b>${n0(c.lineas)} artículos</b> y ${n0(c.unidades)} unidades <b>debería tardar ${fmtMin(cu.tBase)}</b> si lo arma una sola persona${cu.rango ? ` (en la práctica, entre ${fmtMin(cu.rango.lo)} y ${fmtMin(cu.rango.hi)})` : ''}, sin contar pausas.</div>
       <table class="tp-t"><tr><th></th><th>1 persona</th><th>2 personas</th><th>3 personas</th></tr>
         <tr><td>Cada una arma</td>${cu.cols.map(d => `<td><b>${fmtMin(d.cadaUna)}</b></td>`).join('')}</tr>
-        <tr><td>Tiempo total estimado<div class="contador">con margen y descansos</div></td>${cu.cols.map(d => `<td>${fmtMin(d.reloj)}</td>`).join('')}</tr>
+        <tr><td>Tiempo total estimado<div class="contador">con holgura y descansos</div></td>${cu.cols.map(d => `<td>${fmtMin(d.reloj)}</td>`).join('')}</tr>
         <tr><td>Terminan a las</td>${cu.cols.map(d => `<td>${d.fin}</td>`).join('')}</tr></table>
       <div style="margin-top:8px"><button class="btn-chico" data-cuenta="calc:0">Ver la cuenta paso a paso</button></div>`;
   }
@@ -431,14 +444,15 @@ export function iniciarTiemposPedido(ctx) {
       const juntos = m.rho > 0.95 && m.terminos > 1, porArt = m.b + m.c * m.uPorArt, demoraPct = suma(E.pedidos.map(p => p.demoraMs)) / Math.max(1, suma(E.pedidos.map(p => p.trabajoMs))) * 100, sucs = Object.keys(E.factores).sort((a, b) => E.factores[b].factor - E.factores[a].factor);
       modeloTxt = `<p>Con tu historial (${m.n.toLocaleString('es-AR')} pedidos${m.soloUnaPersona ? ' armados por una sola persona' : ''}), armar un pedido lleva <b>${juntos ? `≈ ${n1(porArt)} min por artículo (con ${n1(m.uPorArt)} unidades por artículo en promedio)` : `${m.a > 0.05 ? n1(m.a) + ' min fijos + ' : ''}${n1(m.b)} min por artículo${m.c > 0.0005 ? ' + ' + n3(m.c) + ' min por unidad' : ''}`}</b>, con un ajuste para cada sucursal (unas son más lentas que otras).
         La estimación se equivoca en promedio ${n0(q.mape * 100)}% por pedido, y un pedido real suele quedar entre ${n0((q.p20 - 1) * 100)}% y +${n0((q.p80 - 1) * 100)}% de lo estimado. Las demoras de ${c.umbralDemora} a ${c.umbralPausa} min equivalen a ${n0(demoraPct)}% del tiempo de armado.</p>
-        <p class="contador">No incluye el arranque (ir al primer pasillo, preparar el pallet) ni el cierre (envolver, etiquetar): hoy el Armador no los marca. El tiempo de armado suma los tiempos entre artículos seguidos y agrega un artículo promedio por persona, porque el primero no tiene uno anterior.</p>
+        <p class="contador">El tiempo de armado suma los tiempos entre artículos seguidos y agrega un artículo promedio por persona, porque el primero no tiene uno anterior. Hoy el Armador no marca cuándo empieza ni cuándo termina un pedido (ir al primer pasillo, preparar el pallet, envolver, etiquetar), así que ese tiempo no se mide.</p>
         ${sucs.length ? `<table class="tp-t"><tr><th>Sucursal</th><th>Pedidos (1 persona)</th><th>Tarda respecto del promedio</th></tr>${sucs.map(s => { const f = E.factores[s]; return `<tr><td style="font-weight:700">${esc(s)}</td><td>${f.n}</td><td>${f.bruto >= 1 ? '+' : ''}${n0((f.bruto - 1) * 100)}%</td></tr>`; }).join('')}</table>` : ''}`;
     }
     host.innerHTML = `<details id="tp_detAj" ${E.ajustesAbierto ? 'open' : ''}><summary>⚙️ Ajustes y cómo se calcula</summary><div class="tp-aj">
-      <div class="tp-ajf"><b>Margen</b> ${num('tolerancia', c.tolerancia, 58)} %<p>Tiempo extra que se suma al tiempo de armado para dar un tiempo realista, porque siempre hay demoras y necesidades personales. Ejemplo: si armar son 100 min y el margen es 15%, el tiempo total estimado es 115 min.</p></div>
-      <div class="tp-ajf"><b>Pérdida por armar entre varios</b> Entre 2: ${num('equipo.2', c.equipo[2], 54)} % Entre 3: ${num('equipo.3', c.equipo[3], 54)} %<p>Si varias personas arman el mismo pedido, el tiempo no baja justo a la mitad (o a un tercio): se coordinan y se pisan. Ejemplo: 100 min entre 2 personas son 50 min cada una, más 10% = 55 min cada una.</p></div>
+      <div class="tp-ajf"><b>% de holgura</b> ${num('tolerancia', c.tolerancia, 58)} %<p>Tiempo extra que se suma a lo que arma cada persona, para demoras chicas y necesidades personales. Ejemplo: si armar son 100 min y la holgura es 15%, la persona necesita 115 min.</p></div>
+      <div class="tp-ajf"><b>Pérdida por armar entre varios</b> Entre 2: ${num('equipo.2', c.equipo[2], 54)} % Entre 3: ${num('equipo.3', c.equipo[3], 54)} %<p>Se aplica sobre lo que le toca a cada persona después de repartir el trabajo. Entre varios no se tarda justo la mitad (o un tercio): se coordinan, se cruzan en los pasillos o uno espera al otro. Ejemplo: 100 min entre 2 personas son 50 min cada una; con 10% de pérdida son 55 min cada una. Es un supuesto, no se mide: lo ajustás vos.</p></div>
       <div class="tp-ajf"><b>Empiezan a las</b> <input type="time" data-cfg="inicio" value="${esc(c.inicio)}"><p>Sirve para calcular a qué hora terminan.</p></div>
-      <div class="tp-ajf"><b>Descansos</b>${c.descansos.map((d, i) => `<div>${esc(d.nombre)}: si el trabajo de una persona pasa de ${num('descansos.' + i + '.despues', d.despues, 58)} min, se suma un descanso de ${num('descansos.' + i + '.dura', d.dura, 50)} min</div>`).join('')}<p>Se suman al tiempo total estimado. Ponelos en 0 si no querés contarlos.</p></div>
+      <div class="tp-ajf"><b>Descansos</b>${c.descansos.map((d, i) => `<div>Tiempo de ${esc(String(d.nombre).toLowerCase())}: ${num('descansos.' + i + '.dura', d.dura, 56)} min</div>`).join('')}<p>Se suman completos al tiempo total estimado de cada persona (no a lo que se pasa armando). Ponelos en 0 si no querés contarlos.</p></div>
+      <div class="tp-ajf"><b>Ajustar por sucursal</b> <label style="font-weight:600"><input type="checkbox" data-cfgchk="ajusteSucursal" ${c.ajusteSucursal !== false ? 'checked' : ''}> Corregir el tiempo según lo que históricamente tarda cada sucursal</label><p>Algunas sucursales tardan siempre un poco más o menos que el promedio (distancia al andén, cómo se arma el pallet, etc.). Si está prendido, se suma esa diferencia medida en tus pedidos (con pocos pedidos casi no cambia nada). Si lo apagás, todas las sucursales se calculan igual.</p></div>
       <div class="tp-ajf"><b>Demoras y pausas</b> Entre dos artículos seguidos, hasta ${num('umbralDemora', c.umbralDemora, 46)} min cuenta como trabajo; de ahí hasta ${num('umbralPausa', c.umbralPausa, 46)} min es una demora (no cuenta como armado); más es una pausa.<p>Al cambiarlo se recalcula todo el historial.</p></div>
       <div class="tp-ajf"><b>Cómo se calcula lo que debería tardar</b>${modeloTxt}</div></div></details>`;
   }
@@ -454,42 +468,127 @@ export function iniciarTiemposPedido(ctx) {
   }
   function descargarCSV() {
     const cel = v => { const s = String(v ?? ''); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-    const enc = ['Día', 'Sucursal', 'Artículos', 'Unidades', 'Marcas', 'Sin stock', 'Personas', 'Tiempo de armado (min)', 'Demoras (min)', 'Pausas (min)', 'Tiempo total (min)', 'Min por artículo', 'Debería tardar 1 persona (min)', 'Desvío %', 'Detalle por persona'];
-    const filas = E.pedidos.filter(p => !E.filtroSuc || p.sucursal === E.filtroSuc).map(p => { const e = esperado(p), real = p.trabajoMs / MIN; return [p.dia, p.sucursal, p.lineas, p.unidades, p.picks, p.sinStock, p.k, n1(real), n1(p.demoraMs / MIN), n1(p.pausaMs / MIN), n1(p.relojMs / MIN), p.lineas ? n1(real / p.lineas) : '', e == null ? '' : n1(e), e ? n0((real / e - 1) * 100) : '', p.personas.map(x => x.nombre + ': ' + n1(x.trabajoMs / MIN) + ' min de armado, ' + x.picks + ' marcas').join(' | ')]; });
+    const enc = ['Día', 'Sucursal', 'Artículos', 'Unidades', 'Marcas', 'Sin stock', 'Personas', 'Tiempo de armado (min)', 'Demoras (min)', 'Pausas (min)', 'Tiempo total (min)', 'Min por artículo', 'Debería haber tardado 1 persona (min)', 'Estimado al empezar 1 persona (min)', 'Desvío %', 'Marcas dudosas', 'Detalle por persona'];
+    const filas = E.pedidos.filter(p => !E.filtroSuc || p.sucursal === E.filtroSuc).map(p => { const e = esperado(p), real = p.trabajoMs / MIN; return [p.dia, p.sucursal, p.lineas, p.unidades, p.picks, p.sinStock, p.k, n1(real), n1(p.demoraMs / MIN), n1(p.pausaMs / MIN), n1(p.relojMs / MIN), p.lineas ? n1(real / p.lineas) : '', e == null ? '' : n1(e), e == null ? '' : n1(esperadoIni(p)), e ? n0((real / e - 1) * 100) : '', p.dudosas.length, p.personas.map(x => x.nombre + ': ' + n1(x.trabajoMs / MIN) + ' min de armado, ' + x.picks + ' marcas').join(' | ')]; });
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + [enc, ...filas].map(f => f.map(cel).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
     a.download = 'pedidos_tiempos_' + fechaLocal(Date.now()) + '.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+
+  // ======================================================== marcas mal cargadas: encontrarlas, corregirlas o sacarlas de las estadísticas
+  const marcasDelPedido = (dia, suc) => E.eventos.filter(ev => fechaLocal(ev.timestampMs) === dia && (ev.sucursal || '(sin sucursal)') === suc).sort((a, b) => a.timestampMs - b.timestampMs);
+  function renderRevisar() {
+    const host = $('tp_revisar'); if (!host) return;
+    const dud = E.pedidos.filter(p => p.dudosas.length), exc = {};
+    E.eventos.forEach(ev => { if (ev.excluido && ev.timestampMs) { const k = fechaLocal(ev.timestampMs) + '|' + (ev.sucursal || '(sin sucursal)'); exc[k] = (exc[k] || 0) + 1; } });
+    E.revisar = [...dud.map(p => ({ tipo: 'dud', dia: p.dia, sucursal: p.sucursal, p })), ...Object.keys(exc).sort().reverse().map(k => { const [dia, ...r] = k.split('|'); return { tipo: 'exc', dia, sucursal: r.join('|'), n: exc[k] }; })];
+    host.style.display = E.revisar.length ? '' : 'none';
+    if (!E.revisar.length) { host.innerHTML = ''; return; }
+    const hora = ms => new Date(ms).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    host.innerHTML = `<h3 class="mt-h3">⚠️ Para revisar</h3>
+      <div class="contador" style="margin-bottom:8px">Acá aparecen los pedidos con una cantidad que parece mal cargada (por ejemplo un código de barras escrito en el casillero de cantidad) y los que tienen marcas sacadas de las estadísticas. Mientras no se corrija, las estadísticas usan lo que se pidió en lugar de ese número.</div>
+      <div style="overflow-x:auto"><table class="tp-t"><tr><th>Día</th><th>Sucursal</th><th>Qué pasa</th><th></th></tr>
+      ${E.revisar.map((x, i) => { let que;
+        if (x.tipo === 'dud') { const d = x.p.dudosas[0]; que = `Cantidad dudosa en «${esc(d.producto || d.codigo || '?')}»: se pidió ${n0(d.cantidadPedida)} y figura <b>${n0(d.cantidadArmada)}</b> (${esc((d.personaNombre || '').split(' ')[0])}, ${hora(d.timestampMs)})${x.p.dudosas.length > 1 ? ` y ${x.p.dudosas.length - 1} más` : ''}`; }
+        else que = `${x.n} marca${x.n === 1 ? '' : 's'} sacada${x.n === 1 ? '' : 's'} de las estadísticas`;
+        return `<tr><td style="white-space:nowrap">${esc(x.dia)}</td><td><b>${esc(x.sucursal)}</b></td><td>${que}</td><td><button class="btn-chico ${x.tipo === 'dud' ? 'azul' : ''}" data-cuenta="rev:${i}">${x.tipo === 'dud' ? 'Ver marcas y corregir' : 'Ver y volver a incluir'}</button></td></tr>`; }).join('')}</table></div>`;
+  }
+  async function guardarMarca(ev, remoto, local) {
+    await updateDoc(doc(db, 'eventosArmado', ev.id), remoto);     // si falla, no se toca nada en pantalla
+    Object.assign(ev, remoto, local);
+  }
+  async function accionMarca(a) {
+    const i = a.indexOf(':'), tipo = i < 0 ? a : a.slice(0, i), id = i < 0 ? '' : a.slice(i + 1), c = E.cuenta;
+    if (tipo === 'cancel') { E.editMarca = ''; E.msgMarca = ''; renderCuenta(); return; }
+    if (tipo === 'corr') { E.editMarca = id; E.msgMarca = ''; renderCuenta(); return; }
+    if (!puede() || !c) return;
+    const ev = id ? E.eventos.find(x => x.id === id) : null, yo = quienSoy();
+    try {
+      if (tipo === 'guardar') {
+        const inp = document.getElementById('mk_in_' + id), v = inp && inp.value !== '' ? Number(inp.value) : NaN;
+        if (!ev || !(isFinite(v) && v >= 0 && v < 100000)) { E.msgMarca = 'Escribí una cantidad válida (entre 0 y 99.999).'; renderCuenta(); return; }
+        await guardarMarca(ev, { cantidadArmada: v, cantidadOriginal: ev.cantidadOriginal != null ? ev.cantidadOriginal : ev.cantidadArmada, corregidoPor: yo, corregidoEn: serverTimestamp() }, { corregidoEn: new Date() });
+        E.editMarca = ''; E.msgMarca = 'Cantidad corregida a ' + n0(v) + '. Las estadísticas ya la usan.';
+      } else if (tipo === 'excl' && ev) {
+        await guardarMarca(ev, { excluido: true, excluidoPor: yo, excluidoEn: serverTimestamp() }, { excluidoEn: new Date() }); E.msgMarca = 'Marca sacada de las estadísticas (se puede volver a incluir).';
+      } else if (tipo === 'rest' && ev) {
+        await guardarMarca(ev, { excluido: false, excluidoPor: yo, excluidoEn: serverTimestamp() }, { excluidoEn: new Date() }); E.msgMarca = 'Marca incluida de nuevo.';
+      } else if (tipo === 'exclp') {
+        const lista = marcasDelPedido(c.dia, c.sucursal).filter(x => !x.excluido);
+        if (!confirm(`¿Sacar de las estadísticas TODO el pedido de ${c.sucursal} del ${c.dia} (${lista.length} marcas)?\n\nNo se borra nada: se puede volver a incluir desde acá.`)) return;
+        await Promise.all(lista.map(x => guardarMarca(x, { excluido: true, excluidoPor: yo, excluidoEn: serverTimestamp() }, { excluidoEn: new Date() }))); E.msgMarca = 'El pedido entero quedó fuera de las estadísticas.';
+      } else if (tipo === 'restp') {
+        const lista = marcasDelPedido(c.dia, c.sucursal).filter(x => x.excluido);
+        await Promise.all(lista.map(x => guardarMarca(x, { excluido: false, excluidoPor: yo, excluidoEn: serverTimestamp() }, { excluidoEn: new Date() }))); E.msgMarca = 'El pedido volvió a las estadísticas.';
+      } else return;
+      recalcular();
+    } catch (err) { E.msgMarca = 'No se pudo guardar: ' + (err.message || err.code || err); renderCuenta(); }
   }
 
   // ======================================================== la cuenta de un pedido (ventana)
   function abrirCuenta(info) { E.cuenta = info; $('tp_modal').hidden = false; renderCuenta(); }
   function cerrarCuenta() { E.cuenta = null; const mo = $('tp_modal'); if (mo) mo.hidden = true; }
-  function renderCuenta() {
-    const host = $('tp_cuenta'), c = E.cuenta; if (!host || !c) return;
-    if (!E.modelo) { host.innerHTML = '<div class="empty-state">Todavía no hay modelo para hacer la cuenta.</div>'; return; }
-    const cfg = E.cfg, fi = E.factores[c.sucursal], cu = cuentaPedido(E.modelo, fi, c.lineas, c.unidades, cfg, E.calidad), m = cu.modelo, juntos = E.modelo.rho > 0.95 && E.modelo.terminos > 1, cols = cu.cols;
-    const infoFactor = fi ? `${esc(c.sucursal)} tardó ${n0(Math.abs(fi.bruto - 1) * 100)}% ${fi.bruto >= 1 ? 'más' : 'menos'} que el promedio en ${fi.n} pedidos${fi.n < 12 ? '; con pocos pedidos el ajuste se acerca prudentemente a 1' : ''}` : `${esc(c.sucursal)} no tiene historial de una sola persona: no se ajusta`;
-    const real = c.real != null ? `<tr class="tp-real"><td colspan="2">Lo que tardó de verdad ese día (tiempo de armado)</td><td><b>${n1(c.real)} min</b> (${(c.real / cu.tBase - 1) * 100 >= 0 ? '+' : ''}${n0((c.real / cu.tBase - 1) * 100)}% contra lo esperado${c.realReloj != null ? '; tiempo total, ' + fmtMin(c.realReloj) : ''})</td></tr>` : '';
-    const cel = fn => cols.map(d => `<td>${fn(d)}</td>`).join('');
-    host.innerHTML = `<h3 style="margin:0 0 4px">La cuenta: ${esc(c.sucursal)}</h3>
-      <div class="contador" style="margin-bottom:12px">${esc(c.titulo || '')} · ${n0(c.lineas)} artículos · ${n0(c.unidades)} unidades${c.nota ? ' · ' + esc(c.nota) : ''}. Los números con casillero los podés cambiar: se guarda y se recalcula todo.</div>
-      <h4 style="margin:0 0 6px">1. Cuánto debería tardar una persona armando (sin pausas)</h4>
+  function seccionMarcas(c, marcas) {
+    const puedeC = puede(), esDud = m => !m.excluido && esCantidadDudosa(m.cantidadPedida, m.cantidadArmada), dudosas = marcas.filter(esDud), sacadas = marcas.filter(m => m.excluido), todas = !E.soloDudosas || (!dudosas.length && !sacadas.length);
+    const prev = {}, gaps = new Map();
+    marcas.forEach(m => { const k = m.personaDocumento || m.personaNombre || '?'; if (!m.excluido) { gaps.set(m.id, prev[k] != null ? (m.timestampMs - prev[k]) / MIN : null); prev[k] = m.timestampMs; } });
+    const hora = ms => new Date(ms).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const filas = (todas ? marcas : marcas.filter(m => m.excluido || esDud(m))).map(m => {
+      const dud = esDud(m), edit = E.editMarca === m.id, g = gaps.get(m.id), ini = Math.min(Number(m.cantidadPedida) || 0, 99999);
+      const armo = edit ? `<input type="number" id="mk_in_${esc(m.id)}" min="0" max="99999" step="any" value="${esc(String(ini))}" style="width:90px"> <button class="btn-chico azul" data-mk="guardar:${esc(m.id)}">Guardar</button> <button class="btn-chico" data-mk="cancel">Cancelar</button>`
+        : `<b>${n0(m.cantidadArmada)}</b>${dud ? ' <span class="chip crit" style="font-size:11px;padding:0 8px">dudosa</span>' : ''}${m.cantidadOriginal != null ? `<div class="contador">corregida (antes: ${n0(m.cantidadOriginal)})</div>` : ''}`;
+      const acc = !puedeC ? '' : m.excluido ? `<button class="btn-chico" data-mk="rest:${esc(m.id)}">Volver a incluir</button>` : `<button class="btn-chico" data-mk="corr:${esc(m.id)}">Corregir cantidad</button> <button class="btn-chico" data-mk="excl:${esc(m.id)}" title="Deja de contar en todas las estadísticas. Se puede deshacer.">Sacar de las estadísticas</button>`;
+      return `<tr class="${m.excluido ? 'tp-exc' : dud ? 'tp-dud' : ''}"><td style="white-space:nowrap">${hora(m.timestampMs)}</td><td>${esc((m.personaNombre || '').split(' ')[0] || '?')}</td><td>${esc(m.producto || m.codigo || '?')}<div class="contador">${m.codigo ? 'cód. ' + esc(m.codigo) : ''}${m.diferencia ? ' · ' + esc(m.diferencia) : ''}</div></td><td>${n0(m.cantidadPedida)}</td><td>${armo}</td><td>${m.excluido ? 'sacada' : g == null ? '—' : fmtMin(g)}</td><td>${acc}</td></tr>`;
+    }).join('');
+    return `<h4 style="margin:16px 0 6px">3. Las marcas de este pedido <span class="contador">por si alguna se cargó mal</span></h4>
+      <div class="contador" style="margin-bottom:8px">${marcas.length} marcas · ${dudosas.length} con cantidad dudosa · ${sacadas.length} sacadas de las estadísticas. "Sacar de las estadísticas" no borra nada: la marca deja de contar en todos los paneles y se puede volver a incluir.${puedeC ? '' : ' Solo Logística puede corregir marcas.'}</div>
+      <div class="mt-barra" style="flex-wrap:wrap;gap:8px 14px">${dudosas.length || sacadas.length ? `<label><input type="checkbox" data-solo ${E.soloDudosas ? 'checked' : ''}> Mostrar solo las dudosas y las sacadas</label>` : ''}${puedeC && marcas.some(m => !m.excluido) ? '<button class="btn-chico" data-mk="exclp">Sacar TODO el pedido de las estadísticas</button>' : ''}${puedeC && sacadas.length ? '<button class="btn-chico" data-mk="restp">Volver a incluir lo sacado</button>' : ''}</div>
+      ${E.msgMarca ? `<div class="note" style="margin:8px 0" role="status">${esc(E.msgMarca)}</div>` : ''}
+      <div style="overflow:auto;max-height:360px"><table class="tp-t"><tr><th>Hora</th><th>Persona</th><th>Producto</th><th>Pidió</th><th>Armó</th><th>Desde la anterior</th><th></th></tr>${filas || '<tr><td colspan="7">No hay marcas para mostrar.</td></tr>'}</table></div>`;
+  }
+  function cuentaHtml(c, p, lineas, unidades, hist) {
+    const cfg = E.cfg, fi = E.factores[c.sucursal], cu = cuentaPedido(E.modelo, fi, lineas, unidades, cfg, E.calidad), m = cu.modelo, juntos = E.modelo.rho > 0.95 && E.modelo.terminos > 1, cols = cu.cols;
+    const ay = t => `<div class="tp-help">${t}</div>`, cel = fn => cols.map(d => `<td>${fn(d)}</td>`).join('');
+    const como = `<details class="tp-como" style="margin-bottom:12px"><summary>¿Cómo se calcula todo esto? (en palabras)</summary><p style="margin:6px 0 0;line-height:1.55">El sistema mira los ${n0(E.modelo.n)} pedidos que ya se armaron${E.modelo.soloUnaPersona ? ' con una sola persona' : ''}. De cada uno sabe cuántos artículos y cuántas unidades tuvo y cuánto tardó de verdad. Busca los tres números (minutos por artículo, minutos por unidad y un tiempo fijo) que, aplicados a esos pedidos, den tiempos lo más parecidos posible a los reales. Con esos mismos tres números calcula cualquier pedido, esté armado o no. En tus pedidos se equivoca en promedio ${n0(E.calidad.mape * 100)}%.</p></details>`;
+    let resumen = '';
+    if (hist && p) {
+      const real = p.trabajoMs / MIN, dv = (real / cu.tBase - 1) * 100;
+      resumen = `<table class="tp-t" style="margin-bottom:6px"><tr><th>Para este pedido</th><th>Con cuántas unidades</th><th>Tiempo</th></tr>
+        <tr><td>Estimado al empezar</td><td>${n0(p.unidadesPed)} pedidas</td><td><b>${fmtMin(esperadoIni(p))}</b></td></tr>
+        <tr><td>Debería haber tardado</td><td>${n0(p.unidades)} realmente armadas</td><td><b>${fmtMin(cu.tBase)}</b></td></tr>
+        <tr class="tp-real"><td>Lo que tardó de verdad (tiempo de armado)</td><td></td><td><b>${n1(real)} min</b> (${dv >= 0 ? '+' : ''}${n0(dv)}% contra lo que debería haber tardado; tiempo total, ${fmtMin(p.relojMs / MIN)})</td></tr></table>
+        <div class="tp-help" style="margin:0 0 14px">Antes de armar solo se sabe lo que se pidió (el stock no se conoce hasta que se arma): de ahí sale el estimado al empezar. Una vez armado, para saber cuánto debería haber tardado se usan las unidades que realmente se armaron.</div>`;
+    }
+    const infoFactor = fi ? `${esc(c.sucursal)} tardó ${n0(Math.abs(fi.bruto - 1) * 100)}% ${fi.bruto >= 1 ? 'más' : 'menos'} que el promedio en ${fi.n} pedidos` : (cfg.ajusteSucursal === false ? 'el ajuste está apagado en Ajustes' : `${esc(c.sucursal)} todavía no tiene historial propio`);
+    return como + resumen + `<h4 style="margin:0 0 6px">1. Cuánto ${hist ? 'debería haber tardado' : 'debería tardar'} una persona armando (sin pausas)</h4>
       <table class="tp-t"><tr><th>Paso</th><th>Cuenta</th><th>Resultado</th></tr>
-        <tr><td>Artículos</td><td>${n0(m.lineas)} artículos × ${n2(m.b)} min</td><td>${n1(m.tB)} min</td></tr>
-        ${m.c > 0.0005 ? `<tr><td>Unidades</td><td>${n0(m.unidades)} unidades × ${n3(m.c)} min</td><td>${n1(m.tC)} min</td></tr>` : ''}
-        ${Math.abs(m.a) > 0.05 ? `<tr><td>Tiempo fijo</td><td>arranque y cierre promedio</td><td>${n1(m.tA)} min</td></tr>` : ''}
+        <tr><td>Artículos</td><td>${n0(m.lineas)} artículos × ${n2(m.b)} min <span class="muted">(${n0(m.b * 60)} segundos cada uno)</span>${ay('Cada artículo (renglón del pedido) lleva un tiempo parecido: ir hasta el producto, encontrarlo y escanearlo. Ese tiempo sale de tus pedidos ya armados.')}</td><td>${n1(m.tB)} min</td></tr>
+        ${m.c > 0.0005 ? `<tr><td>Unidades</td><td>${n0(m.unidades)} unidades × ${n3(m.c)} min <span class="muted">(${n1(m.c * 60)} segundos cada una)</span>${ay('Cada unidad que hay que levantar y acomodar en la caja o el pallet. También sale de tus pedidos ya armados.')}</td><td>${n1(m.tC)} min</td></tr>` : ''}
+        ${Math.abs(m.a) > 0.05 ? `<tr><td>Tiempo fijo por pedido</td><td>lo que lleva cualquier pedido sin importar su tamaño${ay('No se mide directo (hoy el Armador no marca cuándo empieza ni cuándo termina un pedido): es el número que hace que la fórmula calce mejor con tus pedidos ya armados. Es un ajuste, no un tiempo real de arranque o cierre.')}</td><td>${n1(m.tA)} min</td></tr>` : ''}
         <tr><td><b>Según el historial</b></td><td>la suma de lo anterior${juntos ? ' (los artículos y las unidades crecen a la par: lo que vale es el total, no cada parte)' : ''}</td><td><b>${n1(m.tModelo)} min</b></td></tr>
-        <tr><td>Ajuste de la sucursal</td><td>× ${n2(cu.factor)} (${infoFactor})</td><td>${n1(cu.tBase)} min</td></tr>
-        <tr class="tp-total"><td><b>Debería tardar</b></td><td>una persona, sin pausas ni demoras${cu.rango ? `; un pedido real suele quedar entre ${n1(cu.rango.lo)} y ${n1(cu.rango.hi)} min` : ''}</td><td><b>${n1(cu.tBase)} min</b></td></tr>${real}</table>
+        <tr><td>Ajuste de la sucursal</td><td>× ${n2(cu.factor)} (${infoFactor})${ay('Algunas sucursales tardan siempre un poco más o menos que el promedio (distancia al andén, cómo se arma el pallet, etc.). Si la diferencia es chica casi no cambia nada. Se puede apagar en Ajustes.')}</td><td>${n1(cu.tBase)} min</td></tr>
+        <tr class="tp-total"><td><b>${hist ? 'Debería haber tardado' : 'Debería tardar'}</b></td><td>una persona, sin pausas ni demoras${cu.rango ? `; un pedido real suele quedar entre ${n1(cu.rango.lo)} y ${n1(cu.rango.hi)} min` : ''}</td><td><b>${n1(cu.tBase)} min</b></td></tr></table>
       <h4 style="margin:16px 0 6px">2. Entre 1, 2 o 3 personas</h4>
       <div style="overflow-x:auto"><table class="tp-t"><tr><th>Paso</th><th>1 persona</th><th>2 personas</th><th>3 personas</th></tr>
-        <tr><td>Debería tardar</td>${cel(d => n1(d.total) + ' min')}</tr>
+        <tr><td>${hist ? 'Debería haber tardado' : 'Debería tardar'}</td>${cel(d => n1(d.total) + ' min')}</tr>
         <tr><td>Se reparte entre las personas</td><td>—</td>${[2, 3].map(k => `<td>÷ ${k}<div class="contador">→ ${n1(cols[k - 1].porPersona)} min cada una</div></td>`).join('')}</tr>
-        <tr><td>Pérdida por armar entre varios<div class="contador">se coordinan y se pisan</div></td><td>—</td>${[2, 3].map(k => `<td>+ ${num('equipo.' + k, cfg.equipo[k], 50)} %<div class="contador">→ ${n1(cols[k - 1].cadaUna)} min cada una</div></td>`).join('')}</tr>
+        <tr><td>Pérdida por armar entre varios${ay(`Se aplica sobre lo que le toca a cada uno después de repartir: ${n1(cols[1].porPersona)} min × (1 + ${n0(cfg.equipo[2])}%) = ${n1(cols[1].cadaUna)} min. Entre varios no se tarda justo la mitad: se coordinan y se cruzan en los pasillos. Es un supuesto, no se mide.`)}</td><td>—</td>${[2, 3].map(k => `<td>+ ${num('equipo.' + k, cfg.equipo[k], 50)} %<div class="contador">→ ${n1(cols[k - 1].cadaUna)} min cada una</div></td>`).join('')}</tr>
         <tr class="tp-total"><td><b>Cada persona arma</b></td>${cel(d => '<b>' + n1(d.cadaUna) + ' min</b>')}</tr>
-        <tr><td>Margen ${num('tolerancia', cfg.tolerancia, 52)} %<div class="contador">demoras y necesidades personales</div></td>${cel(d => '+ ' + n0(d.tolerancia) + '%<div class="contador">→ ' + n1(d.trabajo) + ' min de trabajo</div>')}</tr>
-        <tr><td>Descansos que caen en el turno${cfg.descansos.map((d, i) => `<div class="contador">${esc(d.nombre)}: si pasa de ${num('descansos.' + i + '.despues', d.despues, 50)} min, suma ${num('descansos.' + i + '.dura', d.dura, 42)} min</div>`).join('')}</td>${cel(d => d.descansosMin ? '+ ' + n0(d.descansosMin) + ' min<div class="contador">' + d.descansos.map(x => esc(x.nombre)).join(' y ') + '</div>' : 'ninguno')}</tr>
+        <tr><td>% de holgura ${num('tolerancia', cfg.tolerancia, 52)} %${ay('Tiempo extra que se suma a lo que arma cada persona, para demoras chicas y necesidades personales.')}</td>${cel(d => '+ ' + n0(d.tolerancia) + '%<div class="contador">→ ' + n1(d.trabajo) + ' min de trabajo</div>')}</tr>
+        <tr><td>Descansos${cfg.descansos.map((d, i) => `<div class="contador">Tiempo de ${esc(String(d.nombre).toLowerCase())}: ${num('descansos.' + i + '.dura', d.dura, 50)} min</div>`).join('')}${ay('Se suman completos al tiempo total de cada persona.')}</td>${cel(d => d.descansosMin ? '+ ' + n0(d.descansosMin) + ' min<div class="contador">' + d.descansos.map(x => esc(String(x.nombre).toLowerCase())).join(' + ') + '</div>' : 'ninguno')}</tr>
         <tr class="tp-total"><td><b>Tiempo total estimado</b></td>${cel(d => '<b>' + fmtMin(d.reloj) + '</b>')}</tr>
         <tr><td>Terminan a las<div class="contador">empiezan a las <input type="time" data-cfg="inicio" value="${esc(cfg.inicio)}"></div></td>${cel(d => d.fin)}</tr></table></div>`;
+  }
+  function renderCuenta() {
+    const host = $('tp_cuenta'), c = E.cuenta; if (!host || !c) return;
+    const hist = !!c.dia, p = hist ? E.pedidos.find(x => x.dia === c.dia && x.sucursal === c.sucursal) : null, marcas = hist ? marcasDelPedido(c.dia, c.sucursal) : [];
+    const lineas = hist ? (p ? p.lineas : 0) : c.lineas, unidades = hist ? (p ? p.unidades : 0) : c.unidades;
+    const cab = `<h3 style="margin:0 0 4px">La cuenta: ${esc(c.sucursal)}</h3><div class="contador" style="margin-bottom:12px">${esc(c.titulo || '')}${lineas || unidades ? ` · ${n0(lineas)} artículos · ${n0(unidades)} unidades${hist ? ' realmente armadas' : ''}` : ''}${c.nota ? ' · ' + esc(c.nota) : ''}. Los números con casillero los podés cambiar: se guarda y se recalcula todo.</div>`;
+    const aviso = hist && p && p.dudosas.length ? `<div class="note crit" style="margin-bottom:12px">⚠ Este pedido tiene <b>${p.dudosas.length}</b> marca${p.dudosas.length === 1 ? '' : 's'} con una cantidad que parece mal cargada (la más grande: <b>${n0(Math.max(...p.dudosas.map(x => Number(x.cantidadArmada) || 0)))}</b>). Mientras no la corrijas, las estadísticas usan lo que se pidió. Revisala en el punto 3.</div>` : '';
+    let cuerpo;
+    if (!E.modelo) cuerpo = '<div class="empty-state">Todavía no hay modelo para hacer la cuenta.</div>';
+    else if (hist && !p) cuerpo = '<div class="note" style="margin-bottom:12px">Este pedido está sacado de las estadísticas (todas sus marcas). Abajo podés volver a incluirlo.</div>';
+    else cuerpo = cuentaHtml(c, p, lineas, unidades, hist);
+    host.innerHTML = cab + aviso + cuerpo + (hist ? seccionMarcas(c, marcas) : '');
   }
 
   // ======================================================== armado del panel y eventos
@@ -512,9 +611,10 @@ export function iniciarTiemposPedido(ctx) {
         .tp-box{background:#fff;border-radius:16px;max-width:1000px;width:100%;padding:22px 24px;position:relative;box-shadow:0 20px 60px rgba(0,0,0,.3)}.tp-x{position:absolute;top:12px;right:14px;border:0;background:#eef2f7;border-radius:999px;width:34px;height:34px;font-size:16px;cursor:pointer}
         .tp-box table{width:100%;border-collapse:collapse;font-size:15px}.tp-box th{text-align:left;padding:10px 8px;font-size:12.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border);white-space:nowrap}
         .tp-box td{padding:9px 8px;border-bottom:1px solid var(--border);vertical-align:top}.tp-box h3,.tp-box h4{color:var(--text,#0f172a)}.tp-box input[type=number],.tp-box input[type=time]{padding:3px 5px;border:1px solid var(--border);border-radius:6px;font:inherit;font-size:13px}
-        .tp-total td{background:rgba(46,91,255,.06)}.tp-real td{background:rgba(245,158,11,.12)}</style>
+        .tp-total td{background:rgba(46,91,255,.06)}.tp-real td{background:rgba(245,158,11,.12)}.tp-help{font-size:12.5px;color:var(--muted);font-weight:400;line-height:1.4;margin-top:3px}.tp-dud td{background:rgba(220,38,38,.09)}.tp-exc td{opacity:.5;text-decoration:line-through}</style>
       <div class="card"><div class="mt-barra"><b>Período</b> <select id="tp_semanas"><option value="4">Últimas 4 semanas</option><option value="8">Últimas 8 semanas</option><option value="12">Últimas 12 semanas</option></select>
         <button class="btn-chico azul" id="tp_btnCalcular">Actualizar</button> <span class="contador" id="tp_estado">Leyendo las marcas de armado del período...</span></div></div>
+      <div class="card" id="tp_revisar" style="display:none"></div>
       <div class="card"><h3 class="mt-h3">📈 Cuánto están tardando</h3><div id="tp_graf"><div class="empty-state">Leyendo las marcas de armado...</div></div></div>
       <div class="card"><h3 class="mt-h3">📅 Pedidos de hoy: cuánto deberían tardar</h3><div id="tp_hoy"><div class="empty-state">Leyendo los pedidos de hoy...</div></div></div>
       <div class="card"><h3 class="mt-h3">🧮 ¿Cuánto debería tardar un pedido?</h3><div id="tp_calc"><div class="empty-state">Calculando el historial...</div></div></div>
@@ -527,11 +627,13 @@ export function iniciarTiemposPedido(ctx) {
     $('tp_btnCalcular').onclick = () => { calcular(); cargarHoy(); };
     const cuentaDe = ref => { const [t, i] = ref.split(':'), n = +i;
       if (t === 'hoy') { const g = E.hoy.grupos[n], u = usoHoy(g); return { sucursal: g.sucursal, lineas: u.l, unidades: u.u, titulo: 'Pedido de hoy' + (E.hoy.modo === 'falta' ? ' (solo lo que falta armar)' : ''), nota: `${g.armadas} de ${g.lineas} artículos ya armados` }; }
+      if (t === 'rev') { const x = E.revisar[n]; return { sucursal: x.sucursal, dia: x.dia, titulo: 'Pedido del ' + x.dia }; }
       if (t === 'calc') return { sucursal: E.calc.sucursal, lineas: E.calc.lineas, unidades: E.calc.unidades, titulo: 'Pedido de la calculadora' };
-      const p = (t === 'dia' ? E.filasDia : E.filasVis)[n]; return { sucursal: p.sucursal, lineas: p.lineas, unidades: p.unidades, titulo: 'Pedido del ' + p.dia, real: p.trabajoMs / MIN, realReloj: p.relojMs / MIN }; };
+      const p = (t === 'dia' ? E.filasDia : E.filasVis)[n]; E.editMarca = ''; E.msgMarca = ''; return { sucursal: p.sucursal, dia: p.dia, titulo: 'Pedido del ' + p.dia }; };
     const onClick = ev => {
       const t = ev.target;
       if (t.closest('#tp_cerrar') || t.id === 'tp_modal') { cerrarCuenta(); return; }
+      const mk = t.closest('[data-mk]'); if (mk) { ev.preventDefault(); accionMarca(mk.dataset.mk); return; }
       const gb = t.closest('[data-g]'); if (gb && gb.tagName !== 'INPUT') { ev.preventDefault(); accionGraf(gb.dataset.g); return; }
       if (t.closest('#tp_btnHoy')) { cargarHoy(); return; }
       const b = t.closest('button[data-cuenta]'); if (b) { abrirCuenta(cuentaDe(b.dataset.cuenta)); return; }
@@ -546,6 +648,8 @@ export function iniciarTiemposPedido(ctx) {
     };
     const onChange = ev => {                        // al salir del casillero
       const el = ev.target;
+      if (el.dataset.solo !== undefined) { E.soloDudosas = el.checked; renderCuenta(); return; }
+      if (el.dataset.cfgchk !== undefined) { E.cfg[el.dataset.cfgchk] = el.checked; guardarCfg(); recalcular(); return; }
       if (el.id === 'tp_calcSuc') { E.calc.sucursal = el.value; Object.assign(E.calc, tipico(el.value)); renderCalc(); return; }
       if (el.name === 'tp_modo') { E.hoy.modo = el.value; renderHoy(); return; }
       if (el.dataset.g === 'desde' || el.dataset.g === 'hasta') { E.graf[el.dataset.g] = el.value; if (E.graf.desde && E.graf.hasta && E.graf.desde > E.graf.hasta) [E.graf.desde, E.graf.hasta] = [E.graf.hasta, E.graf.desde]; E.graf.diaSel = ''; renderGrafico(); return; }

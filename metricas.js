@@ -190,7 +190,7 @@ export function iniciarMetricas(ctx) {
           const plano = [];
           snap.forEach(d => {
             const data = d.data();
-            if (!data.timestamp) return; // por si el serverTimestamp todavía no resolvió (optimistic local write)
+            if (!data.timestamp || data.excluido) return;   // una marca sacada de las estadísticas no cuenta // por si el serverTimestamp todavía no resolvió (optimistic local write)
             const ev = { ...data, timestampMs: data.timestamp.toMillis() };
             const key = ev.personaDocumento || ev.personaNombre || '?';
             if (!porPersona[key]) porPersona[key] = { nombre: ev.personaNombre, eventos: [] };
@@ -348,7 +348,7 @@ export function iniciarMetricas(ctx) {
           const porPersona = {};
           snap.forEach(d => {
             const data = d.data();
-            if (!data.timestamp) return;
+            if (!data.timestamp || data.excluido) return;   // una marca sacada de las estadísticas no cuenta
             const ev = { ...data, timestampMs: data.timestamp.toMillis() };
             const key = ev.personaDocumento || ev.personaNombre || '?';
             if (!porPersona[key]) porPersona[key] = { nombre: ev.personaNombre, eventos: [] };
@@ -480,7 +480,7 @@ export function iniciarMetricas(ctx) {
           const todosLosEventos = [];
           snap.forEach(d => {
             const data = d.data();
-            if (!data.timestamp) return;
+            if (!data.timestamp || data.excluido) return;   // una marca sacada de las estadísticas no cuenta
             const ev = { ...data, timestampMs: data.timestamp.toMillis() };
             const key = ev.personaDocumento || ev.personaNombre || '?';
             if (!porPersona[key]) porPersona[key] = { nombre: ev.personaNombre, eventos: [] };
