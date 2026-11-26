@@ -465,7 +465,7 @@ function computeDow() {
 function buildStock() {
   S.stockMap = {}; S.stockMissing = []; S.stockUnknown = []; S.stockSeen = new Set();
   const st = S.stock; S.stockDn = st && st.date ? strToDn(st.date) : todayDn();
-  if (!st) return;
+  if (!st) { aplicarDepositoSial(); return; }
   const seen = new Set();
   for (const r of st.rows || []) {
     const m = S.mm[normCod(r.cod)];
@@ -480,6 +480,7 @@ function buildStock() {
   // Stock a mano: solo para productos que no tienen stock en Firebase (p. ej. un proveedor agregado a mano). Nunca pisa el stock real.
   for (const m of S.master) if (!seen.has(m.cod)) { const sm = ((S.params && S.params.prod && S.params.prod[m.cod]) || {}).stockManual; if (sm !== undefined && sm !== null && sm !== '' && +sm >= 0) { S.stockMap[m.cod] = +sm; seen.add(m.cod); } }
   S.stockMissing = S.master.filter(m => !seen.has(m.cod)).map(m => m.cod);
+  aplicarDepositoSial();   // los SIAL: el depósito del reporte pisa al de Firebase
 }
 
 /* ================= series y pronóstico ================= */
@@ -950,9 +951,9 @@ window.addEventListener('resize', () => { moveInd(); });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(moveInd);
 function renderStatus() {
   if (!S.ready) { $('#status').innerHTML = ''; return; }
-  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 19/11 · stock en sucursales</span>`; return; }
+  if (S.meta && S.meta.virtual) { $('#status').innerHTML = `<span class="pill warn">Sin ventas cargadas</span><span class="pill">Stock del <b>${dnFmt(S.stockDn)}</b></span><span class="pill"><b>${nf(S.master.length)}</b> productos · <b>${new Set(S.master.map(m => m.prov)).size}</b> proveedores</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 26/11 · stock de depósito SIAL</span>`; return; }
   const part = isPartial() ? `<span class="pill warn" title="La última semana tiene datos hasta el ${dnFmt(S.lastDn)}; se completa con el perfil por día de la semana">semana en curso parcial</span>` : '';
-  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 19/11 · stock en sucursales</span>${part}`;
+  $('#status').innerHTML = `<span class="pill">Ventas hasta <b>${dnFmt(S.lastDn)}</b></span><span class="pill">Stock del <b>${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}</b></span><span class="pill"><b>${S.master.length}</b> productos · <b>${S.storeList.length}</b> sucursales</span><span class="pill" title="Versión con ventas acumulativas, historial de cargas y reinicio (22/10)">v. 26/11 · stock de depósito SIAL</span>${part}`;
 }
 function render(anim) {
   renderTabs(); renderStatus(); badgeSol();
@@ -1306,7 +1307,7 @@ function stockRows() {
   const usaTotal = !!(S.params.g && S.params.g.stockTotal);
   return S.master.filter(m => m.prov).map(m => {
     const r = by[m.cod], dep = S.stockMap[m.cod] || 0, ss = stockSucDe(m), suc = ss ? ss.total : null, tot = dep + (suc || 0), ef = usaTotal ? tot : dep, sem = r ? r.wk4 : 0;
-    return { m, u: dep, ss, suc, ut: tot, ef, caj: m.xcaja && m.ucaja ? dep / m.ucaja : null, pos: pos[m.cod] || '', sem, dias: sem > 0 ? ef / (sem / 7) : null, estado: r ? r.estado : 'sinventas' };
+    return { m, u: dep, fte: (S.stockFuente || {})[m.cod] || null, ss, suc, ut: tot, ef, caj: m.xcaja && m.ucaja ? dep / m.ucaja : null, pos: pos[m.cod] || '', sem, dias: sem > 0 ? ef / (sem / 7) : null, estado: r ? r.estado : 'sinventas' };
   });
 }
 const diasTxt = d => d == null ? '<span class="muted">sin ventas</span>' : d > 365 ? 'más de 365 d' : nf(d, 0) + ' d';
@@ -1331,11 +1332,11 @@ function viewStock(main) {
     const e = ESTADO[x.estado] || ESTADO.sinventas, m = x.m, ss = x.ss, sinStk = '<span class="chip crit">sin stock</span>';
     const tip = ss ? ss.det.map(d => d[0] + ' ' + nf(d[1], 0)).join(' · ') + ' (al ' + dnFmt(ss.hasta) + ')' + (ss.neg ? '. Las sucursales con stock negativo cuentan como 0.' : '') : '';
     const celSuc = ss ? `<span title="${esc(tip)}">${ss.total > 0 ? stkNum(ss.total, m) : '<b>0</b><span class="u">u.</span>'}<span class="sub">al ${dnFmt(ss.hasta)}${ss.neg ? ' · ' + ss.neg + ' neg.' : ''}</span></span>` : '<span class="muted" title="Este producto no vino en el reporte de ventas de las sucursales">—</span>';
-    return `<tr class="row" data-cod="${esc(m.cod)}"><td class="sticky1 wrap"><div class="pn">${esc(m.nombre)}<small>cód. ${esc(m.cod)}${m.ci ? ' · int. ' + esc(m.ci) : ''}${ss && ss.sial ? ' · <span class="chip" style="padding:0 8px;font-size:12px" title="Va por SIAL">SIAL</span>' : ''}</small></div></td><td>${esc(m.prov)}</td><td>${esc(x.pos) || '<span class="muted">—</span>'}</td><td class="n">${celSuc}</td><td class="n">${x.u <= 0 ? sinStk : stkNum(x.u, m)}</td><td class="n st-tot">${x.ut <= 0 ? sinStk : stkNum(x.ut, m)}</td>${conVentas ? `<td class="n">${x.sem > 0 ? nf(x.sem, x.sem < 20 ? 1 : 0) + ' u.' : '<span class="muted">—</span>'}</td><td class="n">${diasTxt(x.dias)}</td><td><span class="chip ${e.c}">${e.t}</span></td>` : ''}</tr>`;
+    return `<tr class="row" data-cod="${esc(m.cod)}"><td class="sticky1 wrap"><div class="pn">${esc(m.nombre)}<small>cód. ${esc(m.cod)}${m.ci ? ' · int. ' + esc(m.ci) : ''}${ss && ss.sial ? ' · <span class="chip" style="padding:0 8px;font-size:12px" title="Va por SIAL">SIAL</span>' : ''}</small></div></td><td>${esc(m.prov)}</td><td>${esc(x.pos) || '<span class="muted">—</span>'}</td><td class="n">${celSuc}</td><td class="n">${x.u <= 0 ? sinStk : stkNum(x.u, m)}${x.fte ? `<span class="sub" title="Stock del depósito que vino en el reporte de ventas (productos SIAL)${x.fte.neg ? '. Era negativo: cuenta como 0.' : ''}" style="${todayDn() - x.fte.dn > 7 ? 'color:#b45309' : ''}">reporte al ${dnFmt(x.fte.dn)}${todayDn() - x.fte.dn > 7 ? ' ⚠' : ''}</span>` : ''}</td><td class="n st-tot">${x.ut <= 0 ? sinStk : stkNum(x.ut, m)}</td>${conVentas ? `<td class="n">${x.sem > 0 ? nf(x.sem, x.sem < 20 ? 1 : 0) + ' u.' : '<span class="muted">—</span>'}</td><td class="n">${diasTxt(x.dias)}</td><td><span class="chip ${e.c}">${e.t}</span></td>` : ''}</tr>`;
   }).join('');
   const chip = (k, t, n) => `<button class="chipb" data-stf="${k}" aria-pressed="${u.stF === k}">${t} <b>${nf(n)}</b></button>`;
   main.innerHTML = `
-  <section>${heroHead('Stock', 'Qué hay en las sucursales y en el depósito', `Depósito: se lee de tu Firebase (stock del ${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}). Sucursales: llega en el reporte de ventas que se recibe por mail${conSuc ? ' (último dato del ' + dnFmt(fechaSuc) + ')' : ''}. Total = depósito + sucursales. Buscá por producto, código o proveedor.`)}</section>
+  <section>${heroHead('Stock', 'Qué hay en las sucursales y en el depósito', `Depósito: en los productos SIAL sale del reporte de ventas que llega por mail; en el resto, de tu Firebase (stock del ${S.stock ? dnFmt(S.stockDn) : 'sin cargar'}). Sucursales: del mismo reporte, solo productos SIAL${conSuc ? ' (último dato del ' + dnFmt(fechaSuc) + ')' : ''}. Total = depósito + sucursales. Buscá por producto, código o proveedor.`)}</section>
   <section class="card">
     <div class="st-bar">${provPickerHtml('ppStock', items, u.stProv, 'Todos los proveedores')}<input type="text" id="stQ" placeholder="Buscar producto, código o proveedor…" aria-label="Buscar" value="${esc(u.stQ)}">
       <select id="stOrd" aria-label="Ordenar"><option value="prov" ${u.stOrd === 'prov' ? 'selected' : ''}>Ordenar: proveedor y nombre</option><option value="nombre" ${u.stOrd === 'nombre' ? 'selected' : ''}>Ordenar: nombre</option>${conVentas ? `<option value="cob" ${u.stOrd === 'cob' ? 'selected' : ''}>Ordenar: menor cobertura primero</option>` : ''}<option value="stock" ${u.stOrd === 'stock' ? 'selected' : ''}>Ordenar: más stock total primero</option></select></div>
@@ -1357,8 +1358,8 @@ function viewStock(main) {
   $('#stSync').onclick = async () => { $('#stSync').disabled = true; $('#stSync').textContent = 'Leyendo…'; await fbSyncStock(false); };
   $('#stCsv').onclick = () => {
     const cel = v => { const s = String(v ?? ''); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-    const lin = [['Proveedor', 'Código', 'Código interno', 'Producto', 'SIAL', 'Posición', 'Stock sucursales (unidades)', 'Stock sucursales al', 'Stock depósito (unidades)', 'Stock depósito (cajas)', 'Stock total (unidades)', 'Venta por semana', 'Cobertura (días)', 'Estado']]
-      .concat(rows.map(x => [x.m.prov, x.m.cod, x.m.ci || '', x.m.nombre, x.ss ? (x.ss.sial ? 'Sí' : 'No') : '', x.pos, x.ss ? nf(x.ss.total, 0) : '', x.ss ? dnFmt(x.ss.hasta) : '', nf(x.u, 0), x.caj != null ? nf(x.caj, 1) : '', nf(x.ut, 0), conVentas && x.sem > 0 ? nf(x.sem, 1) : '', conVentas && x.dias != null ? nf(Math.min(x.dias, 999), 0) : '', conVentas ? (ESTADO[x.estado] || ESTADO.sinventas).t : '']));
+    const lin = [['Proveedor', 'Código', 'Código interno', 'Producto', 'SIAL', 'Posición', 'Stock sucursales (unidades)', 'Stock sucursales al', 'Stock depósito (unidades)', 'Fuente del depósito', 'Stock depósito (cajas)', 'Stock total (unidades)', 'Venta por semana', 'Cobertura (días)', 'Estado']]
+      .concat(rows.map(x => [x.m.prov, x.m.cod, x.m.ci || '', x.m.nombre, x.ss ? (x.ss.sial ? 'Sí' : 'No') : '', x.pos, x.ss ? nf(x.ss.total, 0) : '', x.ss ? dnFmt(x.ss.hasta) : '', nf(x.u, 0), x.fte ? 'Reporte al ' + dnFmt(x.fte.dn) : 'Firebase', x.caj != null ? nf(x.caj, 1) : '', nf(x.ut, 0), conVentas && x.sem > 0 ? nf(x.sem, 1) : '', conVentas && x.dias != null ? nf(Math.min(x.dias, 999), 0) : '', conVentas ? (ESTADO[x.estado] || ESTADO.sinventas).t : '']));
     saveFile('stock_' + dnToStr(todayDn()) + '.csv', '\ufeff' + lin.map(l => l.map(cel).join(';')).join('\r\n'));
   };
   $$('tr.row', main).forEach(tr => tr.onclick = () => openDetail(tr.dataset.cod));
@@ -2001,16 +2002,16 @@ function parseSalesMatriz(rows) {
 function parseSales(rows) {
   const mat = parseSalesMatriz(rows); if (mat) return mat;
   const cim = mapaCodigoInterno();
-  const hit = findCols(rows, { cod: /^cod/, 'desc?': /descripc/, suc: /^(?!.*stock).*sucursal/, qty: /cantidad/, fecha: /^fecha/ });   // la sucursal NUNCA es la columna "Stock sucursal"
+  const hit = findCols(rows, { cod: /^cod/, 'desc?': /descripc/, suc: /^(?!.*stock).*sucursal/, qty: /cantidad/, fecha: /^fecha/, 'sial?': /^sial$/ });   // la sucursal NUNCA es la columna "Stock sucursal"
   if (!hit) throw new Error('No encontré las columnas "Cód. artículo", "Cantidad venta", "Desc. sucursal" y "Fecha". Revisá el encabezado.');
-  const { cod: ci, desc: di, suc: si, qty: qi, fecha: fi } = hit.cols;
+  const { cod: ci, desc: di, suc: si, qty: qi, fecha: fi, sial: ai } = hit.cols;
   const agg = new Map(), ignored = new Map(), dayTot = new Map(); let minD = Infinity, maxD = -Infinity, n = 0, bad = 0;
   for (let r = hit.row + 1; r < rows.length; r++) {
     const row = rows[r], cm = String(row[ci] ?? '').match(/^\s*([A-Za-z0-9.]+)\s+-\s/), cod = normCod(cm ? cm[1] : row[ci]), d = parseDateAny(row[fi]), q = toNum(row[qi]);
     if (!cod || isNaN(d) || isNaN(q)) { bad++; continue; }
     const suc = normSuc(row[si]) || 'SIN SUCURSAL';
     const key = S.mm[cod] ? cod : cim[cod];
-    if (!key) { const o = ignored.get(cod) || { n: 0, q: 0, nombre: di >= 0 ? String(row[di] ?? '').trim() : '' }; o.n++; o.q += q; ignored.set(cod, o); continue; }
+    if (!key) { const o = ignored.get(cod) || { n: 0, q: 0, nombre: di >= 0 ? String(row[di] ?? '').trim() : '', sial: ai >= 0 ? false : null }; if (ai >= 0 && /^s[ií]/i.test(String(row[ai] ?? '').trim())) o.sial = true; o.n++; o.q += q; ignored.set(cod, o); continue; }
     n++; if (d < minD) minD = d; if (d > maxD) maxD = d;
     let a = agg.get(key); if (!a) agg.set(key, a = new Map());
     let b = a.get(suc); if (!b) a.set(suc, b = new Map());
@@ -2575,25 +2576,35 @@ function viewSolDetalle(main, s) {
 // S.stockSuc = { items: { <código interno>: { sial, s: { SUCURSAL: [stock, día] } } } }. Cada celda guarda el último valor conocido y de qué día es:
 // un reporte más viejo nunca pisa a uno más nuevo. El stock del depósito sigue saliendo de Firebase (S.stockMap).
 function parseStockSuc(rows) {
-  const hit = findCols(rows, { cod: /^cod/, suc: /^(?!.*stock).*sucursal/, fecha: /^fecha/, stk: /stock/, 'sial?': /^sial$/ });
-  if (!hit) return null;
-  const { cod: ci, suc: si, fecha: fi, stk: ki, sial: ai } = hit.cols, items = new Map(); let n = 0;
+  const hit = findCols(rows, { cod: /^cod/, suc: /^(?!.*stock).*sucursal/, fecha: /^fecha/, 'stk?': /^stock.*sucursal/, 'dep?': /^stock.*dep/, 'sial?': /^sial$/ });
+  if (!hit || (hit.cols.stk < 0 && hit.cols.dep < 0)) return null;
+  const { cod: ci, suc: si, fecha: fi, stk: ki, dep: di, sial: ai } = hit.cols, items = new Map(), noSial = new Map(); let n = 0;
   for (let r = hit.row + 1; r < rows.length; r++) {
-    const row = rows[r], cm = String(row[ci] ?? '').match(/^\s*([A-Za-z0-9.]+)\s+-\s/), cod = normCod(cm ? cm[1] : row[ci]), d = parseDateAny(row[fi]), v = toNum(row[ki]);
-    if (!cod || isNaN(d) || isNaN(v)) continue;
-    const suc = normSuc(row[si]) || 'SIN SUCURSAL'; let it = items.get(cod); if (!it) items.set(cod, it = { sial: null, s: new Map() });
-    if (ai >= 0) it.sial = /^s[ií]/i.test(String(row[ai] ?? '').trim());
-    const prev = it.s.get(suc); if (!prev || d >= prev[1]) it.s.set(suc, [v, d]); n++;
+    const row = rows[r], cm = String(row[ci] ?? '').match(/^\s*([A-Za-z0-9.]+)\s+-\s/), cod = normCod(cm ? cm[1] : row[ci]), d = parseDateAny(row[fi]);
+    if (!cod || isNaN(d)) continue;
+    const esSial = ai >= 0 ? /^s[ií]/i.test(String(row[ai] ?? '').trim()) : null;
+    if (esSial === false) { noSial.set(cod, Math.max(noSial.get(cod) || 0, d)); continue; }   // no va por SIAL: su stock se lleva en Firebase (y el de sucursal de estos productos viene con negativos enormes)
+    const v = ki >= 0 ? toNum(row[ki]) : NaN, dv = di >= 0 ? toNum(row[di]) : NaN, suc = normSuc(row[si]) || 'SIN SUCURSAL';
+    let it = items.get(cod); if (!it) items.set(cod, it = { sial: esSial, s: new Map(), dep: null });
+    if (!isNaN(v)) { const prev = it.s.get(suc); if (!prev || d >= prev[1]) it.s.set(suc, [v, d]); }
+    if (!isNaN(dv) && (!it.dep || d >= it.dep[1])) it.dep = [dv, d];   // el depósito es uno solo: el mismo valor en todas las sucursales
+    n++;
   }
-  return n ? { items, n } : null;
+  noSial.forEach((d, cod) => { if (!items.has(cod)) items.set(cod, { sial: false, s: new Map(), dep: null, d }); });   // si antes figuraba como SIAL, se saca
+  return n || noSial.size ? { items, n } : null;
 }
 function mezclarStockSuc(parsed) {
   if (!S.stockSuc) S.stockSuc = { items: {} };
   const it0 = S.stockSuc.items; let cambios = 0;
   parsed.items.forEach((v, cod) => {
-    const a = it0[cod] || (it0[cod] = { sial: false, s: {} });
+    if (v.sial === false) {   // ahora va por Firebase: se saca (solo si el reporte es igual o más nuevo que lo guardado)
+      const a0 = it0[cod]; if (!a0) return; const ult = Math.max(a0.d ? a0.d[1] : 0, ...Object.values(a0.s).map(x => x[1]), 0);
+      if (v.d >= ult) { delete it0[cod]; cambios++; } return;
+    }
+    const a = it0[cod] || (it0[cod] = { sial: false, s: {}, d: null });
     if (v.sial !== null) a.sial = v.sial;
     v.s.forEach(([val, d], suc) => { const p = a.s[suc]; if (!p || d >= p[1]) { if (!p || p[0] !== val || p[1] !== d) cambios++; a.s[suc] = [val, d]; } });
+    if (v.dep && (!a.d || v.dep[1] >= a.d[1])) { if (!a.d || a.d[0] !== v.dep[0] || a.d[1] !== v.dep[1]) cambios++; a.d = [v.dep[0], v.dep[1]]; }
   });
   return cambios;
 }
@@ -2601,7 +2612,7 @@ async function guardarStockSuc() {
   if (!S.db) return;
   const cods = Object.keys(S.stockSuc.items).sort(), sucs = [...new Set(cods.flatMap(c => Object.keys(S.stockSuc.items[c].s)))].sort(), idx = Object.fromEntries(sucs.map((x, i) => [x, String(i)])), docs = [];
   for (let i = 0; i < cods.length; i += 300) {   // en documentos de 300 productos: el límite de Firebase es 1 MB por documento
-    const it = {}; cods.slice(i, i + 300).forEach(c => { const a = S.stockSuc.items[c], m = {}; for (const k in a.s) m[idx[k]] = a.s[k]; it[c] = { a: a.sial ? 1 : 0, s: m }; });
+    const it = {}; cods.slice(i, i + 300).forEach(c => { const a = S.stockSuc.items[c], m = {}; for (const k in a.s) m[idx[k]] = a.s[k]; it[c] = a.d ? { a: a.sial ? 1 : 0, s: m, d: a.d } : { a: a.sial ? 1 : 0, s: m }; });
     docs.push({ n: docs.length, sucs, it });
   }
   validarParaFirebase(docs, 'el stock de las sucursales');
@@ -2615,7 +2626,7 @@ async function cargarStockSuc() {
   try {
     (await S.db.collection('stocksuc').get()).docs.forEach(d => {
       const x = d.data(), sucs = x.sucs || []; S.stockSucDocs++;
-      for (const c in (x.it || {})) { const o = x.it[c], m = {}; for (const k in (o.s || {})) m[sucs[+k]] = o.s[k].slice(); S.stockSuc.items[c] = { sial: !!o.a, s: m }; }
+      for (const c in (x.it || {})) { const o = x.it[c], m = {}; for (const k in (o.s || {})) m[sucs[+k]] = o.s[k].slice(); S.stockSuc.items[c] = { sial: !!o.a, s: m, d: o.d ? o.d.slice() : null }; }
     });
   } catch (e) { /* todavía no hay stock de sucursales */ }
 }
@@ -2628,11 +2639,24 @@ function stockSucDe(m) {
   det.sort((x, y) => y[1] - x[1]);
   return { total, neg, desde: min, hasta: max, det, sial: !!a.sial };
 }
+// El stock del DEPÓSITO de los productos SIAL viene en el reporte ("Stock depósito Secos"); el de todos los demás se lleva en Firebase.
+// El de Firebase nunca se toca salvo para los SIAL que traen dato en el reporte.
+function aplicarDepositoSial() {
+  S.stockFuente = {};
+  if (!S.stockSuc || !S.master) return;
+  for (const m of S.master) {
+    const a = m.ci ? S.stockSuc.items[m.ci] : null; if (!a || !a.sial || !a.d) continue;
+    S.stockMap[m.cod] = Math.max(0, a.d[0] * rawMult(m));        // un depósito negativo (egreso sin ingreso) cuenta como 0
+    S.stockFuente[m.cod] = { dn: a.d[1], neg: a.d[0] < 0 };
+    if (S.stockSeen) S.stockSeen.add(m.cod);
+    if (S.stockMissing) S.stockMissing = S.stockMissing.filter(c => c !== m.cod);
+  }
+}
 // El stock con el que se calcula el pedido: el del depósito, o (si se activó) depósito + sucursales.
 const stockEf = m => (S.stockMap[m.cod] || 0) + (S.params && S.params.g && S.params.g.stockTotal ? (stockSucDe(m) || { total: 0 }).total : 0);
 async function aplicarStockSucDeCola() {   // el stock que vino en los mismos reportes que se acaban de guardar
   let c = 0, hay = false; for (const q of PEND.cola) if (q.stockSuc) { hay = true; c += mezclarStockSuc(q.stockSuc); }
-  if (!hay) return; if (c) await guardarStockSuc(); invalidate(); render();
+  if (!hay) return; if (c) await guardarStockSuc(); buildStock(); invalidate(); render();
 }
 
 /* ================= buzón: reportes que llegan por mail ================= */
@@ -2671,16 +2695,16 @@ function motivosRevision(p) {
 const resumenBuzon = p => {
   let u = 0, us = 0; const por = {}, r2 = x => Math.round(x * 100) / 100;
   for (const [, st] of p.agg) for (const [sc, days] of st) for (const q of days.values()) { u += q; por[sc] = (por[sc] || 0) + q; }
-  for (const [, o] of p.ignored) us += o.q;
-  const sin = [...p.ignored.entries()].map(([cod, o]) => ({ cod, nombre: (o.nombre || '').slice(0, 60), q: r2(o.q) })).sort((a, b) => b.q - a.q).slice(0, 8);
+  let nSial = 0, uSial = 0, conCol = false; for (const [, o] of p.ignored) { us += o.q; if (o.sial !== null && o.sial !== undefined) conCol = true; if (o.sial === true) { nSial++; uSial += o.q; } }
+  const sin = [...p.ignored.entries()].map(([cod, o]) => ({ cod, nombre: (o.nombre || '').slice(0, 60), q: r2(o.q), sial: o.sial === true })).sort((a, b) => (b.sial - a.sial) || (b.q - a.q)).slice(0, 8);
   Object.keys(por).forEach(k => { por[k] = r2(por[k]); });
-  return { resumen: { desde: dnToStr(p.minD), hasta: dnToStr(p.maxD), filas: p.n, productos: p.agg.size, unidades: r2(u), ignorados: p.ignored.size, unidadesSin: r2(us), sinReconocer: sin, porSucursal: por } };
+  return { resumen: { desde: dnToStr(p.minD), hasta: dnToStr(p.maxD), filas: p.n, productos: p.agg.size, unidades: r2(u), ignorados: p.ignored.size, unidadesSin: r2(us), sinReconocer: sin, porSucursal: por, ...(conCol ? { ignoradosSial: nSial, unidadesSinSial: r2(uSial) } : {}) } };
 };
 const detalleResumen = r => {
-  const base = `ventas del ${esc(r.desde)} al ${esc(r.hasta)}: <b>${nf(r.productos)}</b> productos reconocidos (${nf(r.unidades || 0)} u.)${r.ignorados ? ` · <b>${nf(r.ignorados)}</b> códigos sin reconocer (${nf(r.unidadesSin || 0)} u.)` : ' · todos los códigos reconocidos'}`;
+  const base = `ventas del ${esc(r.desde)} al ${esc(r.hasta)}: <b>${nf(r.productos)}</b> productos reconocidos (${nf(r.unidades || 0)} u.)${r.ignoradosSial !== undefined ? ` · ${r.ignoradosSial ? `<b>${nf(r.ignoradosSial)}</b> productos SIAL sin reconocer (${nf(r.unidadesSinSial || 0)} u.): faltan en el catálogo o no tienen su código interno` : 'todos los productos SIAL reconocidos'}${r.ignorados - r.ignoradosSial ? ` · ${nf(r.ignorados - r.ignoradosSial)} productos no SIAL que no están en el catálogo (${nf(r.unidadesSin - r.unidadesSinSial)} u.; es normal, no son de Compras)` : ''}` : r.ignorados ? ` · <b>${nf(r.ignorados)}</b> códigos sin reconocer (${nf(r.unidadesSin || 0)} u.)` : ' · todos los códigos reconocidos'}`;
   const suc = r.porSucursal ? Object.entries(r.porSucursal).sort((a, b) => b[1] - a[1]).map(([k, v]) => esc(k) + ' ' + nf(v, 0)).join(' · ') : '';
-  const sin = (r.sinReconocer || []).map(o => esc(o.nombre || o.cod) + ' (cód. ' + esc(o.cod) + ') ' + nf(o.q, 0) + ' u.').join('; ');
-  return base + (suc || sin ? `<details style="margin-top:4px"><summary>Ver qué se leyó</summary>${suc ? '<div>Unidades por sucursal: ' + suc + '</div>' : ''}${sin ? '<div>Sin reconocer (los de más venta): ' + sin + '</div>' : ''}</details>` : '');
+  const sin = (r.sinReconocer || []).map(o => (o.sial ? '[SIAL] ' : '') + esc(o.nombre || o.cod) + ' (cód. ' + esc(o.cod) + ') ' + nf(o.q, 0) + ' u.').join('; ');
+  return base + (suc || sin ? `<details style="margin-top:4px"><summary>Ver qué se leyó</summary>${suc ? '<div>Unidades por sucursal: ' + suc + '</div>' : ''}${sin ? '<div>Sin reconocer (primero los SIAL, después los de más venta): ' + sin + '</div>' : ''}</details>` : '');
 };
 async function revisarBuzon() {
   if (BUZON.cargando || !S.db || !S.ready || !S.master.length) return;
